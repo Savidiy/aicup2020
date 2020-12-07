@@ -52,12 +52,16 @@ namespace Aicup2020
         public Action GetAction(PlayerView playerView, DebugInterface debugInterface)
         {
             _playerView = playerView;
+            #region first initialization arrays and lists (once)
             if (needPrepare == true)
             {
                 //once prepare variables and struct
                 needPrepare = false;
                 Prepare();
             }
+            #endregion
+
+            #region calc statistics and informations
             myId = _playerView.MyId;
             foreach (var p in _playerView.Players)
             {
@@ -67,22 +71,68 @@ namespace Aicup2020
                     myScore = p.Score;
                 }
             }
-
-            //prepare
-            CheckEntitiesCount();            
+            CheckEntitiesCount();
             CheckEntitiesMemory();
+            #endregion
 
-            //analyze
+            #region select and correct tasks
+
+            //// retreat from enemies
+            /// info units about dangers zone
+
+            ////build units
+            /// build builder
+            /// build ranger
+            /// build melee
+
+            //// build bases
+            /// build BuilderBase
+            /// build RangedBase
+            /// build MeleeBase
+            /// build house
+            /// build turret
+            /// build wall
+
+            //// attack enemies
+            /// my builder charge enemy builders
+
+            //// collect resources
+
+
+            #endregion
+
+            #region update tasks
+
             FindBuildPriorities();
 
             CheckEntitiesNeedRepair();
+            #endregion
+
+            #region select group for tasks
+
+
+
+            #endregion
+
+            #region select role for units in groups
 
             CheckEntitiesGroup();
 
+            #endregion
+
+            #region select and approve unit actions
+
+            #endregion
+
+            #region set unit actions
+
             var actions = SelectActions();
-     
+            #endregion
+
+            #region prerpare info to next turn
             //save previous entity state
             SaveEntitiesMemory();
+            #endregion
 
             return new Action(actions);
         }
