@@ -5,20 +5,20 @@ namespace Aicup2020
 {
     public class MyStrategy
     {
-        Dictionary<Model.EntityType, int> currentMyEntityCount = new Dictionary<Model.EntityType, int>();
-        Dictionary<Model.EntityType, int> previousEntityCount = new Dictionary<Model.EntityType, int>();
-        Dictionary<Model.EntityType, float> buildEntityPriority = new Dictionary<Model.EntityType, float>();
         Dictionary<int, EntityMemory> entityMemories = new Dictionary<int, EntityMemory>();
 
+        #region Служебные переменные
         EntityType[] entityTypesArray = { EntityType.BuilderUnit, EntityType.RangedUnit, EntityType.MeleeUnit, EntityType.Turret, EntityType.House, EntityType.BuilderBase, EntityType.MeleeBase, EntityType.RangedBase, EntityType.Wall, EntityType.Resource };
 
         bool needPrepare = true;
+        #endregion
 
         int[] maxTargetCountTiers = { 5, 15, 40, 80};
         float[] builderTargetCountTiers = { 1f, 0.75f, 0.7f, 0.6f , 0.3f};
         float[] rangerTargetCountTiers = { 0f, 0.25f, 0.3f, 0.4f, 0.7f };
         float housePopulationDelay = 5f;
 
+        #region клетки где можно построить юнита вокруг здания
         int largeBuildingSize = 5;
         int[] buildingPositionDX = {-1, -1, -1, -1, -1, 0, 1, 2, 3 ,4, 5, 5, 5, 5, 5,  4,  3,  2,  1,  0 };
         int[] buildingPositionDY = { 0,  1,  2,  3,  4, 5, 5, 5, 5, 5, 4, 3, 2, 1, 0, -1, -1, -1, -1, -1 };
@@ -31,6 +31,7 @@ namespace Aicup2020
         // 1                13
         // 0  X             14
         //   19 18 17 16 15
+        #endregion
 
         Dictionary<EntityType, Group> basicEntityIdGroups = new Dictionary<EntityType, Group>();
         Group houseBuilderGroup = new Group();
@@ -40,26 +41,62 @@ namespace Aicup2020
 
         PlayerView _playerView;
         public IDictionary<EntityType, EntityProperties> properties;
+
         System.Random random = new System.Random();
+
         int[][] cellWithIdOnlyBuilding;
         int[][] cellWithIdAny;
         int[][] onceVisibleMap;
-        int myResources;
-        int howMuchResourcesCollectLastTurn = 0;
 
+        #region Статичстические переменные
+        Dictionary<Model.EntityType, int> currentMyEntityCount = new Dictionary<Model.EntityType, int>();
+        Dictionary<Model.EntityType, int> previousEntityCount = new Dictionary<Model.EntityType, int>();
+        Dictionary<Model.EntityType, float> buildEntityPriority = new Dictionary<Model.EntityType, float>();
+
+        int howMuchResourcesIHaveNextTurn = 0;
+        int nextTurnResourcesSelectCount = 5;
+        int nextTurnResourcesBonus = 5;
+        int howMuchResourcesCollectLastTurn = 0;
         const int howManyTurnsHistory = 30;
         int[] howMuchResourcesCollectLastNTurns = new int[howManyTurnsHistory];
         int[] howMuchResourcesCollectCPALastNTurns = new int[howManyTurnsHistory];
         int[] howMuchLiveBuildersLast10Turns = new int[howManyTurnsHistory];
         int howMuchResourcesCollectAll = 0;
+        
+        int myResources;
         int myScore;
         int myId;
         int mapSize;
         int populationMax = 0;
         int populationUsing = 0;
+        #endregion
+        #region Желания, Планы, Намерения и т.д.
 
         enum DesireType {WantCreateBuilders, WantCreateHouses, WantExtractResources };
         List<DesireType> desires = new List<DesireType>();
+        List<DesireType> prevDesires = new List<DesireType>();
+        
+        enum PlanType {PlanCreateBuilders, PlanCreateHouses, PlanExtractResources }
+        List<PlanType> plans = new List<PlanType>();
+        List<PlanType> prevPlans = new List<PlanType>();
+        
+        enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, IntentionCreateHouses, IntentionExtractResources, IntentionFindResources }
+        struct Intention
+        {
+            public IntentionType intentionType;
+            public int targetId;
+
+            public Intention(IntentionType type, int _targetId)
+            {
+                intentionType = type;
+                targetId = _targetId;
+            }
+        }
+        List<Intention> intentions = new List<Intention>();
+        List<Intention> prevIntentions = new List<Intention>();
+
+        Dictionary<int, Model.EntityAction> actions = new Dictionary<int, Model.EntityAction>();
+        #endregion
 
         public Action GetAction(PlayerView playerView, DebugInterface debugInterface)
         {
@@ -93,15 +130,18 @@ namespace Aicup2020
             #endregion
 
             GenerateDesires(); // Желания - Что я хочу сделать?       
-            SelectPlans(); // Планы - Какие из желаний я могу сейчас сделать?
-            SelectIntentions(); // Намерения - Как я буду выполнять планы?
-            SelectGroups(); // Группы - Кто будет выполнять намерения?
+            ConvertDesiresToPlans(); // Планы - Какие из желаний я могу сейчас сделать?
+            ConvertPlansToIntentions(); // Намерения - Как и кем я буду выполнять планы?
+            CorrectCrossIntentions();// Проверяем взаимоискулючающие и противоречащие намерения. Оставляем только нужные.
+            ConvertIntentionsToActions(); // Приказы - Кто будет выполнять намерения?
+            //приказы превращаются в конкретные action для entities
 
-            FindBuildPriorities();
-            CheckEntitiesNeedRepair();
-            CheckEntitiesGroup();
+            //old logics
+            // FindBuildPriorities();
+            //CheckEntitiesNeedRepair();
+            //CheckEntitiesGroup();
 
-            var actions = GenerateActions();
+            //var actions = GenerateActions();
 
             //save previous entity state
             //SaveEntitiesMemory();
@@ -116,27 +156,27 @@ namespace Aicup2020
             EntityType entityType;
             EntityProperties property;
 
-            //================= BUILDER BASE ================ actions
-            entityType = EntityType.BuilderBase;
-            property = properties[entityType];
-            foreach (var id in basicEntityIdGroups[entityType].members)
-            {
-                if (buildEntityPriority[EntityType.RangedUnit] <= buildEntityPriority[EntityType.BuilderUnit]
-                    && buildEntityPriority[EntityType.BuilderUnit] > 0)
-                {
-                    BuildAction buildAction = new BuildAction();
+            //////================= BUILDER BASE ================ actions
+            ////entityType = EntityType.BuilderBase;
+            ////property = properties[entityType];
+            ////foreach (var id in basicEntityIdGroups[entityType].members)
+            ////{
+            ////    if (buildEntityPriority[EntityType.RangedUnit] <= buildEntityPriority[EntityType.BuilderUnit]
+            ////        && buildEntityPriority[EntityType.BuilderUnit] > 0)
+            ////    {
+            ////        BuildAction buildAction = new BuildAction();
 
-                    Vec2Int target = FindSpawnPosition(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y, false);
+            ////        Vec2Int target = FindSpawnPosition(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y, false);
 
-                    buildAction.EntityType = property.Build.Value.Options[0];
-                    buildAction.Position = target;
+            ////        buildAction.EntityType = property.Build.Value.Options[0];
+            ////        buildAction.Position = target;
 
-                    actions.Add(id, new EntityAction(null, buildAction, null, null));
-                } else
-                {
-                    actions.Add(id, new EntityAction(null, null, null, null));
-                }
-            }
+            ////        actions.Add(id, new EntityAction(null, buildAction, null, null));
+            ////    } else
+            ////    {
+            ////        actions.Add(id, new EntityAction(null, null, null, null));
+            ////    }
+            ////}
 
             //================= RANGER BASE ============ actions
             entityType = EntityType.RangedBase;
@@ -441,11 +481,19 @@ namespace Aicup2020
             int co = currentMyEntityCount[EntityType.BuilderUnit];
             howMuchLiveBuildersLast10Turns[0] = co;
             howMuchResourcesCollectCPALastNTurns[0] = (co == 0) ? 0 : howMuchResourcesCollectLastTurn * 100 / co;
-        }
 
+            int sum = 0;
+            for (int i = 0; i < nextTurnResourcesSelectCount; i++)
+            {
+                sum += howMuchResourcesCollectLastNTurns[0];
+            }
+            howMuchResourcesIHaveNextTurn = myResources + sum / nextTurnResourcesSelectCount + nextTurnResourcesBonus;
+        }
         void GenerateDesires()
         {
-            desires.Clear();
+            prevDesires.Clear();
+            prevDesires = desires;
+            desires = new List<DesireType>();
             desires.Add(DesireType.WantCreateHouses);
             desires.Add(DesireType.WantCreateBuilders);
             desires.Add(DesireType.WantExtractResources);
@@ -470,31 +518,148 @@ namespace Aicup2020
 
             //// collect resources
         }
-        void SelectPlans()
+        void ConvertDesiresToPlans()
         {
+            prevPlans.Clear();
+            prevPlans = plans;
+            plans = new List<PlanType>();
+            //add new plans
             foreach(var d in desires)
             {
                 switch (d)
                 {
-                    case DesireType.WantCreateBuilders:
+                    case DesireType.WantCreateBuilders:                        
+                        //i have base
+                        if (currentMyEntityCount[EntityType.BuilderBase] > 0)
+                        {
+                            //i have resources
+                            int newCost = properties[EntityType.BuilderUnit].Cost + currentMyEntityCount[EntityType.BuilderUnit] - 1;
+                            if (howMuchResourcesIHaveNextTurn >= newCost)
+                            {
+                                plans.Add(PlanType.PlanCreateBuilders);
+                            }
+                        }
+                        
                         break;
                     case DesireType.WantCreateHouses:
+                        //i have builders
+                        if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
+                        {
+                            //i have resources
+                            int newCost = properties[EntityType.House].Cost;
+                            if (howMuchResourcesIHaveNextTurn >= newCost)
+                            {
+                                plans.Add(PlanType.PlanCreateHouses);
+                            }
+                        }
                         break;
                     case DesireType.WantExtractResources:
+                        //i have builders
+                        if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
+                        {                            
+                            plans.Add(PlanType.PlanExtractResources);
+                        }
                         break;
                     default:
-                        int k = 5;//unknown desireType
+                        int k = 5;//unknown type
                         break;
                 }
             }
         }
-        void SelectIntentions()
+        void ConvertPlansToIntentions()
         {
+            prevIntentions.Clear();
+            prevIntentions = intentions;
+            intentions = new List<Intention>();
+            foreach (var d in plans)
+            {
+                switch (d)
+                {
+                    case PlanType.PlanCreateBuilders:
+                        foreach (var id in basicEntityIdGroups[EntityType.BuilderBase].members)
+                        {
+                            intentions.Add(new Intention(IntentionType.IntentionCreateBuilder, id));
+                        }
+                        break;
+                    case PlanType.PlanCreateHouses:
+                        ////i have builders
+                        //if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
+                        //{
+                        //    //i have resources
+                        //    int newCost = properties[EntityType.House].Cost;
+                        //    if (howMuchResourcesIHaveNextTurn >= newCost)
+                        //    {
+                        //        plans.Add(PlanType.PlanCreateHouses);
+                        //    }
+                        //}
+                        break;
+                    case PlanType.PlanExtractResources:
+                        ////i have builders
+                        //if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
+                        //{
+                        //    plans.Add(PlanType.PlanExtractResources);
+                        //}
+                        break;
+                    default:
+                        int k = 5;// unknown type
+                        break;
+                }
+            }
+        }
+        void CorrectCrossIntentions()
+        {
+
+            // cancel build 
+            foreach (var pi in prevIntentions)
+            {
+                switch (pi.intentionType)
+                {
+                    case IntentionType.IntentionCreateBuilder:
+                        foreach(var ni in intentions)
+                        {                            
+                            if (ni.intentionType == IntentionType.IntentionCreateBuilder)
+                            {
+                                if (pi.targetId == ni.targetId)
+                                    break;
+                            }
+                        }
+                        intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, pi.targetId));
+                        break;
+                } 
+            }
 
         }
-        void SelectGroups()
+        void ConvertIntentionsToActions()
         {
+            actions.Clear();
 
+            foreach (var ni in intentions)
+            {
+                switch (ni.intentionType)
+                {
+                    case IntentionType.IntentionCreateBuilder:
+                        ActCreateUnit(ni.targetId, false);
+                        break;
+                    case IntentionType.IntentionStopCreatingBuilder:
+                        ActCancelAll(ni.targetId);
+                        break;
+                }
+            }
+        }
+        void ActCreateUnit(int baseId, bool agressive)
+        {
+            BuildAction buildAction = new BuildAction();
+
+            Vec2Int target = FindSpawnPosition(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y, agressive);
+
+            buildAction.EntityType = properties[entityMemories[baseId].myEntity.EntityType].Build.Value.Options[0];
+            buildAction.Position = target;
+
+            actions.Add(baseId, new EntityAction(null, buildAction, null, null));
+        }
+        void ActCancelAll(int id)
+        {
+            actions.Add(id, new EntityAction(null, null, null, null));
         }
 
         void AddEntityViewToOnceVisibleMap(EntityType entityType, int sx, int sy)
