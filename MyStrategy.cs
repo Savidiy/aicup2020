@@ -45,11 +45,21 @@ namespace Aicup2020
         int[][] cellWithIdAny;
         int[][] onceVisibleMap;
         int myResources;
+        int howMuchResourcesCollectLastTurn = 0;
+
+        const int howManyTurnsHistory = 30;
+        int[] howMuchResourcesCollectLastNTurns = new int[howManyTurnsHistory];
+        int[] howMuchResourcesCollectCPALastNTurns = new int[howManyTurnsHistory];
+        int[] howMuchLiveBuildersLast10Turns = new int[howManyTurnsHistory];
+        int howMuchResourcesCollectAll = 0;
         int myScore;
         int myId;
         int mapSize;
         int populationMax = 0;
         int populationUsing = 0;
+
+        enum DesireType {WantCreateBuilders, WantCreateHouses, WantExtractResources };
+        List<DesireType> desires = new List<DesireType>();
 
         public Action GetAction(PlayerView playerView, DebugInterface debugInterface)
         {
@@ -71,78 +81,35 @@ namespace Aicup2020
             {
                 if (p.Id == myId)
                 {
+
+                    howMuchResourcesCollectLastTurn = p.Resource - myResources; // не учитывает стоимость произведенных сущностей
                     myResources = p.Resource;
                     myScore = p.Score;
                     break;
                 }
             }
             CountNumberOfEntitiesAndMap();
-            CheckAliveAndDieEntitiesMemory();           
+            CheckAliveAndDieEntities();
             #endregion
 
-            #region select and correct tasks
+            GenerateDesires(); // Желания - Что я хочу сделать?       
+            SelectPlans(); // Планы - Какие из желаний я могу сейчас сделать?
+            SelectIntentions(); // Намерения - Как я буду выполнять планы?
+            SelectGroups(); // Группы - Кто будет выполнять намерения?
 
-            //// retreat from enemies
-            /// info units about dangers zone
+            FindBuildPriorities();
+            CheckEntitiesNeedRepair();
+            CheckEntitiesGroup();
 
-            ////build units
-            /// build builder
-            /// build ranger
-            /// build melee
+            var actions = GenerateActions();
 
-            //// build bases
-            /// build BuilderBase
-            /// build RangedBase
-            /// build MeleeBase
-            /// build house
-            /// build turret
-            /// build wall
-
-            //// attack enemies
-            /// my builder charge enemy builders
-
-            //// collect resources
-
-
-            #endregion
-
-            #region update tasks
-
-            //FindBuildPriorities();
-
-            //CheckEntitiesNeedRepair();
-            #endregion
-
-            #region select group for tasks
-
-
-
-            #endregion
-
-            #region select role for units in groups
-
-            //CheckEntitiesGroup();
-
-            #endregion
-
-            #region select and approve unit actions
-
-            #endregion
-
-            #region set unit actions
-
-            var actions = SelectActions();
-            #endregion
-
-            #region prerpare info to next turn
             //save previous entity state
             //SaveEntitiesMemory();
-            #endregion
 
             return new Action(actions);
         }
 
-        Dictionary<int, EntityAction> SelectActions()
+        Dictionary<int, EntityAction> GenerateActions()
         {
             var actions = new Dictionary<int, Model.EntityAction>();
 
@@ -390,7 +357,7 @@ namespace Aicup2020
                 basicEntityIdGroups.Add(ent, new Group());
             }
         }
-        void CheckAliveAndDieEntitiesMemory()
+        void CheckAliveAndDieEntities()
         {
             hasInactiveHouse = false;
 
@@ -422,6 +389,8 @@ namespace Aicup2020
                         em.SetGroup(basicEntityIdGroups[e.EntityType]);
                         entityMemories.Add(e.Id, em);
                         AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
+
+                        howMuchResourcesCollectLastTurn += properties[e.EntityType].Cost + currentMyEntityCount[e.EntityType] - 1;
 
                         //check my units
                         if (properties[em.myEntity.EntityType].CanMove == false)
@@ -455,8 +424,79 @@ namespace Aicup2020
                     entityMemories.Remove(m.Key);
                 }
             }
+
+            //statistics
+            if (_playerView.CurrentTick == 0)
+            {
+                howMuchResourcesCollectLastTurn = 0;
+            }
+            howMuchResourcesCollectAll += howMuchResourcesCollectLastTurn;
+            for(int i = howMuchResourcesCollectCPALastNTurns.Length - 1; i > 0; i--)
+            {
+                howMuchResourcesCollectLastNTurns[i] = howMuchResourcesCollectLastNTurns[i - 1];
+                howMuchResourcesCollectCPALastNTurns[i] = howMuchResourcesCollectCPALastNTurns[i - 1];
+                howMuchLiveBuildersLast10Turns[i] = howMuchLiveBuildersLast10Turns[i - 1];
+            }
+            howMuchResourcesCollectLastNTurns[0] = howMuchResourcesCollectLastTurn;
+            int co = currentMyEntityCount[EntityType.BuilderUnit];
+            howMuchLiveBuildersLast10Turns[0] = co;
+            howMuchResourcesCollectCPALastNTurns[0] = (co == 0) ? 0 : howMuchResourcesCollectLastTurn * 100 / co;
         }
-        
+
+        void GenerateDesires()
+        {
+            desires.Clear();
+            desires.Add(DesireType.WantCreateHouses);
+            desires.Add(DesireType.WantCreateBuilders);
+            desires.Add(DesireType.WantExtractResources);
+            //// retreat from enemies
+            /// info units about dangers zone
+
+            ////build units
+            /// build builder
+            /// build ranger
+            /// build melee
+
+            //// build bases
+            /// build BuilderBase
+            /// build RangedBase
+            /// build MeleeBase
+            /// build house
+            /// build turret
+            /// build wall
+
+            //// attack enemies
+            /// my builder charge enemy builders
+
+            //// collect resources
+        }
+        void SelectPlans()
+        {
+            foreach(var d in desires)
+            {
+                switch (d)
+                {
+                    case DesireType.WantCreateBuilders:
+                        break;
+                    case DesireType.WantCreateHouses:
+                        break;
+                    case DesireType.WantExtractResources:
+                        break;
+                    default:
+                        int k = 5;//unknown desireType
+                        break;
+                }
+            }
+        }
+        void SelectIntentions()
+        {
+
+        }
+        void SelectGroups()
+        {
+
+        }
+
         void AddEntityViewToOnceVisibleMap(EntityType entityType, int sx, int sy)
         {
             int sightRange = properties[entityType].SightRange;
@@ -951,12 +991,65 @@ namespace Aicup2020
                 }
             }
         }
+
+        Color colorRed = new Color(1, 0, 0, 1);
+        Color colorGreen = new Color(0, 1, 0, 1);
+        Color colorBlue = new Color(0, 0, 1, 1);
         public void DebugUpdate(PlayerView playerView, DebugInterface debugInterface)
         {
             debugInterface.Send(new DebugCommand.Clear());
-            debugInterface.GetState();
+            DebugState debugState = debugInterface.GetState();
+
+            #region draw CPA
+            string text = $"{howMuchResourcesCollectAll} all";
+            int textSize = 16;
+            int margin = 2;
+            int sx = debugState.WindowSize.X - 10;
+            int sy = debugState.WindowSize.Y - 100;
+            int index = 0;
+            int col1 = 27;
+            int col2 = 55;
+            DebugData.PlacedText cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), text, 1, textSize);
+            debugInterface.Send(new DebugCommand.Add(cpa));
+            index++;
+            cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), "add / bui / cpa", 1, textSize);
+            debugInterface.Send(new DebugCommand.Add(cpa));
+
+            for (int i = 0; i < howMuchResourcesCollectLastNTurns.Length; i++)
+            {
+                index++;
+                debugInterface.Send(new DebugCommand.Add(
+                    new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col2, sy - index * (textSize + margin)), colorGreen),
+                    howMuchResourcesCollectLastNTurns[i] + " / ", 1, textSize)));
+                debugInterface.Send(new DebugCommand.Add(
+                    new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col1, sy - index * (textSize + margin)), colorGreen),
+                    howMuchLiveBuildersLast10Turns[i] + " / ", 1, textSize)));
+                debugInterface.Send(new DebugCommand.Add(
+                    new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen),
+                    howMuchResourcesCollectCPALastNTurns[i] + "", 1, textSize)));
+            }
+            #endregion
+
+
+            //if (playerView.CurrentTick == 10)
+            //{
+            //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
+
+            //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
+            //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
+            //    debugInterface.Send(new DebugCommand.Add(text));
+
+            //    ColoredVertex[] vertices = new ColoredVertex[] {
+            //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
+            //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
+            //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
+            //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
+            //    };
+            //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+            //    debugInterface.Send(new DebugCommand.Add(lines));
+            //}
         }
-        
+
         void CountNumberOfEntitiesAndMap()
         {           
             //clear map
