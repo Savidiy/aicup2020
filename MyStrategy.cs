@@ -85,11 +85,19 @@ namespace Aicup2020
         {
             public IntentionType intentionType;
             public int targetId;
+            public Group targetGroup;
 
             public Intention(IntentionType type, int _targetId)
             {
                 intentionType = type;
                 targetId = _targetId;
+                targetGroup = null;
+            }
+            public Intention(IntentionType type, Group _targetGroup)
+            {
+                intentionType = type;
+                targetId = 0;
+                targetGroup = _targetGroup;
             }
         }
         List<Intention> intentions = new List<Intention>();
@@ -497,6 +505,7 @@ namespace Aicup2020
             desires.Add(DesireType.WantCreateHouses);
             desires.Add(DesireType.WantCreateBuilders);
             desires.Add(DesireType.WantExtractResources);
+
             //// retreat from enemies
             /// info units about dangers zone
 
@@ -594,11 +603,7 @@ namespace Aicup2020
                         //}
                         break;
                     case PlanType.PlanExtractResources:
-                        ////i have builders
-                        //if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
-                        //{
-                        //    plans.Add(PlanType.PlanExtractResources);
-                        //}
+                        intentions.Add(new Intention(IntentionType.IntentionExtractResources, basicEntityIdGroups[EntityType.BuilderUnit]));
                         break;
                     default:
                         int k = 5;// unknown type
@@ -615,15 +620,22 @@ namespace Aicup2020
                 switch (pi.intentionType)
                 {
                     case IntentionType.IntentionCreateBuilder:
-                        foreach(var ni in intentions)
-                        {                            
-                            if (ni.intentionType == IntentionType.IntentionCreateBuilder)
+                        {
+                            bool needStop = true;
+                            foreach (var ni in intentions)
                             {
-                                if (pi.targetId == ni.targetId)
-                                    break;
+                                if (ni.intentionType == IntentionType.IntentionCreateBuilder)
+                                {
+                                    if (pi.targetId == ni.targetId)
+                                    {
+                                        needStop = false;
+                                        break;
+                                    }
+                                }
                             }
+                            if (needStop)
+                                intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, pi.targetId));
                         }
-                        intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, pi.targetId));
                         break;
                 } 
             }
@@ -643,6 +655,15 @@ namespace Aicup2020
                     case IntentionType.IntentionStopCreatingBuilder:
                         ActCancelAll(ni.targetId);
                         break;
+                    case IntentionType.IntentionExtractResources:
+                        {
+                            int dist = properties[EntityType.BuilderUnit].SightRange;
+                            foreach (var id in ni.targetGroup.members)
+                            {
+                                ActExtractResources(id, dist);
+                            }
+                        }
+                        break;
                 }
             }
         }
@@ -660,6 +681,18 @@ namespace Aicup2020
         void ActCancelAll(int id)
         {
             actions.Add(id, new EntityAction(null, null, null, null));
+        }
+        void ActExtractResources(int id, int distance)
+        {
+            MoveAction moveAction = new MoveAction();
+            moveAction.BreakThrough = true;
+            moveAction.FindClosestPosition = true;
+            moveAction.Target = new Vec2Int(_playerView.MapSize - 1, _playerView.MapSize - 1);
+
+            AttackAction attackAction = new AttackAction();
+            attackAction.AutoAttack = new AutoAttack(distance, new EntityType[] { EntityType.Resource });
+
+            actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
         }
 
         void AddEntityViewToOnceVisibleMap(EntityType entityType, int sx, int sy)
