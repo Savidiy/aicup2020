@@ -10,10 +10,7 @@ namespace Aicup2020
         Dictionary<Model.EntityType, float> buildEntityPriority = new Dictionary<Model.EntityType, float>();
         Dictionary<int, EntityMemory> entityMemories = new Dictionary<int, EntityMemory>();
 
-        EntityType[] entityTypesArray = { EntityType.BuilderBase, EntityType.BuilderUnit, EntityType.House, EntityType.MeleeBase, EntityType.MeleeUnit, EntityType.RangedBase, EntityType.RangedUnit, EntityType.Resource, EntityType.Turret, EntityType.Wall };
-
-        int populationMax = 0;
-        int populationUsing = 0;
+        EntityType[] entityTypesArray = { EntityType.BuilderUnit, EntityType.RangedUnit, EntityType.MeleeUnit, EntityType.Turret, EntityType.House, EntityType.BuilderBase, EntityType.MeleeBase, EntityType.RangedBase, EntityType.Wall, EntityType.Resource };
 
         bool needPrepare = true;
 
@@ -42,12 +39,17 @@ namespace Aicup2020
         bool hasInactiveHouse = false;
 
         PlayerView _playerView;
+        public IDictionary<EntityType, EntityProperties> properties;
         System.Random random = new System.Random();
         int[][] cellWithIdOnlyBuilding;
         int[][] cellWithIdAny;
+        int[][] onceVisibleMap;
         int myResources;
         int myScore;
         int myId;
+        int mapSize;
+        int populationMax = 0;
+        int populationUsing = 0;
 
         public Action GetAction(PlayerView playerView, DebugInterface debugInterface)
         {
@@ -56,23 +58,26 @@ namespace Aicup2020
             if (needPrepare == true)
             {
                 //once prepare variables and struct
+                myId = _playerView.MyId;
+                mapSize = _playerView.MapSize;
+                properties = _playerView.EntityProperties;
                 needPrepare = false;
                 Prepare();
             }
             #endregion
 
             #region calc statistics and informations
-            myId = _playerView.MyId;
             foreach (var p in _playerView.Players)
             {
                 if (p.Id == myId)
                 {
                     myResources = p.Resource;
                     myScore = p.Score;
+                    break;
                 }
             }
-            CheckEntitiesCount();
-            CheckEntitiesMemory();
+            CountNumberOfEntitiesAndMap();
+            CheckAliveAndDieEntitiesMemory();           
             #endregion
 
             #region select and correct tasks
@@ -103,9 +108,9 @@ namespace Aicup2020
 
             #region update tasks
 
-            FindBuildPriorities();
+            //FindBuildPriorities();
 
-            CheckEntitiesNeedRepair();
+            //CheckEntitiesNeedRepair();
             #endregion
 
             #region select group for tasks
@@ -116,7 +121,7 @@ namespace Aicup2020
 
             #region select role for units in groups
 
-            CheckEntitiesGroup();
+            //CheckEntitiesGroup();
 
             #endregion
 
@@ -131,7 +136,7 @@ namespace Aicup2020
 
             #region prerpare info to next turn
             //save previous entity state
-            SaveEntitiesMemory();
+            //SaveEntitiesMemory();
             #endregion
 
             return new Action(actions);
@@ -142,11 +147,11 @@ namespace Aicup2020
             var actions = new Dictionary<int, Model.EntityAction>();
 
             EntityType entityType;
-            EntityProperties properties;
+            EntityProperties property;
 
             //================= BUILDER BASE ================ actions
             entityType = EntityType.BuilderBase;
-            properties = _playerView.EntityProperties[entityType];
+            property = properties[entityType];
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
                 if (buildEntityPriority[EntityType.RangedUnit] <= buildEntityPriority[EntityType.BuilderUnit]
@@ -156,7 +161,7 @@ namespace Aicup2020
 
                     Vec2Int target = FindSpawnPosition(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y, false);
 
-                    buildAction.EntityType = properties.Build.Value.Options[0];
+                    buildAction.EntityType = property.Build.Value.Options[0];
                     buildAction.Position = target;
 
                     actions.Add(id, new EntityAction(null, buildAction, null, null));
@@ -168,7 +173,7 @@ namespace Aicup2020
 
             //================= RANGER BASE ============ actions
             entityType = EntityType.RangedBase;
-            properties = _playerView.EntityProperties[entityType];
+            property = properties[entityType];
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
                 if (buildEntityPriority[EntityType.RangedUnit] > buildEntityPriority[EntityType.BuilderUnit]
@@ -177,7 +182,7 @@ namespace Aicup2020
                     Vec2Int target = FindSpawnPosition(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y, true);
 
                     BuildAction buildAction = new BuildAction();
-                    buildAction.EntityType = properties.Build.Value.Options[0];
+                    buildAction.EntityType = property.Build.Value.Options[0];
                     buildAction.Position = target;
 
                     actions.Add(id, new EntityAction(null, buildAction, null, null));
@@ -190,7 +195,7 @@ namespace Aicup2020
 
             //================= MELEE BASE ============ actions
             entityType = EntityType.MeleeBase;
-            properties = _playerView.EntityProperties[entityType];
+            property = properties[entityType];
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
                 if (myResources > 600)
@@ -198,7 +203,7 @@ namespace Aicup2020
                     Vec2Int target = FindSpawnPosition(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y, true);
 
                     BuildAction buildAction = new BuildAction();
-                    buildAction.EntityType = properties.Build.Value.Options[0];
+                    buildAction.EntityType = property.Build.Value.Options[0];
                     buildAction.Position = target;
 
                     actions.Add(id, new EntityAction(null, buildAction, null, null));
@@ -211,7 +216,7 @@ namespace Aicup2020
 
             //================== basic BUILDER UNIT actions ===================
             entityType = EntityType.BuilderUnit;
-            properties = _playerView.EntityProperties[entityType];
+            property = properties[entityType];
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
                 MoveAction moveAction = new MoveAction();
@@ -220,7 +225,7 @@ namespace Aicup2020
                 moveAction.Target = new Vec2Int(_playerView.MapSize - 1, _playerView.MapSize - 1);
 
                 AttackAction attackAction = new AttackAction();
-                attackAction.AutoAttack = new AutoAttack(properties.SightRange, new EntityType[] { EntityType.Resource });
+                attackAction.AutoAttack = new AutoAttack(property.SightRange, new EntityType[] { EntityType.Resource });
 
                 actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
             }
@@ -241,8 +246,8 @@ namespace Aicup2020
                 if (IsFreeCellsRange(
                     entityMemories[id].targetPos.X,
                     entityMemories[id].targetPos.Y,
-                    entityMemories[id].targetPos.X + _playerView.EntityProperties[entityMemories[id].targetEntityType].Size - 1,
-                    entityMemories[id].targetPos.Y + _playerView.EntityProperties[entityMemories[id].targetEntityType].Size - 1
+                    entityMemories[id].targetPos.X + properties[entityMemories[id].targetEntityType].Size - 1,
+                    entityMemories[id].targetPos.Y + properties[entityMemories[id].targetEntityType].Size - 1
                     ))
                 {
                     BuildAction buildAction = new BuildAction(
@@ -275,7 +280,7 @@ namespace Aicup2020
                 {
                     if (entityMemories.ContainsKey(targetId))
                     {
-                        if (entityMemories[targetId].myEntity.Health == _playerView.EntityProperties[entityMemories[targetId].myEntity.EntityType].MaxHealth)
+                        if (entityMemories[targetId].myEntity.Health == properties[entityMemories[targetId].myEntity.EntityType].MaxHealth)
                         {
                             entityMemories[id].ResetTarget();
                             entityMemories[id].SetGroup(basicEntityIdGroups[EntityType.BuilderUnit]);
@@ -309,7 +314,7 @@ namespace Aicup2020
 
             //ranged UNIT actions
             entityType = EntityType.RangedUnit;
-            properties = _playerView.EntityProperties[entityType];
+            property = properties[entityType];
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
                 MoveAction moveAction = new MoveAction();
@@ -318,14 +323,14 @@ namespace Aicup2020
                 moveAction.Target = FindNearestEnemy(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y);
 
                 AttackAction attackAction = new AttackAction();
-                attackAction.AutoAttack = new AutoAttack(properties.SightRange, new EntityType[] { });
+                attackAction.AutoAttack = new AutoAttack(property.SightRange, new EntityType[] { });
 
                 actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
             }
 
             // =============== MELEE UNIT actions
             entityType = EntityType.MeleeUnit;
-            properties = _playerView.EntityProperties[entityType];
+            property = properties[entityType];
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
                 MoveAction moveAction = new MoveAction();
@@ -335,26 +340,57 @@ namespace Aicup2020
 
 
                 AttackAction attackAction = new AttackAction();
-                attackAction.AutoAttack = new AutoAttack(properties.SightRange, new EntityType[] { });
+                attackAction.AutoAttack = new AutoAttack(property.SightRange, new EntityType[] { });
 
                 actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
             }
 
             //=========== TURRET =========== actions
             entityType = EntityType.Turret;
-            properties = _playerView.EntityProperties[entityType];
+            property = properties[entityType];
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
                 AttackAction attackAction = new AttackAction();
-                attackAction.AutoAttack = new AutoAttack(properties.SightRange, new EntityType[] { });
+                attackAction.AutoAttack = new AutoAttack(property.SightRange, new EntityType[] { });
 
                 actions.Add(id, new EntityAction(null, null, attackAction, null));
             }
 
             return actions;
         }
+        void Prepare()
+        {
+            //init arrays
+            cellWithIdAny = new int[mapSize][];
+            cellWithIdOnlyBuilding = new int[mapSize][];
+            onceVisibleMap = new int[mapSize][];
+            for (var i = 0; i < mapSize; i++)
+            {
+                cellWithIdAny[i] = new int[mapSize];
+                cellWithIdOnlyBuilding[i] = new int[mapSize];
+                onceVisibleMap[i] = new int[mapSize];
+            }
 
-        void CheckEntitiesMemory()
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    // cellWithIdAny - zeroing before use
+                    // cellWithIdOnlyBuilding - zeroing before use
+                    onceVisibleMap[x][y] = 0; //update once
+                }
+            }
+
+            //prepare current and previous entity counter
+            foreach (var ent in entityTypesArray)
+            {
+                currentMyEntityCount.Add(ent, 0);
+                previousEntityCount.Add(ent, 0);
+                buildEntityPriority.Add(ent, 0f);
+                basicEntityIdGroups.Add(ent, new Group());
+            }
+        }
+        void CheckAliveAndDieEntitiesMemory()
         {
             hasInactiveHouse = false;
 
@@ -367,7 +403,7 @@ namespace Aicup2020
             foreach (var e in _playerView.Entities)
             {
                 //use only my entities
-                if (e.PlayerId == _playerView.MyId)
+                if (e.PlayerId == myId)
                 {
                     if (e.Active == false)
                     {
@@ -376,18 +412,19 @@ namespace Aicup2020
                     if (entityMemories.ContainsKey(e.Id))
                     {
                         //update
-
                         entityMemories[e.Id].Update(e);
+                        AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
                     }
                     else
                     {
-                        //add
+                        //add my entity
                         var em = new EntityMemory(e);
                         em.SetGroup(basicEntityIdGroups[e.EntityType]);
                         entityMemories.Add(e.Id, em);
+                        AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
 
-                        //check my builder
-                        if (_playerView.EntityProperties[em.myEntity.EntityType].CanMove == false)
+                        //check my units
+                        if (properties[em.myEntity.EntityType].CanMove == false)
                         {
                             for(int i = 0; i < houseBuilderGroup.members.Count; )
                             {
@@ -419,6 +456,57 @@ namespace Aicup2020
                 }
             }
         }
+        
+        void AddEntityViewToOnceVisibleMap(EntityType entityType, int sx, int sy)
+        {
+            int sightRange = properties[entityType].SightRange;
+            int size = properties[entityType].Size;
+            // с этой клетки еще не смотрели по сторонам (благодаря перемещению или новому зданию)
+            if (onceVisibleMap[sx][sy] < sightRange)
+            {
+                int sxRight = sx + size - 1;
+                int syUp = sy + size - 1;
+                for (int si = 0; si < size; si++)
+                {
+                    //my base
+                    for (int siy = 0; siy < size; siy++)
+                    {
+                        SetOnceVisibleMapSafe(sx + si, sy + siy, sightRange);
+                    }
+
+                    //straight
+                    for (int di = 1; di < sightRange; di++)
+                    {
+                        int value = sightRange - di;
+                        SetOnceVisibleMapSafe(sx - di, sy + si, value);// left
+                        SetOnceVisibleMapSafe(sx + si, sy - di, value);// down
+                        SetOnceVisibleMapSafe(sxRight + di, sy + si, value);// right
+                        SetOnceVisibleMapSafe(sx + si, syUp + di, value);// up
+                    }
+                }
+                //diagonal
+                for (int aa = 1; aa < sightRange - 1; aa++)
+                {
+                    for (int bb = 1; bb < sightRange - aa; bb++)
+                    {
+                        int value = sightRange - aa - bb;
+                        SetOnceVisibleMapSafe(sx - aa, sy - bb, value);//left-down
+                        SetOnceVisibleMapSafe(sx - aa, syUp + bb, value);//left-up
+                        SetOnceVisibleMapSafe(sxRight + aa, syUp + bb, value);//right-up
+                        SetOnceVisibleMapSafe(sxRight + aa, sy - bb, value);//right-down
+                    }
+                }
+            }
+        }
+        void SetOnceVisibleMapSafe(int x, int y, int value)
+        {
+            if (x >= 0 && x < mapSize && y >=0 && y < mapSize)
+            {
+                if (onceVisibleMap[x][y] < value)
+                    onceVisibleMap[x][y] = value;
+            }
+        }
+
         void SaveEntitiesMemory()
         {
             foreach (var e in entityMemories)
@@ -432,7 +520,7 @@ namespace Aicup2020
             //need build houses or not
             if (buildEntityPriority[EntityType.House] > 0)
             {
-                if (myResources >= _playerView.EntityProperties[EntityType.House].Cost)
+                if (myResources >= properties[EntityType.House].Cost)
                 {
                     //need build houses
                     if (houseBuilderGroup.members.Count == 0)
@@ -809,7 +897,7 @@ namespace Aicup2020
 
         void TrySelectFreeBuilderForBuild(EntityType buildingType)
         {
-            int buildingSize = _playerView.EntityProperties[buildingType].Size;
+            int buildingSize = properties[buildingType].Size;
             foreach(var id in basicEntityIdGroups[EntityType.BuilderUnit].members)
             {
                 Vec2Int pos = entityMemories[id].myEntity.Position;
@@ -868,31 +956,10 @@ namespace Aicup2020
             debugInterface.Send(new DebugCommand.Clear());
             debugInterface.GetState();
         }
-        void Prepare()
-        {
-            int mapSize = _playerView.MapSize;
-            cellWithIdAny = new int[mapSize][];
-            cellWithIdOnlyBuilding = new int[mapSize][];
-            for(var i = 0; i < mapSize; i++)
-            {
-                cellWithIdAny[i] = new int[mapSize];
-                cellWithIdOnlyBuilding[i] = new int[mapSize];
-            }
-
-            //prepare current and previous entity counter
-            foreach (var ent in entityTypesArray)
-            {
-                currentMyEntityCount.Add(ent, 0);
-                previousEntityCount.Add(ent, 0);
-                buildEntityPriority.Add(ent, 0f);
-                basicEntityIdGroups.Add(ent, new Group());
-            }
-        }
-        void CheckEntitiesCount()
-        {
-            int myId = _playerView.MyId;
-            int mapSize = _playerView.MapSize;
-
+        
+        void CountNumberOfEntitiesAndMap()
+        {           
+            //clear map
             for (int x = 0; x < mapSize; x++)
             {
                 for (int y = 0; y < mapSize; y++)
@@ -902,7 +969,12 @@ namespace Aicup2020
                 }
             }
 
-            previousEntityCount = currentMyEntityCount;
+            //save previous number of entities
+            foreach(var p in previousEntityCount)
+            {
+                previousEntityCount[p.Key] = currentMyEntityCount[p.Key];
+            }
+
             //zeroize current enity count
             foreach (var ent in entityTypesArray)
             {
@@ -911,34 +983,36 @@ namespace Aicup2020
             //count current entities
             foreach (var entity in _playerView.Entities)
             {
-                //fill freeCell arraies
-                int size = _playerView.EntityProperties[entity.EntityType].Size;
+                //fill freeCell arraies for map of moving
+                int size = properties[entity.EntityType].Size;
                 int x1 = entity.Position.X;
                 int x2 = x1 + size - 1;
                 int y1 = entity.Position.Y;
                 int y2 = y1 + size - 1;
-                bool canMove = _playerView.EntityProperties[entity.EntityType].CanMove;
+                bool canMove = properties[entity.EntityType].CanMove;
                 int id = entity.Id;
                 for (int x = x1; x <= x2; x++)
                 {
                     for (int y = y1; y <= y2; y++)
                     {
+                        //this is building
                         if (!canMove) 
                             cellWithIdOnlyBuilding[x][y] = id;
-
+                        //this is any enitites
                         cellWithIdAny[x][y] = id;
                     }
                 }                   
 
                 if (entity.PlayerId == myId)
                 {
+                    //count number of my enitites
                     currentMyEntityCount[entity.EntityType]++;
-                }
+                } 
             }
             //calc max and current population
             populationMax = 0;
             populationUsing = 0;
-            foreach (var e in _playerView.EntityProperties)
+            foreach (var e in properties)
             {
                 populationMax += currentMyEntityCount[e.Key] * e.Value.PopulationProvide;
                 populationUsing += currentMyEntityCount[e.Key] * e.Value.PopulationUse;
@@ -954,7 +1028,7 @@ namespace Aicup2020
             EntityType entityType = EntityType.BuilderBase;
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
-                if (entityMemories[id].myEntity.Health < _playerView.EntityProperties[entityType].MaxHealth)
+                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
                 {
                     needRepairEntityIdList.Add(id);
                 }
@@ -963,7 +1037,7 @@ namespace Aicup2020
             entityType = EntityType.RangedBase;
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
-                if (entityMemories[id].myEntity.Health < _playerView.EntityProperties[entityType].MaxHealth)
+                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
                 {
                     needRepairEntityIdList.Add(id);
                 }
@@ -971,7 +1045,7 @@ namespace Aicup2020
             entityType = EntityType.Turret;
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
-                if (entityMemories[id].myEntity.Health < _playerView.EntityProperties[entityType].MaxHealth)
+                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
                 {
                     needRepairEntityIdList.Add(id);
                 }
@@ -979,7 +1053,7 @@ namespace Aicup2020
             entityType = EntityType.House;
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
-                if (entityMemories[id].myEntity.Health < _playerView.EntityProperties[entityType].MaxHealth)
+                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
                 {
                     needRepairEntityIdList.Add(id);
                 }
@@ -987,7 +1061,7 @@ namespace Aicup2020
             entityType = EntityType.MeleeBase;
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
-                if (entityMemories[id].myEntity.Health < _playerView.EntityProperties[entityType].MaxHealth)
+                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
                 {
                     needRepairEntityIdList.Add(id);
                 }
@@ -1066,7 +1140,6 @@ namespace Aicup2020
 
             return 0f;
         }
-
 
     }
 
