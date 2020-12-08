@@ -48,6 +48,9 @@ namespace Aicup2020
         int[][] cellWithIdAny;
         int[][] onceVisibleMap;
 
+        int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
+        float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
+
         #region Статичстические переменные
         Dictionary<Model.EntityType, int> currentMyEntityCount = new Dictionary<Model.EntityType, int>();
         Dictionary<Model.EntityType, int> previousEntityCount = new Dictionary<Model.EntityType, int>();
@@ -55,7 +58,7 @@ namespace Aicup2020
 
         int howMuchResourcesIHaveNextTurn = 0;
         int nextTurnResourcesSelectCount = 5;
-        int nextTurnResourcesBonus = 5;
+        int nextTurnResourcesBonus = 1;
         int howMuchResourcesCollectLastTurn = 0;
         const int howManyTurnsHistory = 30;
         int[] howMuchResourcesCollectLastNTurns = new int[howManyTurnsHistory];
@@ -80,24 +83,40 @@ namespace Aicup2020
         List<PlanType> plans = new List<PlanType>();
         List<PlanType> prevPlans = new List<PlanType>();
         
-        enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, IntentionCreateHouses, IntentionExtractResources, IntentionFindResources }
-        struct Intention
+        enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, 
+            IntentionCreateHouseStart, IntentionCreateHouseContionue, IntentionRepairBuilding,
+            IntentionExtractResources, IntentionFindResources }
+        class Intention
         {
             public IntentionType intentionType;
             public int targetId;
             public Group targetGroup;
+            public Vec2Int position;
+            public EntityType entityType;
 
+            public Intention(IntentionType type, Vec2Int pos, EntityType _entityType)
+            {
+                intentionType = type;
+                targetId = -1;
+                targetGroup = new Group();
+                position = pos;
+                entityType = _entityType;
+            }
             public Intention(IntentionType type, int _targetId)
             {
                 intentionType = type;
                 targetId = _targetId;
-                targetGroup = null;
+                targetGroup = new Group();
+                position = new Vec2Int();
+                entityType = EntityType.Resource;
             }
             public Intention(IntentionType type, Group _targetGroup)
             {
                 intentionType = type;
-                targetId = 0;
+                targetId = -1;
                 targetGroup = _targetGroup;
+                position = new Vec2Int();
+                entityType = EntityType.Resource;
             }
         }
         List<Intention> intentions = new List<Intention>();
@@ -440,24 +459,36 @@ namespace Aicup2020
 
                         howMuchResourcesCollectLastTurn += properties[e.EntityType].Cost + currentMyEntityCount[e.EntityType] - 1;
 
-                        //check my units
+                        //check my builder units
                         if (properties[em.myEntity.EntityType].CanMove == false)
                         {
-                            for(int i = 0; i < houseBuilderGroup.members.Count; )
+                            for(int i = 0; i < intentions.Count; i++)
                             {
-                                int id = houseBuilderGroup.members[i];
-                                bool removed = false;
-                                if (entityMemories[id].targetPos.X == em.myEntity.Position.X 
-                                    && entityMemories[id].targetPos.Y == em.myEntity.Position.Y)
+                                if (intentions[i].intentionType == IntentionType.IntentionCreateHouseStart)
                                 {
-                                    removed = true;
-                                    entityMemories[id].SetGroup(repairBuilderGroup);
-                                    entityMemories[id].SetTargetId(e.Id);
+                                    if (intentions[i].position.X == em.myEntity.Position.X && intentions[i].position.Y == em.myEntity.Position.Y)
+                                    {
+                                        intentions[i].targetId = em.myEntity.Id;
+                                        break;
+                                    }
                                 }
-
-                                if (!removed)
-                                    i++;
                             }
+
+                            //for(int i = 0; i < houseBuilderGroup.members.Count; )
+                            //{
+                            //    int id = houseBuilderGroup.members[i];
+                            //    bool removed = false;
+                            //    if (entityMemories[id].targetPos.X == em.myEntity.Position.X 
+                            //        && entityMemories[id].targetPos.Y == em.myEntity.Position.Y)
+                            //    {
+                            //        removed = true;
+                            //        entityMemories[id].SetGroup(repairBuilderGroup);
+                            //        entityMemories[id].SetTargetId(e.Id);
+                            //    }
+
+                            //    if (!removed)
+                            //        i++;
+                            //}
                         }
                     }
                 }
@@ -502,7 +533,23 @@ namespace Aicup2020
             prevDesires.Clear();
             prevDesires = desires;
             desires = new List<DesireType>();
-            desires.Add(DesireType.WantCreateHouses);
+
+            #region Хочу строить дома
+            int[] popMax = new int[] {  15, 30, 55, 70, 100, 1000 };
+            int[] popRange = new int[] { 0, 4, 8, 10, 15, 20 };
+            for(int i = 0; i < popMax.Length; i++)
+            {
+                if (populationMax <= popMax[i])
+                {
+                    if (populationUsing + popRange[i] >= populationMax)
+                    {
+                        desires.Add(DesireType.WantCreateHouses);
+                        break;
+                    }
+                }
+            }
+            #endregion
+
             desires.Add(DesireType.WantCreateBuilders);
             desires.Add(DesireType.WantExtractResources);
 
@@ -558,7 +605,17 @@ namespace Aicup2020
                             int newCost = properties[EntityType.House].Cost;
                             if (howMuchResourcesIHaveNextTurn >= newCost)
                             {
-                                plans.Add(PlanType.PlanCreateHouses);
+                                // ограничение на одновременное строительство
+                                int count = 0;
+                                foreach(var ni in intentions)
+                                {
+                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart || ni.intentionType == IntentionType.IntentionCreateHouseContionue) 
+                                        count++;
+                                }
+                                if ((populationMax <= 30 && count == 0) || (populationMax <= 60 && count <= 1) || (count <= 2))
+                                {
+                                    plans.Add(PlanType.PlanCreateHouses);
+                                }
                             }
                         }
                         break;
@@ -591,16 +648,27 @@ namespace Aicup2020
                         }
                         break;
                     case PlanType.PlanCreateHouses:
-                        ////i have builders
-                        //if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
-                        //{
-                        //    //i have resources
-                        //    int newCost = properties[EntityType.House].Cost;
-                        //    if (howMuchResourcesIHaveNextTurn >= newCost)
-                        //    {
-                        //        plans.Add(PlanType.PlanCreateHouses);
-                        //    }
-                        //}
+                        // выбираем где будем строить
+                        Vec2Int pos = FindPositionToBuildHouse();
+                        if (pos.X >= 0) {
+                            Intention intention = new Intention(IntentionType.IntentionCreateHouseStart, pos, EntityType.House);
+                            List<int> buildersId = FindFreeNearestBuilders(
+                                pos,
+                                properties[EntityType.House].Size,
+                                builderCountForStartBuilding,
+                                (int)(properties[EntityType.House].MaxHealth * startBuildingFindDistanceFromHealth));
+                            if (buildersId.Count > 0)
+                            {
+                                foreach (var id in buildersId)
+                                {
+                                    entityMemories[id].SetGroup(intention.targetGroup);
+                                }
+                                intentions.Add(intention);
+                            } else
+                            {
+                                int j = 0;//yне должно такого быть
+                            }
+                        }
                         break;
                     case PlanType.PlanExtractResources:
                         intentions.Add(new Intention(IntentionType.IntentionExtractResources, basicEntityIdGroups[EntityType.BuilderUnit]));
@@ -613,20 +681,20 @@ namespace Aicup2020
         }
         void CorrectCrossIntentions()
         {
-
-            // cancel build 
-            foreach (var pi in prevIntentions)
+            for (int i = 0; i < prevIntentions.Count;)
             {
-                switch (pi.intentionType)
+                bool delete = false;
+
+                switch (prevIntentions[i].intentionType)
                 {
-                    case IntentionType.IntentionCreateBuilder:
+                    case IntentionType.IntentionCreateBuilder: // cancel base build 
                         {
                             bool needStop = true;
                             foreach (var ni in intentions)
                             {
                                 if (ni.intentionType == IntentionType.IntentionCreateBuilder)
                                 {
-                                    if (pi.targetId == ni.targetId)
+                                    if (prevIntentions[i].targetId == ni.targetId)
                                     {
                                         needStop = false;
                                         break;
@@ -634,12 +702,67 @@ namespace Aicup2020
                                 }
                             }
                             if (needStop)
-                                intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, pi.targetId));
+                                intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, prevIntentions[i].targetId));
                         }
                         break;
-                } 
-            }
+                    case IntentionType.IntentionCreateHouseStart:
+                        if (prevIntentions[i].targetId >= 0)
+                        {
+                            // удачное строительство, создавем намерение на ремонт
+                            Intention intention = new Intention(IntentionType.IntentionRepairBuilding, prevIntentions[i].targetId);
+                            intention.targetGroup = prevIntentions[i].targetGroup;
+                            intentions.Add(intention);
+                        }
+                        else
+                        {
+                            // неудачное строительство, распускаем группу
+                            while (prevIntentions[i].targetGroup.members.Count > 0)
+                            {
+                                int id = prevIntentions[i].targetGroup.members[0];
+                                entityMemories[id].SetGroup(basicEntityIdGroups[entityMemories[id].myEntity.EntityType]);
+                            }
+                        }
+                        break;
+                    case IntentionType.IntentionRepairBuilding:
+                        {
+                            bool removed = false;
+                            int targetId = prevIntentions[i].targetId;
 
+                            if (entityMemories.ContainsKey(prevIntentions[i].targetId))
+                            {
+                                if (entityMemories[targetId].myEntity.Health == properties[entityMemories[targetId].myEntity.EntityType].MaxHealth)
+                                {
+                                    removed = true;
+                                }
+                            }
+                            else
+                            {
+                                //target die
+                                removed = true;
+                            }
+                            
+                            if (removed)
+                            {
+                                while (prevIntentions[i].targetGroup.members.Count > 0)
+                                {
+                                    int id = prevIntentions[i].targetGroup.members[0];
+                                    entityMemories[id].SetGroup(basicEntityIdGroups[entityMemories[id].myEntity.EntityType]);
+                                }
+                            }
+                            else
+                            {
+                                intentions.Add(prevIntentions[i]);
+                            }
+                        }
+                        break;
+                }
+
+                if (delete)
+                {
+                    prevIntentions.RemoveAt(i);
+                }
+                else { i++; }
+            }
         }
         void ConvertIntentionsToActions()
         {
@@ -662,6 +785,18 @@ namespace Aicup2020
                             {
                                 ActExtractResources(id, dist);
                             }
+                        }
+                        break;
+                    case IntentionType.IntentionCreateHouseStart:
+                        foreach (int id in ni.targetGroup.members)
+                        {
+                            ActStartCreateBuilding(id, ni.position, EntityType.House);
+                        }
+                        break;
+                    case IntentionType.IntentionRepairBuilding:
+                        foreach (int id in ni.targetGroup.members)
+                        {
+                            ActRepairBuilding(id, ni.targetId);
                         }
                         break;
                 }
@@ -693,6 +828,195 @@ namespace Aicup2020
             attackAction.AutoAttack = new AutoAttack(distance, new EntityType[] { EntityType.Resource });
 
             actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
+        }
+        void ActStartCreateBuilding(int id, Vec2Int pos, EntityType type)
+        {            
+            MoveAction moveAction = new MoveAction();
+            moveAction.BreakThrough = false;
+            moveAction.FindClosestPosition = true;
+            moveAction.Target = new Vec2Int( pos.X + properties[type].Size / 2, pos.Y + properties[type].Size);
+
+            BuildAction buildAction = new BuildAction(type, pos);
+
+            actions.Add(id, new EntityAction(moveAction, buildAction, null, null));
+            
+        }
+
+        void ActRepairBuilding(int id, int targetId)
+        {
+            //repair
+            MoveAction moveAction = new MoveAction();
+            moveAction.BreakThrough = false;
+            moveAction.FindClosestPosition = true;
+            moveAction.Target = entityMemories[targetId].myEntity.Position;
+
+            RepairAction repairAction = new RepairAction(targetId);
+            actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
+        }
+        Vec2Int FindPositionToBuildHouse()
+        {
+            int buildingSize = properties[EntityType.House].Size;
+            foreach (var id in basicEntityIdGroups[EntityType.BuilderUnit].members)
+            {
+                Vec2Int pos = entityMemories[id].myEntity.Position;
+                bool posFinded = false;
+
+                //left 
+                int x = pos.X - buildingSize;
+                int y = pos.Y;
+                if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
+                {
+                    posFinded = true;
+                }
+                else
+                {
+                    //down
+                    x = pos.X;
+                    y = pos.Y - buildingSize;
+                    if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
+                    {
+                        posFinded = true;
+                    }
+                    else
+                    {
+                        //right
+                        x = pos.X + 1;
+                        y = pos.Y;
+                        if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
+                        {
+                            posFinded = true;
+                        }
+                        else
+                        {
+                            //up
+                            x = pos.X;
+                            y = pos.Y + 1;
+                            if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
+                            {
+                                posFinded = true;
+                            }
+                        }
+                    }
+                }
+
+                if (posFinded)
+                {
+                    return new Vec2Int(x, y);
+                    //entityMemories[id].SetGroup(houseBuilderGroup);
+                    //entityMemories[id].SetTargetPos(new Vec2Int(x, y));
+                    //entityMemories[id].SetMovePos(entityMemories[id].myEntity.Position);
+                    //entityMemories[id].SetTargetEntityType(EntityType.House);
+                    //break;
+                }
+            }
+            return new Vec2Int(-1, -1);
+        }
+
+        struct XYWeight
+        {
+            public int x;
+            public int y;
+            public int weight;
+            public XYWeight(int _x, int _y, int _weight)
+            {
+                x = _x;
+                y = _y;
+                weight = _weight;
+            }
+        }
+        List<int> FindFreeNearestBuilders(Vec2Int target, int size, int builderCount, int maxDistance)
+        {
+            List<int> list = new List<int>();
+
+            if (builderCount > basicEntityIdGroups[EntityType.BuilderUnit].members.Count)
+            {
+                builderCount = basicEntityIdGroups[EntityType.BuilderUnit].members.Count;
+            }
+
+            if (builderCount == 0) 
+                return list;
+
+            int[][] map = new int[mapSize][];
+            for (int i = 0; i < mapSize; i++)
+            {
+                map[i] = new int[mapSize];
+            }
+
+            int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
+            int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
+
+            //заполняем максимальными значениями на клетках текущей позиции
+            for (int x = target.X; x < size + target.X; x++)
+            {
+                for (int y = target.Y; y < size + target.Y; y++)
+                {
+                    if (x >= 0 && y >= 0 && x < mapSize && y < mapSize) {
+                        map[x][y] = startIndex;
+                    }
+                }
+            }
+            //добавляем стартовые клетки поиска
+            List<XYWeight> findCells = new List<XYWeight>();
+            for (int x = target.X; x < size + target.X; x++)
+            {
+                findCells.Add(new XYWeight(x, target.Y, startIndex));
+                if (size > 1)
+                    findCells.Add(new XYWeight(x, target.Y + size - 1, startIndex));
+            }
+            for (int y = target.Y + 1; y < size + target.Y - 1; y++)
+            {
+                findCells.Add(new XYWeight(target.X, y, startIndex));
+                findCells.Add(new XYWeight(target.X + size - 1, y, startIndex));
+            }
+
+            while (findCells.Count > 0)
+            {
+                int x = findCells[0].x;
+                int y = findCells[0].y;
+                int w = findCells[0].weight;
+
+                for (int jj = 0; jj < 4; jj++)
+                {
+                    int nx = x;
+                    int ny = y;
+                    if (jj == 0) nx--;
+                    if (jj == 1) ny--;
+                    if (jj == 2) nx++;
+                    if (jj == 3) ny++;
+
+                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                    {
+                        if (map[nx][ny] == 0)
+                        {
+                            map[nx][ny] = w - 1;
+                            int id = cellWithIdAny[nx][ny];
+                            if (id >= 0)
+                            {
+                                //check builder
+                                if (basicEntityIdGroups[EntityType.BuilderUnit].members.Contains(id))
+                                {
+                                    list.Add(id);
+                                    if (list.Count >= builderCount)
+                                        break;
+                                }
+                            }
+                            else
+                            {
+                                //add findCell
+                                if (w > minIndex)
+                                    findCells.Add(new XYWeight(nx, ny, w - 1));
+                            }
+                        }
+                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+
+                    }
+                }
+                findCells.RemoveAt(0);
+
+                if (list.Count >= builderCount)
+                    break;
+            }
+            return list;
         }
 
         void AddEntityViewToOnceVisibleMap(EntityType entityType, int sx, int sy)
