@@ -844,8 +844,16 @@ namespace Aicup2020
         void ActCreateUnit(int baseId, bool agressive)
         {
             BuildAction buildAction = new BuildAction();
-
-            Vec2Int target = FindSpawnPosition(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y, agressive);
+            Vec2Int target;
+            if (agressive)
+            {
+                target = FindSpawnPosition(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y, agressive);
+            } else
+            {
+                //make builder
+                var a = FindNearestToBaseResourceReturnSpawnPlace(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y, distToFindResThenSpawnBuilder);
+                target = new Vec2Int(a.startX, a.startY);
+            }
 
             buildAction.EntityType = properties[entityMemories[baseId].myEntity.EntityType].Build.Value.Options[0];
             buildAction.Position = target;
@@ -1374,130 +1382,209 @@ namespace Aicup2020
                 return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
             }
         }
-        //Vec2Int FindNearestToBaseResourceReturnSpawnPlace(int sx, int sy)
-        //{
-        //    //int index = -1;
-        //    //int distance = _playerView.MapSize * 3;
+        struct StartAndTargetPoint
+        {
+            public readonly int startX;
+            public readonly int startY;
+            public readonly int targetX;
+            public readonly int targetY;
+            public StartAndTargetPoint(int sx, int sy, int tx, int ty)
+            {
+                startX = sx;
+                startY = sy;
+                targetX = tx;
+                targetY = ty;
+            }
+        }
+        /// <summary>
+        /// ищет ближайший (по пройденным клеткам) к базе ресурс и возвращает ХУ клетки производства и ХУ ресурса
+        /// </summary>
+        /// <param name="baseX">положение Х базы родителя </param>
+        /// <param name="baseY">положение У базы родителя</param>
+        /// <returns>  </returns>
+        StartAndTargetPoint FindNearestToBaseResourceReturnSpawnPlace(int baseX, int baseY, int maxDistance)
+        {
+            int size = properties[EntityType.BuilderBase].Size;
+            int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
+            int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
 
-        //    //for (int i = 0; i < _playerView.Entities.Length; i++)
-        //    //{
-        //    //    if (_playerView.Entities[i].PlayerId == null)
-        //    //    {
-        //    //        int d = System.Math.Abs(sx - _playerView.Entities[i].Position.X) + System.Math.Abs(sy - _playerView.Entities[i].Position.Y);
-        //    //        if (d < distance)
-        //    //        {
-        //    //            distance = d;
-        //    //            index = i;
-        //    //        }
-        //    //    }
-        //    //}
+            bool iFind = false;
+            int resourceX = 0;
+            int resourceY = 0;
 
-        //    //if (index >= 0)
-        //    //{
-        //    //    return _playerView.Entities[index].Position;
-        //    //}
-        //    //else
-        //    //{
-        //    //    return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
-        //    //}
+            #region найди ближайший ресурс
+            int[][] map = new int[mapSize][];
+            for (int i = 0; i < mapSize; i++)
+            {
+                map[i] = new int[mapSize];
+            }
 
-        //    int size = properties[EntityType.BuilderBase].Size;
-        //    int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
-        //    int minIndex = startIndex - distToFindResThenSpawnBuilder; //минимальное значение, дальше которого не будем искать
+            //заполняем максимальными значениями на клетках текущей позиции
+            for (int x = baseX; x < size + baseX; x++)
+            {
+                for (int y = baseY; y < size + baseY; y++)
+                {
+                    if (x >= 0 && y >= 0 && x < mapSize && y < mapSize)
+                    {
+                        map[x][y] = startIndex;
+                    }
+                }
+            }
 
-        //    #region найди ближайший ресурс
-        //    int[][] map = new int[mapSize][];
-        //    for (int i = 0; i < mapSize; i++)
-        //    {
-        //        map[i] = new int[mapSize];
-        //    }
+            //добавляем стартовые клетки поиска
+            List<XYWeight> findCells = new List<XYWeight>();
+            for (int x = baseX; x < size + baseX; x++)
+            {
+                findCells.Add(new XYWeight(x, baseY, startIndex));
+                if (size > 1)
+                    findCells.Add(new XYWeight(x, baseY + size - 1, startIndex));
+            }
+            for (int y = baseY + 1; y < size + baseY - 1; y++)
+            {
+                findCells.Add(new XYWeight(baseX, y, startIndex));
+                findCells.Add(new XYWeight(baseX + size - 1, y, startIndex));
+            }
 
-        //    //заполняем максимальными значениями на клетках текущей позиции
-        //    for (int x = sx; x < size + sx; x++)
-        //    {
-        //        for (int y =sy; y < size + sy; y++)
-        //        {
-        //            if (x >= 0 && y >= 0 && x < mapSize && y < mapSize)
-        //            {
-        //                map[x][y] = startIndex;
-        //            }
-        //        }
-        //    }
+            while (findCells.Count > 0)
+            {
+                int x = findCells[0].x;
+                int y = findCells[0].y;
+                int w = findCells[0].weight;
 
-        //    //добавляем стартовые клетки поиска
-        //    List<XYWeight> findCells = new List<XYWeight>();
-        //    for (int x = sx; x < size + sx; x++)
-        //    {
-        //        findCells.Add(new XYWeight(x, sy, startIndex));
-        //        if (size > 1)
-        //            findCells.Add(new XYWeight(x, sy + size - 1, startIndex));
-        //    }
-        //    for (int y = sy + 1; y < size + sy - 1; y++)
-        //    {
-        //        findCells.Add(new XYWeight(sx, y, startIndex));
-        //        findCells.Add(new XYWeight(sx + size - 1, y, startIndex));
-        //    }
+                for (int jj = 0; jj < 4; jj++)// обследование четырех соседних клеток
+                {
+                    int nx = x;
+                    int ny = y;
+                    if (jj == 0) nx--;
+                    if (jj == 1) ny--;
+                    if (jj == 2) nx++;
+                    if (jj == 3) ny++;
 
-        //    while (findCells.Count > 0)
-        //    {
-        //        int x = findCells[0].x;
-        //        int y = findCells[0].y;
-        //        int w = findCells[0].weight;
+                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                    {
+                        if (map[nx][ny] == 0)
+                        {
+                            // это ресурс?
+                            if (resourceMemoryMap[nx][ny] > 0)
+                            {
+                                resourceX = nx;
+                                resourceY = ny;
+                                map[nx][ny] = w - 1;
+                                iFind = true;
+                                break;
+                            }
+                            // ищем путь дальше или что-то мешает?                                                        
+                            int id = cellWithIdAny[nx][ny];
+                            if (id >= 0)
+                            {
+                                // что-то мешает, но это не ресурс
+                            }
+                            else
+                            {
+                                // ищем дальше
+                                map[nx][ny] = w - 1;
+                                if (w > minIndex)
+                                    findCells.Add(new XYWeight(nx, ny, w - 1));
+                            }
+                        }
+                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                    }
+                }
+                findCells.RemoveAt(0);
 
-        //        for (int jj = 0; jj < 4; jj++)
-        //        {
-        //            int nx = x;
-        //            int ny = y;
-        //            if (jj == 0) nx--;
-        //            if (jj == 1) ny--;
-        //            if (jj == 2) nx++;
-        //            if (jj == 3) ny++;
+                if (iFind)
+                    break;
+            }
+            #endregion
 
-        //            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
-        //            {
-        //                if (map[nx][ny] == 0)
-        //                {
-        //                    int id = cellWithIdAny[nx][ny];
-        //                    if (id >= 0)
-        //                    {
-        //                        //check resources
-        //                        if (basicEntityIdGroups[EntityType.BuilderUnit].members.Contains(id))
-        //                        {
-        //                            list.Add(id);
-        //                            if (list.Count >= builderCount)
-        //                                break;
-        //                        }
-        //                    }
-        //                    else
-        //                    {
-        //                        //add findCell
-        //                        map[nx][ny] = w - 1;
-        //                        if (w > minIndex)
-        //                            findCells.Add(new XYWeight(nx, ny, w - 1));
-        //                    }
-        //                }
-        //                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+            int targetX = resourceX;
+            int targetY = resourceY;
 
-        //            }
-        //        }
-        //        findCells.RemoveAt(0);
+            if (iFind)
+            {
+                #region распутай путь до первой клетки и верни его
+                int currentNum = map[targetX][targetY];
+                int targetNum = startIndex - 1;
 
-        //        if (list.Count >= builderCount)
-        //            break;
-        //    }
-        //    return list;
-        //    #endregion
+                while(currentNum < targetNum)
+                {
+                    int nextNum = currentNum + 1;
+                    bool find = false;
+                    if (targetX > 0)//can check left
+                    {
+                        if (map[targetX - 1][targetY] == nextNum)
+                        {
+                            targetX--;
+                            find = true;
+                        }   
+                    } 
+                    if (!find && targetX + 1 < mapSize)//can check right
+                    {
+                        if (map[targetX + 1][targetY] == nextNum)
+                        {
+                            targetX++;
+                            find = true;
+                        }
+                    } 
+                    if (!find && targetY + 1 < mapSize)//can check up
+                    {
+                        if (map[targetX][targetY+1] == nextNum)
+                        {
+                            find = true;
+                            targetY++;
+                        }
+                    } 
+                    if (!find && targetY > 0)
+                    {
+                        if (map[targetX][targetY - 1] == nextNum)
+                        {
+                            targetY--;
+                            find = true;
+                        }
+                    }
+                    if (find)
+                    {
+                        currentNum = map[targetX][targetY];
+                    } else
+                    {
+                        break;//не должно быть такого
+                    }
+                }
 
-        //    #region распутай путь до первой клетки и верни его
+                return new StartAndTargetPoint(targetX, targetY, resourceX, resourceY);
+                #endregion
+            }
+            else
+            {
+                #region если не нашелся, то верни правую-верхнюю свободную
+                //find nearest building cell
+                int positionDindex = 9; //left upper
 
-        //    #endregion
+                //if needed select nearest free 
+                for (int i = 0; i < 20; i++)
+                {
+                    int index = positionDindex + buildingPositionIter[i];
+                    if (index < 0) index += 20;
+                    if (index >= 20) index -= 20;
 
-        //    #region если не нашелся, то верни правую-верхнюю свободную
+                    int kx = baseX + buildingPositionDX[index];
+                    int ky = baseY + buildingPositionDY[index];
 
-        //    #endregion
-
-
-        //}
+                    if (kx >= 0
+                        && kx < _playerView.MapSize
+                        && ky >= 0
+                        && ky < _playerView.MapSize)
+                    {
+                        if (cellWithIdAny[kx][ky] < 0)
+                        {
+                            return new StartAndTargetPoint(kx, ky, kx, ky);
+                        }
+                    }
+                }
+                #endregion
+            }
+            return new StartAndTargetPoint(0, 0, 0, 0);// странно, как это произошло?
+        }
         Vec2Int FindNearestEnemy(int sx, int sy)
         {
             int enemyIndex = -1;
@@ -1729,6 +1816,8 @@ namespace Aicup2020
             debugInterface.Send(new DebugCommand.Clear());
             DebugState debugState = debugInterface.GetState();
 
+            
+
             #region draw CPA
             string text = $"{howMuchResourcesCollectAll} all";
             int textSize = 16;
@@ -1861,125 +1950,126 @@ namespace Aicup2020
             //theoreticaly same population using
             //unitCount = currentMyEntityCount[EntityType.BuilderUnit] + currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit];
         }
-        void CheckEntitiesNeedRepair()
-        {
-            needRepairEntityIdList.Clear();
 
-            EntityType entityType = EntityType.BuilderBase;
-            foreach (var id in basicEntityIdGroups[entityType].members)
-            {
-                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-                {
-                    needRepairEntityIdList.Add(id);
-                }
-            }
+        //void CheckEntitiesNeedRepair()
+        //{
+        //    needRepairEntityIdList.Clear();
 
-            entityType = EntityType.RangedBase;
-            foreach (var id in basicEntityIdGroups[entityType].members)
-            {
-                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-                {
-                    needRepairEntityIdList.Add(id);
-                }
-            }
-            entityType = EntityType.Turret;
-            foreach (var id in basicEntityIdGroups[entityType].members)
-            {
-                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-                {
-                    needRepairEntityIdList.Add(id);
-                }
-            }
-            entityType = EntityType.House;
-            foreach (var id in basicEntityIdGroups[entityType].members)
-            {
-                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-                {
-                    needRepairEntityIdList.Add(id);
-                }
-            }
-            entityType = EntityType.MeleeBase;
-            foreach (var id in basicEntityIdGroups[entityType].members)
-            {
-                if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-                {
-                    needRepairEntityIdList.Add(id);
-                }
-            }
-        }
-        void FindBuildPriorities()
-        {
-            foreach (var ent in entityTypesArray)
-            {
-                buildEntityPriority[ent] = FindBuildEntityPriority(ent);
-            }
-        }
-        float GetTargetEntityCount(EntityType entityType)
-        {
-            switch (entityType)
-            {
-                case EntityType.BuilderBase:
-                    if (currentMyEntityCount[entityType] == 0)
-                        return 1f;
-                    break;
-                case EntityType.RangedBase:
-                    if (currentMyEntityCount[entityType] == 0)
-                        return 1f;
-                    break;
-                case EntityType.BuilderUnit:
-                    if (populationUsing == populationMax)
-                        return 0f;
-                    for (int i = 0; i < maxTargetCountTiers.Length; i++)
-                    {
-                        if (populationUsing <= maxTargetCountTiers[i])
-                        {
-                            return populationMax * builderTargetCountTiers[i];
-                        }
-                    }
-                    return populationMax * builderTargetCountTiers[builderTargetCountTiers.Length - 1];
-                case EntityType.RangedUnit:
-                    if (populationUsing == populationMax)
-                        return 0f;
-                    for (int i = 0; i < maxTargetCountTiers.Length; i++)
-                    {
-                        if (populationUsing <= maxTargetCountTiers[i])
-                        {
-                            return populationMax * rangerTargetCountTiers[i];
-                        }
-                    }
-                    return populationMax * rangerTargetCountTiers[rangerTargetCountTiers.Length - 1];
-                case EntityType.House:
-                    if (populationMax - populationUsing < housePopulationDelay)
-                        return currentMyEntityCount[entityType] + 1f;
-                    break;
-            }
-            return 0f;
-        }
+        //    EntityType entityType = EntityType.BuilderBase;
+        //    foreach (var id in basicEntityIdGroups[entityType].members)
+        //    {
+        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
+        //        {
+        //            needRepairEntityIdList.Add(id);
+        //        }
+        //    }
 
-        float FindBuildEntityPriority(EntityType entityType)
-        {
-            float targetCount = GetTargetEntityCount(entityType);
+        //    entityType = EntityType.RangedBase;
+        //    foreach (var id in basicEntityIdGroups[entityType].members)
+        //    {
+        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
+        //        {
+        //            needRepairEntityIdList.Add(id);
+        //        }
+        //    }
+        //    entityType = EntityType.Turret;
+        //    foreach (var id in basicEntityIdGroups[entityType].members)
+        //    {
+        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
+        //        {
+        //            needRepairEntityIdList.Add(id);
+        //        }
+        //    }
+        //    entityType = EntityType.House;
+        //    foreach (var id in basicEntityIdGroups[entityType].members)
+        //    {
+        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
+        //        {
+        //            needRepairEntityIdList.Add(id);
+        //        }
+        //    }
+        //    entityType = EntityType.MeleeBase;
+        //    foreach (var id in basicEntityIdGroups[entityType].members)
+        //    {
+        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
+        //        {
+        //            needRepairEntityIdList.Add(id);
+        //        }
+        //    }
+        //}
+        //void FindBuildPriorities()
+        //{
+        //    foreach (var ent in entityTypesArray)
+        //    {
+        //        buildEntityPriority[ent] = FindBuildEntityPriority(ent);
+        //    }
+        //}
+        //float GetTargetEntityCount(EntityType entityType)
+        //{
+        //    switch (entityType)
+        //    {
+        //        case EntityType.BuilderBase:
+        //            if (currentMyEntityCount[entityType] == 0)
+        //                return 1f;
+        //            break;
+        //        case EntityType.RangedBase:
+        //            if (currentMyEntityCount[entityType] == 0)
+        //                return 1f;
+        //            break;
+        //        case EntityType.BuilderUnit:
+        //            if (populationUsing == populationMax)
+        //                return 0f;
+        //            for (int i = 0; i < maxTargetCountTiers.Length; i++)
+        //            {
+        //                if (populationUsing <= maxTargetCountTiers[i])
+        //                {
+        //                    return populationMax * builderTargetCountTiers[i];
+        //                }
+        //            }
+        //            return populationMax * builderTargetCountTiers[builderTargetCountTiers.Length - 1];
+        //        case EntityType.RangedUnit:
+        //            if (populationUsing == populationMax)
+        //                return 0f;
+        //            for (int i = 0; i < maxTargetCountTiers.Length; i++)
+        //            {
+        //                if (populationUsing <= maxTargetCountTiers[i])
+        //                {
+        //                    return populationMax * rangerTargetCountTiers[i];
+        //                }
+        //            }
+        //            return populationMax * rangerTargetCountTiers[rangerTargetCountTiers.Length - 1];
+        //        case EntityType.House:
+        //            if (populationMax - populationUsing < housePopulationDelay)
+        //                return currentMyEntityCount[entityType] + 1f;
+        //            break;
+        //    }
+        //    return 0f;
+        //}
 
-            switch (entityType)
-            {
+        //float FindBuildEntityPriority(EntityType entityType)
+        //{
+        //    float targetCount = GetTargetEntityCount(entityType);
 
-                case EntityType.MeleeUnit:
-                    return 0f;
-                case EntityType.BuilderUnit:
-                case EntityType.RangedUnit:                    
-                    return 1f - currentMyEntityCount[entityType] / targetCount;
-                case EntityType.House:
-                    if (targetCount != 0)
-                        return 1 - (populationMax - populationUsing) / housePopulationDelay;
-                    break;
-                case EntityType.BuilderBase:
-                    return targetCount * 10f;//0 or 10
-                case EntityType.RangedBase:
-                    return targetCount * 5f;//0 or 5
-            }
+        //    switch (entityType)
+        //    {
 
-            return 0f;
-        }
+        //        case EntityType.MeleeUnit:
+        //            return 0f;
+        //        case EntityType.BuilderUnit:
+        //        case EntityType.RangedUnit:                    
+        //            return 1f - currentMyEntityCount[entityType] / targetCount;
+        //        case EntityType.House:
+        //            if (targetCount != 0)
+        //                return 1 - (populationMax - populationUsing) / housePopulationDelay;
+        //            break;
+        //        case EntityType.BuilderBase:
+        //            return targetCount * 10f;//0 or 10
+        //        case EntityType.RangedBase:
+        //            return targetCount * 5f;//0 or 5
+        //    }
+
+        //    return 0f;
+        //}
 
     }
 
