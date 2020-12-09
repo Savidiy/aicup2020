@@ -48,7 +48,7 @@ namespace Aicup2020
         int[][] cellWithIdAny;
         int[][] onceVisibleMap;
 
-        int builderCountForStartBuilding = 2; // количество ближайших свободных строителей которое ищется при начале строительства
+        int builderCountForStartBuilding = 4; // количество ближайших свободных строителей которое ищется при начале строительства
         float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
 
         #region Статичстические переменные
