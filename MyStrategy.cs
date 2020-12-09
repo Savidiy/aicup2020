@@ -83,18 +83,26 @@ namespace Aicup2020
         #endregion
         #region Желания, Планы, Намерения и т.д.
 
-        enum DesireType {WantCreateBuilders, WantCreateHouses, WantExtractResources, WantTurretAttacks };
+        enum DesireType {WantCreateBuilders, WantCreateRangers,
+            WantCreateHouses, 
+            WantExtractResources, 
+            WantTurretAttacks, WantAllWarriorsAttack };
         List<DesireType> desires = new List<DesireType>();
         List<DesireType> prevDesires = new List<DesireType>();
         
-        enum PlanType {PlanCreateBuilders, PlanCreateHouses, PlanExtractResources, PlanTurretAttacks }
+        enum PlanType {PlanCreateBuilders, PlanCreateRangers,
+            PlanCreateHouses, 
+            PlanExtractResources, 
+            PlanTurretAttacks, PlanAllWarriorsAttack }
         List<PlanType> plans = new List<PlanType>();
         List<PlanType> prevPlans = new List<PlanType>();
         
         enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, 
+            IntentionCreateRanger, IntentionStopCreatingRanger,
             IntentionCreateHouseStart, IntentionCreateHouseContionue, IntentionRepairBuilding,
             IntentionExtractResources, IntentionFindResources, 
-            IntentionTurretAttacks
+            IntentionTurretAttacks,
+            IntentionAllWarriorsAttack
         }
         class Intention
         {
@@ -615,9 +623,46 @@ namespace Aicup2020
             }
             #endregion
 
-            desires.Add(DesireType.WantCreateBuilders);
+            int countEnemiesOnMyTerritory = 0;
+            int myTerritoryX = mapSize / 2;
+            int myTerritoryY = mapSize / 2;
+            foreach(var p in enemiesById)
+            {
+                if (p.Value.Position.X < myTerritoryX && p.Value.Position.Y < myTerritoryY)
+                {
+                    countEnemiesOnMyTerritory++;
+                }
+            }
+
+            bool needCreateWarriors = false;
+            if (countEnemiesOnMyTerritory > 0)
+            {
+                if (currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit] <= countEnemiesOnMyTerritory + populationMax / 5)
+                {
+                    needCreateWarriors = true;
+                    desires.Add(DesireType.WantCreateRangers);
+                }
+            } 
+            if (needCreateWarriors == false)
+            {
+                if (currentMyEntityCount[EntityType.BuilderUnit] < 30)
+                {
+                    desires.Add(DesireType.WantCreateBuilders);
+                } else
+                {
+                    if (currentMyEntityCount[EntityType.BuilderUnit] < currentMyEntityCount[EntityType.RangedUnit] * 2)
+                        desires.Add(DesireType.WantCreateBuilders);
+                    else 
+                        desires.Add(DesireType.WantCreateRangers);
+                }
+            }
+
+
+
             desires.Add(DesireType.WantExtractResources);
+
             desires.Add(DesireType.WantTurretAttacks);
+            desires.Add(DesireType.WantAllWarriorsAttack);
 
 
             //// retreat from enemies
@@ -651,7 +696,7 @@ namespace Aicup2020
             {
                 switch (d)
                 {
-                    case DesireType.WantCreateBuilders:                        
+                    case DesireType.WantCreateBuilders:
                         //i have base
                         if (currentMyEntityCount[EntityType.BuilderBase] > 0)
                         {
@@ -661,8 +706,19 @@ namespace Aicup2020
                             {
                                 plans.Add(PlanType.PlanCreateBuilders);
                             }
+                        }                        
+                        break;
+                    case DesireType.WantCreateRangers:
+                        //i have base
+                        if (currentMyEntityCount[EntityType.RangedBase] > 0)
+                        {
+                            //i have resources
+                            int newCost = properties[EntityType.RangedUnit].Cost + currentMyEntityCount[EntityType.RangedUnit] - 1;
+                            if (howMuchResourcesIHaveNextTurn >= newCost)
+                            {
+                                plans.Add(PlanType.PlanCreateRangers);
+                            }
                         }
-                        
                         break;
                     case DesireType.WantCreateHouses:
                         //i have builders
@@ -700,6 +756,14 @@ namespace Aicup2020
                             plans.Add(PlanType.PlanTurretAttacks);
                         }
                         break;
+                    case DesireType.WantAllWarriorsAttack:
+                        //i have warrior
+                        if ((currentMyEntityCount[EntityType.RangedUnit] + currentMyEntityCount[EntityType.MeleeUnit]) > 0)
+                        {
+                            plans.Add(PlanType.PlanAllWarriorsAttack);
+                        }
+                        break;
+
                     default:
                         int k = 5;//unknown type
                         break;
@@ -719,6 +783,12 @@ namespace Aicup2020
                         foreach (var id in basicEntityIdGroups[EntityType.BuilderBase].members)
                         {
                             intentions.Add(new Intention(IntentionType.IntentionCreateBuilder, id));
+                        }
+                        break;
+                    case PlanType.PlanCreateRangers:
+                        foreach (var id in basicEntityIdGroups[EntityType.RangedBase].members)
+                        {
+                            intentions.Add(new Intention(IntentionType.IntentionCreateRanger, id));
                         }
                         break;
                     case PlanType.PlanCreateHouses:
@@ -750,6 +820,10 @@ namespace Aicup2020
                     case PlanType.PlanTurretAttacks:
                         intentions.Add(new Intention(IntentionType.IntentionTurretAttacks, basicEntityIdGroups[EntityType.Turret]));
                         break;
+                    case PlanType.PlanAllWarriorsAttack:
+                        intentions.Add(new Intention(IntentionType.IntentionAllWarriorsAttack, basicEntityIdGroups[EntityType.MeleeUnit]));
+                        intentions.Add(new Intention(IntentionType.IntentionAllWarriorsAttack, basicEntityIdGroups[EntityType.RangedUnit]));
+                        break;
                     default:
                         int k = 5;// unknown type
                         break;
@@ -780,6 +854,24 @@ namespace Aicup2020
                             }
                             if (needStop)
                                 intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, prevIntentions[i].targetId));
+                        }
+                        break;
+                    case IntentionType.IntentionCreateRanger: // cancel Ranger base build
+                        {
+                            bool needStop = true;
+                            foreach (var ni in intentions)
+                            {
+                                if (ni.intentionType == IntentionType.IntentionCreateRanger)
+                                {
+                                    if (prevIntentions[i].targetId == ni.targetId)
+                                    {
+                                        needStop = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (needStop)
+                                intentions.Add(new Intention(IntentionType.IntentionStopCreatingRanger, prevIntentions[i].targetId));
                         }
                         break;
                     case IntentionType.IntentionCreateHouseStart:
@@ -855,6 +947,12 @@ namespace Aicup2020
                     case IntentionType.IntentionStopCreatingBuilder:
                         ActCancelAll(ni.targetId);
                         break;
+                    case IntentionType.IntentionCreateRanger:
+                        ActCreateUnit(ni.targetId, true);
+                        break;
+                    case IntentionType.IntentionStopCreatingRanger:
+                        ActCancelAll(ni.targetId);
+                        break;
                     case IntentionType.IntentionExtractResources:
                         {
                             int dist = properties[EntityType.BuilderUnit].SightRange;
@@ -882,6 +980,13 @@ namespace Aicup2020
                             ActTurretAttack(id);
                         }
                         break;
+                    case IntentionType.IntentionAllWarriorsAttack:
+                        foreach (int id in ni.targetGroup.members)
+                        {
+                            ActAttackNearbyEnemy(id);
+                        }
+                        break;
+
                 }
             }
         }
@@ -964,6 +1069,18 @@ namespace Aicup2020
                 attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { });
 
             actions.Add(id, new EntityAction(null, null, attackAction, null));
+        }
+        void ActAttackNearbyEnemy(int id)
+        {
+            MoveAction moveAction = new MoveAction();
+            moveAction.BreakThrough = true;
+            moveAction.FindClosestPosition = true;
+            moveAction.Target = FindNearestEnemy(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y);
+
+            AttackAction attackAction = new AttackAction();
+            attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, new EntityType[] { });
+
+            actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
         }
 
         bool[] FindAvailableTargetType(int sx, int sy, int size, int range)
