@@ -31,8 +31,12 @@ namespace Aicup2020
         #endregion
 
         Dictionary<EntityType, Group> basicEntityIdGroups = new Dictionary<EntityType, Group>();
-        Group houseBuilderGroup = new Group();
-        Group repairBuilderGroup = new Group();
+        Group groupHouseBuilders = new Group();
+        Group groupRepairBuilders = new Group();
+        Group groupRetreatBuilders = new Group();
+        Group groupMyBuildersAttackEnemyBuilders = new Group();
+
+
         List<int> needRepairEntityIdList = new List<int>();
         bool hasInactiveHouse = false;
 
@@ -56,11 +60,11 @@ namespace Aicup2020
             public byte meleesAim;
             public byte buildersWarning;
             public byte buildersAim;
-            //public EnemyDangerCell()
+            //public EnemyDangerCell(EnemyDangerCell cell)
             //{
-            //    rangersWarning = 0; // могут подойти в следующий ход
-            //    rangersAim = 0; // могут атаковать сейчас
-            //    turretsAim = 0;
+            //    rangersWarning = cell.rangersAim; // могут подойти в следующий ход
+            //    rangersAim = cell.rangersAim; // могут атаковать сейчас
+            //    turretsAim = cell.;
             //    meleesWarning = 0;
             //    meleesAim = 0;
             //    builderWarning = 0;
@@ -102,14 +106,14 @@ namespace Aicup2020
 
         enum DesireType {WantCreateBuilders, WantCreateRangers,
             WantCreateHouses, 
-            WantExtractResources, 
+            WantExtractResources, WantReatreatBuilders,
             WantTurretAttacks, WantAllWarriorsAttack };
         List<DesireType> desires = new List<DesireType>();
         List<DesireType> prevDesires = new List<DesireType>();
         
         enum PlanType {PlanCreateBuilders, PlanCreateRangers,
             PlanCreateHouses, 
-            PlanExtractResources, 
+            PlanExtractResources, PlanRetreatBuilders,
             PlanTurretAttacks, PlanAllWarriorsAttack }
         List<PlanType> plans = new List<PlanType>();
         List<PlanType> prevPlans = new List<PlanType>();
@@ -117,7 +121,7 @@ namespace Aicup2020
         enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, 
             IntentionCreateRanger, IntentionStopCreatingRanger,
             IntentionCreateHouseStart, IntentionCreateHouseContionue, IntentionRepairBuilding,
-            IntentionExtractResources, IntentionFindResources, 
+            IntentionExtractResources, IntentionFindResources, IntentionRetreatBuilders, IntentionMyBuiAttackEnemyBui,
             IntentionTurretAttacks,
             IntentionAllWarriorsAttack
         }
@@ -157,7 +161,7 @@ namespace Aicup2020
         List<Intention> intentions = new List<Intention>();
         List<Intention> prevIntentions = new List<Intention>();
 
-        Dictionary<int, Model.EntityAction> actions = new Dictionary<int, Model.EntityAction>();
+        Dictionary<int, EntityAction> actions = new Dictionary<int, EntityAction>();
         #endregion
 
         public Action GetAction(PlayerView playerView, DebugInterface debugInterface)
@@ -195,8 +199,11 @@ namespace Aicup2020
 
             GenerateDesires(); // ∆елани€ - „то € хочу сделать?       
             ConvertDesiresToPlans(); // ѕланы -  акие из желаний € могу сейчас сделать?
+
+            PrepareBeforeCreateIntentions(); //ѕодготовительные мероприти€ перед создани€ми намерений
             ConvertPlansToIntentions(); // Ќамерени€ -  ак и кем € буду выполн€ть планы?
             CorrectCrossIntentions();// ѕровер€ем взаимоискулючающие и противоречащие намерени€. ќставл€ем только нужные.
+
             ConvertIntentionsToActions(); // ѕриказы -  то будет выполн€ть намерени€?
             //приказы превращаютс€ в конкретные action дл€ entities
 
@@ -302,9 +309,9 @@ namespace Aicup2020
             }
 
             //=================== HOUSE builder unit ========================
-            for (var i=0; i < houseBuilderGroup.members.Count; )
+            for (var i=0; i < groupHouseBuilders.members.Count; )
             {
-                int id = houseBuilderGroup.members[i];
+                int id = groupHouseBuilders.members[i];
                 bool removed = false;
 
                 MoveAction moveAction = new MoveAction();
@@ -340,9 +347,9 @@ namespace Aicup2020
             }
 
             //=================== REPAIR builder unit ========================
-            for (var i = 0; i < repairBuilderGroup.members.Count;)
+            for (var i = 0; i < groupRepairBuilders.members.Count;)
             {
-                int id = repairBuilderGroup.members[i];
+                int id = groupRepairBuilders.members[i];
                 bool removed = false;
                 
                 int targetId = entityMemories[id].targetId;
@@ -635,6 +642,7 @@ namespace Aicup2020
             }
             #endregion
 
+            #region ¬ыбираем кого строить
             int countEnemiesOnMyTerritory = 0;
             int myTerritoryX = mapSize / 2;
             int myTerritoryY = mapSize / 2;
@@ -668,9 +676,9 @@ namespace Aicup2020
                         desires.Add(DesireType.WantCreateRangers);
                 }
             }
+            #endregion
 
-
-
+            desires.Add(DesireType.WantReatreatBuilders);
             desires.Add(DesireType.WantExtractResources);
 
             desires.Add(DesireType.WantTurretAttacks);
@@ -703,12 +711,14 @@ namespace Aicup2020
             prevPlans.Clear();
             prevPlans = plans;
             plans = new List<PlanType>();
+
             //add new plans
-            foreach(var d in desires)
+            foreach (var d in desires)
             {
                 switch (d)
                 {
                     case DesireType.WantCreateBuilders:
+                        #region хочу создавать строителей
                         //i have base
                         if (currentMyEntityCount[EntityType.BuilderBase] > 0)
                         {
@@ -720,7 +730,9 @@ namespace Aicup2020
                             }
                         }                        
                         break;
+                    #endregion
                     case DesireType.WantCreateRangers:
+                        #region ’очу создавать стрелков
                         //i have base
                         if (currentMyEntityCount[EntityType.RangedBase] > 0)
                         {
@@ -732,7 +744,9 @@ namespace Aicup2020
                             }
                         }
                         break;
+                    #endregion
                     case DesireType.WantCreateHouses:
+                        #region хочу строить дома
                         //i have builders
                         if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
                         {
@@ -754,33 +768,58 @@ namespace Aicup2020
                             }
                         }
                         break;
+                    #endregion
+                    case DesireType.WantReatreatBuilders:
+                        #region хочу чтобы строители сбегали от врагов
+                        plans.Add(PlanType.PlanRetreatBuilders);
+                        break;
+                    #endregion
                     case DesireType.WantExtractResources:
+                        #region хочу добывать ресурсы
                         //i have builders
                         if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
                         {                            
                             plans.Add(PlanType.PlanExtractResources);
                         }
                         break;
+                    #endregion
                     case DesireType.WantTurretAttacks:
+                        #region хочу чтобы турели атаковали
                         //i have turret
                         if (currentMyEntityCount[EntityType.Turret] > 0)
                         {
                             plans.Add(PlanType.PlanTurretAttacks);
                         }
                         break;
+                    #endregion
                     case DesireType.WantAllWarriorsAttack:
+                        #region хочу чтобы все войны атаковали
                         //i have warrior
                         if ((currentMyEntityCount[EntityType.RangedUnit] + currentMyEntityCount[EntityType.MeleeUnit]) > 0)
                         {
                             plans.Add(PlanType.PlanAllWarriorsAttack);
                         }
                         break;
-
+                    #endregion
                     default:
                         int k = 5;//unknown type
                         break;
                 }
             }
+        }
+        void PrepareBeforeCreateIntentions()
+        {
+            #region очищаем группы побега и атаки строителей
+            while (groupRetreatBuilders.members.Count > 0)
+            {
+                entityMemories[groupRetreatBuilders.members[0]].SetGroup(basicEntityIdGroups[entityMemories[groupRetreatBuilders.members[0]].myEntity.EntityType]);
+            }
+            while (groupMyBuildersAttackEnemyBuilders.members.Count > 0)
+            {
+                entityMemories[groupMyBuildersAttackEnemyBuilders.members[0]].SetGroup(basicEntityIdGroups[entityMemories[groupRetreatBuilders.members[0]].myEntity.EntityType]);
+            }
+            #endregion
+
         }
         void ConvertPlansToIntentions()
         {
@@ -826,6 +865,38 @@ namespace Aicup2020
                             }
                         }
                         break;
+                    case PlanType.PlanRetreatBuilders:
+                        #region хочу чтобы строители сбегали от врагов
+                        {
+                            bool needRetreat = false;
+                            bool needAttackEnemyBuilders = false;
+                            foreach (var em in entityMemories)
+                            {
+                                if (em.Value.myEntity.EntityType == EntityType.BuilderUnit)
+                                {
+                                    EnemyDangerCell enemyDangerCell = enemyDangerCells[em.Value.myEntity.Position.X][em.Value.myEntity.Position.Y];
+                                    if ((enemyDangerCell.meleesWarning + enemyDangerCell.meleesAim + enemyDangerCell.rangersAim + enemyDangerCell.rangersWarning) > 0)
+                                    {
+                                        needRetreat = true;
+                                        em.Value.SetGroup(groupRetreatBuilders);
+                                    }
+                                    else
+                                    {
+                                        if (enemyDangerCell.buildersAim > 0)
+                                        {
+                                            needAttackEnemyBuilders = true;
+                                            em.Value.SetGroup(groupMyBuildersAttackEnemyBuilders);
+                                        }
+                                    }
+                                }
+                            }
+                            if (needRetreat)
+                                intentions.Add(new Intention(IntentionType.IntentionRetreatBuilders, groupRetreatBuilders));
+                            if (needAttackEnemyBuilders)
+                                intentions.Add(new Intention(IntentionType.IntentionMyBuiAttackEnemyBui, groupMyBuildersAttackEnemyBuilders));
+                        }
+                        break;
+                        #endregion
                     case PlanType.PlanExtractResources:
                         intentions.Add(new Intention(IntentionType.IntentionExtractResources, basicEntityIdGroups[EntityType.BuilderUnit]));
                         break;
@@ -847,10 +918,11 @@ namespace Aicup2020
             for (int i = 0; i < prevIntentions.Count;)
             {
                 bool delete = false;
-
+                // анализ предыдущих заданий
                 switch (prevIntentions[i].intentionType)
                 {
-                    case IntentionType.IntentionCreateBuilder: // cancel base build 
+                    case IntentionType.IntentionCreateBuilder:
+                        #region  cancel base build 
                         {
                             bool needStop = true;
                             foreach (var ni in intentions)
@@ -868,7 +940,9 @@ namespace Aicup2020
                                 intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, prevIntentions[i].targetId));
                         }
                         break;
-                    case IntentionType.IntentionCreateRanger: // cancel Ranger base build
+                    #endregion
+                    case IntentionType.IntentionCreateRanger:
+                        #region // cancel Ranger base build
                         {
                             bool needStop = true;
                             foreach (var ni in intentions)
@@ -886,7 +960,9 @@ namespace Aicup2020
                                 intentions.Add(new Intention(IntentionType.IntentionStopCreatingRanger, prevIntentions[i].targetId));
                         }
                         break;
+                    #endregion
                     case IntentionType.IntentionCreateHouseStart:
+                        #region —оздаем намерение на ремонт построенного или отмен€ем строительство
                         if (prevIntentions[i].targetId >= 0)
                         {
                             // удачное строительство, создавем намерение на ремонт
@@ -904,7 +980,9 @@ namespace Aicup2020
                             }
                         }
                         break;
+                    #endregion
                     case IntentionType.IntentionRepairBuilding:
+                        #region продолжаем ремонтировать или отмен€ем задание
                         {
                             bool removed = false;
                             int targetId = prevIntentions[i].targetId;
@@ -936,6 +1014,7 @@ namespace Aicup2020
                             }
                         }
                         break;
+                        #endregion
                 }
 
                 if (delete)
@@ -995,10 +1074,21 @@ namespace Aicup2020
                     case IntentionType.IntentionAllWarriorsAttack:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            ActAttackNearbyEnemy(id);
+                            ActAttackNearbyEnemy(id, new EntityType[] { });
                         }
                         break;
-
+                    case IntentionType.IntentionRetreatBuilders:
+                        foreach (int id in ni.targetGroup.members)
+                        {
+                            ActRetreatFromEnemy(id);
+                        }
+                        break;
+                    case IntentionType.IntentionMyBuiAttackEnemyBui:
+                        foreach (int id in ni.targetGroup.members)
+                        {
+                            ActAttackNearbyEnemy(id, new EntityType[] { EntityType.BuilderUnit});
+                        }
+                        break;
                 }
             }
         }
@@ -1061,6 +1151,99 @@ namespace Aicup2020
             RepairAction repairAction = new RepairAction(targetId);
             actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
         }
+        void ActRetreatFromEnemy (int id)
+        {
+            int x = entityMemories[id].myEntity.Position.X;
+            int y = entityMemories[id].myEntity.Position.Y;
+
+            List<Vec2Int> targetsWarning = new List<Vec2Int>();
+            List<Vec2Int> targetsSafe = new List<Vec2Int>();
+
+            if (x > 0)
+            {
+                var cell = enemyDangerCells[x - 1][y];
+
+                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
+                {
+                    targetsSafe.Add(new Vec2Int(x-1, y));
+                } else
+                {
+                    if (cell.meleesAim + cell.rangersAim == 0)
+                    {
+                        targetsWarning.Add(new Vec2Int(x - 1, y));
+                    }
+                }
+            }
+            if (x + 1 < mapSize)
+            {
+                var cell = enemyDangerCells[x + 1][y];
+                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
+                {
+                    targetsSafe.Add(new Vec2Int(x + 1, y));
+                }
+                else
+                {
+                    if (cell.meleesAim + cell.rangersAim == 0)
+                    {
+                        targetsWarning.Add(new Vec2Int(x + 1, y));
+                    }
+                }
+            }
+            if (y > 0)
+            {
+                var cell = enemyDangerCells[x][y - 1];
+                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
+                {
+                    targetsSafe.Add(new Vec2Int(x, y - 1));
+                }
+                else
+                {
+                    if (cell.meleesAim + cell.rangersAim == 0)
+                    {
+                        targetsWarning.Add(new Vec2Int(x, y - 1));
+                    }
+                }
+            }
+            if (y + 1 < mapSize)
+            {
+                var cell = enemyDangerCells[x][y + 1];
+                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
+                {
+                    targetsSafe.Add(new Vec2Int(x, y + 1));
+                }
+                else
+                {
+                    if (cell.meleesAim + cell.rangersAim == 0)
+                    {
+                        targetsWarning.Add(new Vec2Int(x, y + 1));
+                    }
+                }
+            }
+
+            if (targetsSafe.Count > 0)
+            {
+                MoveAction moveAction = new MoveAction();
+                moveAction.BreakThrough = false;
+                moveAction.FindClosestPosition = true;
+                moveAction.Target = targetsSafe[random.Next(targetsSafe.Count)];
+                actions.Add(id, new EntityAction(moveAction, null, null, null));
+            } else if(targetsWarning.Count > 0)
+            {
+                MoveAction moveAction = new MoveAction();
+                moveAction.BreakThrough = false;
+                moveAction.FindClosestPosition = true;
+                moveAction.Target = targetsWarning[random.Next(targetsWarning.Count)];
+                actions.Add(id, new EntityAction(moveAction, null, null, null));
+
+            }
+            else
+            {
+                AttackAction attackAction = new AttackAction();
+                attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, new EntityType[] { });
+                actions.Add(id, new EntityAction(null, null, attackAction, null));
+            }
+
+        }
         void ActTurretAttack(int id)
         {
             int range = properties[EntityType.Turret].SightRange;
@@ -1083,7 +1266,7 @@ namespace Aicup2020
 
             actions.Add(id, new EntityAction(null, null, attackAction, null));
         }
-        void ActAttackNearbyEnemy(int id)
+        void ActAttackNearbyEnemy(int id, EntityType[] entityTypes)
         {
             MoveAction moveAction = new MoveAction();
             moveAction.BreakThrough = true;
@@ -1091,7 +1274,7 @@ namespace Aicup2020
             moveAction.Target = FindNearestEnemy(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y);
 
             AttackAction attackAction = new AttackAction();
-            attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, new EntityType[] { });
+            attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypes);
 
             actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
         }
@@ -1326,7 +1509,6 @@ namespace Aicup2020
             }
             return list;
         }
-
 
         void AddEnemyDangerCells(int sx, int sy, EntityType entityType)
         {
@@ -2086,7 +2268,7 @@ namespace Aicup2020
 
                 if (posFinded)
                 {
-                    entityMemories[id].SetGroup(houseBuilderGroup);                    
+                    entityMemories[id].SetGroup(groupHouseBuilders);                    
                     entityMemories[id].SetTargetPos(new Vec2Int(x, y));
                     entityMemories[id].SetMovePos(entityMemories[id].myEntity.Position);
                     entityMemories[id].SetTargetEntityType(EntityType.House);
@@ -2224,7 +2406,7 @@ namespace Aicup2020
                 bool showTurretsZone = false;
                 bool showBuildersZone = false;
                 bool showMeleesZone = false;
-                bool showRangersZone = false;
+                bool showRangersZone = true;
 
                 for (int x = 0; x < mapSize; x++)
                 {
