@@ -47,8 +47,12 @@ namespace Aicup2020
         int[][] cellWithIdOnlyBuilding;
         int[][] cellWithIdAny;
         int[][] onceVisibleMap;
+        bool[][] currentVisibleMap;
+        int[][] resourceMemoryMap;
 
-        int builderCountForStartBuilding = 5; // количество ближайших свободных строителей которое ищется при начале строительства
+        int distToFindResThenSpawnBuilder = 30; // дистанция поиска пути при создании строителя иначе просто справа вверху создается
+
+        int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
         float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
 
         #region Статичстические переменные
@@ -154,6 +158,7 @@ namespace Aicup2020
             }
             CountNumberOfEntitiesAndMap();
             CheckAliveAndDieEntities();
+            CheckDeadResourceOnCurrentVisibleMap();
             #endregion
 
             GenerateDesires(); // Желания - Что я хочу сделать?       
@@ -398,22 +403,27 @@ namespace Aicup2020
             cellWithIdAny = new int[mapSize][];
             cellWithIdOnlyBuilding = new int[mapSize][];
             onceVisibleMap = new int[mapSize][];
+            currentVisibleMap = new bool[mapSize][];
+            resourceMemoryMap = new int[mapSize][];
             for (var i = 0; i < mapSize; i++)
             {
                 cellWithIdAny[i] = new int[mapSize];
                 cellWithIdOnlyBuilding[i] = new int[mapSize];
                 onceVisibleMap[i] = new int[mapSize];
+                currentVisibleMap[i] = new bool[mapSize];
+                resourceMemoryMap[i] = new int[mapSize];
+                // auto zeroing all when created
             }
 
-            for (int x = 0; x < mapSize; x++)
-            {
-                for (int y = 0; y < mapSize; y++)
-                {
-                    // cellWithIdAny - zeroing before use
-                    // cellWithIdOnlyBuilding - zeroing before use
-                    onceVisibleMap[x][y] = 0; //update once
-                }
-            }
+            //for (int x = 0; x < mapSize; x++)
+            //{
+            //    for (int y = 0; y < mapSize; y++)
+            //    {
+            //        // cellWithIdAny - zeroing before use
+            //        // cellWithIdOnlyBuilding - zeroing before use
+            //        onceVisibleMap[x][y] = 0; //update once
+            //    }
+            //}
 
             //prepare current and previous entity counter
             foreach (var ent in entityTypesArray)
@@ -427,6 +437,12 @@ namespace Aicup2020
         void CheckAliveAndDieEntities()
         {
             hasInactiveHouse = false;
+
+            int currentTick = _playerView.CurrentTick;
+
+            //zeroing visible map all
+            for (int x = 0; x < mapSize; x++)
+                currentVisibleMap[x] = new bool[mapSize];
 
             //uncheck memory
             foreach (var m in entityMemories)
@@ -447,7 +463,9 @@ namespace Aicup2020
                     {
                         //update
                         entityMemories[e.Id].Update(e);
+                        //once and current visible map update
                         AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
+                        AddEntityViewToCurrentVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
                     }
                     else
                     {
@@ -455,14 +473,16 @@ namespace Aicup2020
                         var em = new EntityMemory(e);
                         em.SetGroup(basicEntityIdGroups[e.EntityType]);
                         entityMemories.Add(e.Id, em);
+                        //once and current visible map update
                         AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
+                        AddEntityViewToCurrentVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
 
                         howMuchResourcesCollectLastTurn += properties[e.EntityType].Cost + currentMyEntityCount[e.EntityType] - 1;
 
                         //check my builder units
                         if (properties[em.myEntity.EntityType].CanMove == false)
                         {
-                            for(int i = 0; i < intentions.Count; i++)
+                            for (int i = 0; i < intentions.Count; i++)
                             {
                                 if (intentions[i].intentionType == IntentionType.IntentionCreateHouseStart)
                                 {
@@ -491,6 +511,10 @@ namespace Aicup2020
                             //}
                         }
                     }
+                }
+                else if (e.PlayerId == null)// it s resource
+                {
+                    resourceMemoryMap[e.Position.X][e.Position.Y] = currentTick;
                 }
             }
 
@@ -527,6 +551,21 @@ namespace Aicup2020
                 sum += howMuchResourcesCollectLastNTurns[0];
             }
             howMuchResourcesIHaveNextTurn = myResources + sum / nextTurnResourcesSelectCount + nextTurnResourcesBonus;
+        }
+        void CheckDeadResourceOnCurrentVisibleMap()
+        {
+            int currentTick = _playerView.CurrentTick;
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    if (currentVisibleMap[x][y] == true)
+                    {
+                        if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                            resourceMemoryMap[x][y] = 0;
+                    }
+                }
+            }
         }
         void GenerateDesires()
         {
@@ -1060,12 +1099,56 @@ namespace Aicup2020
                 }
             }
         }
+        void AddEntityViewToCurrentVisibleMap(EntityType entityType, int sx, int sy)
+        {
+            int sightRange = properties[entityType].SightRange;
+            int size = properties[entityType].Size;
+            
+            int sxRight = sx + size - 1;
+            int syUp = sy + size - 1;
+            for (int si = 0; si < size; si++)
+            {
+                //my base
+                for (int siy = 0; siy < size; siy++)
+                {
+                    SetCurrentVisibleMapSafe(sx + si, sy + siy);
+                }
+
+                //straight
+                for (int di = 1; di < sightRange; di++)
+                {
+                    SetCurrentVisibleMapSafe(sx - di, sy + si);// left
+                    SetCurrentVisibleMapSafe(sx + si, sy - di);// down
+                    SetCurrentVisibleMapSafe(sxRight + di, sy + si);// right
+                    SetCurrentVisibleMapSafe(sx + si, syUp + di);// up
+                }
+            }
+            //diagonal
+            for (int aa = 1; aa < sightRange - 1; aa++)
+            {
+                for (int bb = 1; bb < sightRange - aa; bb++)
+                {
+                    SetCurrentVisibleMapSafe(sx - aa, sy - bb);//left-down
+                    SetCurrentVisibleMapSafe(sx - aa, syUp + bb);//left-up
+                    SetCurrentVisibleMapSafe(sxRight + aa, syUp + bb);//right-up
+                    SetCurrentVisibleMapSafe(sxRight + aa, sy - bb);//right-down
+                }
+            }
+            
+        }
         void SetOnceVisibleMapSafe(int x, int y, int value)
         {
             if (x >= 0 && x < mapSize && y >=0 && y < mapSize)
             {
                 if (onceVisibleMap[x][y] < value)
                     onceVisibleMap[x][y] = value;
+            }
+        }
+        void SetCurrentVisibleMapSafe(int x, int y)
+        {
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize)
+            {
+                currentVisibleMap[x][y] = true;
             }
         }
 
@@ -1291,6 +1374,130 @@ namespace Aicup2020
                 return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
             }
         }
+        //Vec2Int FindNearestToBaseResourceReturnSpawnPlace(int sx, int sy)
+        //{
+        //    //int index = -1;
+        //    //int distance = _playerView.MapSize * 3;
+
+        //    //for (int i = 0; i < _playerView.Entities.Length; i++)
+        //    //{
+        //    //    if (_playerView.Entities[i].PlayerId == null)
+        //    //    {
+        //    //        int d = System.Math.Abs(sx - _playerView.Entities[i].Position.X) + System.Math.Abs(sy - _playerView.Entities[i].Position.Y);
+        //    //        if (d < distance)
+        //    //        {
+        //    //            distance = d;
+        //    //            index = i;
+        //    //        }
+        //    //    }
+        //    //}
+
+        //    //if (index >= 0)
+        //    //{
+        //    //    return _playerView.Entities[index].Position;
+        //    //}
+        //    //else
+        //    //{
+        //    //    return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
+        //    //}
+
+        //    int size = properties[EntityType.BuilderBase].Size;
+        //    int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
+        //    int minIndex = startIndex - distToFindResThenSpawnBuilder; //минимальное значение, дальше которого не будем искать
+
+        //    #region найди ближайший ресурс
+        //    int[][] map = new int[mapSize][];
+        //    for (int i = 0; i < mapSize; i++)
+        //    {
+        //        map[i] = new int[mapSize];
+        //    }
+
+        //    //заполняем максимальными значениями на клетках текущей позиции
+        //    for (int x = sx; x < size + sx; x++)
+        //    {
+        //        for (int y =sy; y < size + sy; y++)
+        //        {
+        //            if (x >= 0 && y >= 0 && x < mapSize && y < mapSize)
+        //            {
+        //                map[x][y] = startIndex;
+        //            }
+        //        }
+        //    }
+
+        //    //добавляем стартовые клетки поиска
+        //    List<XYWeight> findCells = new List<XYWeight>();
+        //    for (int x = sx; x < size + sx; x++)
+        //    {
+        //        findCells.Add(new XYWeight(x, sy, startIndex));
+        //        if (size > 1)
+        //            findCells.Add(new XYWeight(x, sy + size - 1, startIndex));
+        //    }
+        //    for (int y = sy + 1; y < size + sy - 1; y++)
+        //    {
+        //        findCells.Add(new XYWeight(sx, y, startIndex));
+        //        findCells.Add(new XYWeight(sx + size - 1, y, startIndex));
+        //    }
+
+        //    while (findCells.Count > 0)
+        //    {
+        //        int x = findCells[0].x;
+        //        int y = findCells[0].y;
+        //        int w = findCells[0].weight;
+
+        //        for (int jj = 0; jj < 4; jj++)
+        //        {
+        //            int nx = x;
+        //            int ny = y;
+        //            if (jj == 0) nx--;
+        //            if (jj == 1) ny--;
+        //            if (jj == 2) nx++;
+        //            if (jj == 3) ny++;
+
+        //            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+        //            {
+        //                if (map[nx][ny] == 0)
+        //                {
+        //                    int id = cellWithIdAny[nx][ny];
+        //                    if (id >= 0)
+        //                    {
+        //                        //check resources
+        //                        if (basicEntityIdGroups[EntityType.BuilderUnit].members.Contains(id))
+        //                        {
+        //                            list.Add(id);
+        //                            if (list.Count >= builderCount)
+        //                                break;
+        //                        }
+        //                    }
+        //                    else
+        //                    {
+        //                        //add findCell
+        //                        map[nx][ny] = w - 1;
+        //                        if (w > minIndex)
+        //                            findCells.Add(new XYWeight(nx, ny, w - 1));
+        //                    }
+        //                }
+        //                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+
+        //            }
+        //        }
+        //        findCells.RemoveAt(0);
+
+        //        if (list.Count >= builderCount)
+        //            break;
+        //    }
+        //    return list;
+        //    #endregion
+
+        //    #region распутай путь до первой клетки и верни его
+
+        //    #endregion
+
+        //    #region если не нашелся, то верни правую-верхнюю свободную
+
+        //    #endregion
+
+
+        //}
         Vec2Int FindNearestEnemy(int sx, int sy)
         {
             int enemyIndex = -1;
@@ -1552,6 +1759,24 @@ namespace Aicup2020
             }
             #endregion
 
+            #region draw unvisible resources
+            int currentTick = playerView.CurrentTick - 1;
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                    {
+                        ColoredVertex[] vertices = new ColoredVertex[] {
+                            new ColoredVertex(new Vec2Float(x, y), new Vec2Float(), colorBlue),
+                            new ColoredVertex(new Vec2Float(x+1,y+1), new Vec2Float(), colorBlue)
+                        };
+                        DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                        debugInterface.Send(new DebugCommand.Add(lines));
+                    }
+                }
+            }
+            #endregion
 
             //if (playerView.CurrentTick == 10)
             //{
