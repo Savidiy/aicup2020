@@ -8,7 +8,9 @@ namespace Aicup2020
         Dictionary<int, EntityMemory> entityMemories = new Dictionary<int, EntityMemory>();
 
         #region Служебные переменные
-        EntityType[] entityTypesArray = { EntityType.BuilderUnit, EntityType.RangedUnit, EntityType.MeleeUnit, EntityType.Turret, EntityType.House, EntityType.BuilderBase, EntityType.MeleeBase, EntityType.RangedBase, EntityType.Wall, EntityType.Resource };
+        EntityType[] entityTypesArray = { EntityType.BuilderUnit, EntityType.RangedUnit, EntityType.MeleeUnit, 
+            EntityType.Turret, EntityType.House, EntityType.BuilderBase, EntityType.MeleeBase, EntityType.RangedBase, EntityType.Wall, 
+            EntityType.Resource };
 
         bool needPrepare = true;
         #endregion
@@ -59,6 +61,7 @@ namespace Aicup2020
         Dictionary<Model.EntityType, int> currentMyEntityCount = new Dictionary<Model.EntityType, int>();
         Dictionary<Model.EntityType, int> previousEntityCount = new Dictionary<Model.EntityType, int>();
         Dictionary<Model.EntityType, float> buildEntityPriority = new Dictionary<Model.EntityType, float>();
+        Dictionary<int, Entity> enemiesById = new Dictionary<int, Entity>();
 
         int howMuchResourcesIHaveNextTurn = 0;
         int nextTurnResourcesSelectCount = 5;
@@ -76,20 +79,23 @@ namespace Aicup2020
         int mapSize;
         int populationMax = 0;
         int populationUsing = 0;
+        bool fogOfWar;
         #endregion
         #region Желания, Планы, Намерения и т.д.
 
-        enum DesireType {WantCreateBuilders, WantCreateHouses, WantExtractResources };
+        enum DesireType {WantCreateBuilders, WantCreateHouses, WantExtractResources, WantTurretAttacks };
         List<DesireType> desires = new List<DesireType>();
         List<DesireType> prevDesires = new List<DesireType>();
         
-        enum PlanType {PlanCreateBuilders, PlanCreateHouses, PlanExtractResources }
+        enum PlanType {PlanCreateBuilders, PlanCreateHouses, PlanExtractResources, PlanTurretAttacks }
         List<PlanType> plans = new List<PlanType>();
         List<PlanType> prevPlans = new List<PlanType>();
         
         enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, 
             IntentionCreateHouseStart, IntentionCreateHouseContionue, IntentionRepairBuilding,
-            IntentionExtractResources, IntentionFindResources }
+            IntentionExtractResources, IntentionFindResources, 
+            IntentionTurretAttacks
+        }
         class Intention
         {
             public IntentionType intentionType;
@@ -140,6 +146,7 @@ namespace Aicup2020
                 mapSize = _playerView.MapSize;
                 properties = _playerView.EntityProperties;
                 needPrepare = false;
+                fogOfWar = _playerView.FogOfWar;
                 Prepare();
             }
             #endregion
@@ -415,6 +422,17 @@ namespace Aicup2020
                 // auto zeroing all when created
             }
 
+            if (!fogOfWar)
+            {
+                for(int x = 0; x <mapSize; x++)
+                {
+                    for(int y = 0; y < mapSize; y++)
+                    {
+                        onceVisibleMap[x][y] = 20;
+                        currentVisibleMap[x][y] = true;
+                    }
+                }                
+            }
             //for (int x = 0; x < mapSize; x++)
             //{
             //    for (int y = 0; y < mapSize; y++)
@@ -440,9 +458,14 @@ namespace Aicup2020
 
             int currentTick = _playerView.CurrentTick;
 
-            //zeroing visible map all
-            for (int x = 0; x < mapSize; x++)
-                currentVisibleMap[x] = new bool[mapSize];
+            //zeroing visible map all only with for of war
+            if (fogOfWar)
+            {
+                for (int x = 0; x < mapSize; x++)
+                    currentVisibleMap[x] = new bool[mapSize];
+            }
+            // zero enemies dictionary
+            enemiesById.Clear();
 
             //uncheck memory
             foreach (var m in entityMemories)
@@ -515,6 +538,9 @@ namespace Aicup2020
                 else if (e.PlayerId == null)// it s resource
                 {
                     resourceMemoryMap[e.Position.X][e.Position.Y] = currentTick;
+                } else // it's enemy
+                {
+                    enemiesById.Add(e.Id, e);
                 }
             }
 
@@ -591,6 +617,8 @@ namespace Aicup2020
 
             desires.Add(DesireType.WantCreateBuilders);
             desires.Add(DesireType.WantExtractResources);
+            desires.Add(DesireType.WantTurretAttacks);
+
 
             //// retreat from enemies
             /// info units about dangers zone
@@ -665,6 +693,13 @@ namespace Aicup2020
                             plans.Add(PlanType.PlanExtractResources);
                         }
                         break;
+                    case DesireType.WantTurretAttacks:
+                        //i have turret
+                        if (currentMyEntityCount[EntityType.Turret] > 0)
+                        {
+                            plans.Add(PlanType.PlanTurretAttacks);
+                        }
+                        break;
                     default:
                         int k = 5;//unknown type
                         break;
@@ -711,6 +746,9 @@ namespace Aicup2020
                         break;
                     case PlanType.PlanExtractResources:
                         intentions.Add(new Intention(IntentionType.IntentionExtractResources, basicEntityIdGroups[EntityType.BuilderUnit]));
+                        break;
+                    case PlanType.PlanTurretAttacks:
+                        intentions.Add(new Intention(IntentionType.IntentionTurretAttacks, basicEntityIdGroups[EntityType.Turret]));
                         break;
                     default:
                         int k = 5;// unknown type
@@ -838,6 +876,12 @@ namespace Aicup2020
                             ActRepairBuilding(id, ni.targetId);
                         }
                         break;
+                    case IntentionType.IntentionTurretAttacks:
+                        foreach (int id in ni.targetGroup.members)
+                        {
+                            ActTurretAttack(id);
+                        }
+                        break;
                 }
             }
         }
@@ -888,7 +932,6 @@ namespace Aicup2020
             actions.Add(id, new EntityAction(moveAction, buildAction, null, null));
             
         }
-
         void ActRepairBuilding(int id, int targetId)
         {
             //repair
@@ -900,6 +943,94 @@ namespace Aicup2020
             RepairAction repairAction = new RepairAction(targetId);
             actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
         }
+        void ActTurretAttack(int id)
+        {
+            int range = properties[EntityType.Turret].SightRange;
+
+            bool[] availableTargetsType = FindAvailableTargetType(
+                entityMemories[id].myEntity.Position.X,
+                entityMemories[id].myEntity.Position.Y,
+                properties[EntityType.Turret].Size,
+                range);
+
+            AttackAction attackAction = new AttackAction();
+            if (availableTargetsType[(int)EntityType.RangedUnit] == true)
+                attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit });
+            else if (availableTargetsType[(int)EntityType.MeleeUnit] == true)
+                attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit, EntityType.MeleeUnit });
+            else if (availableTargetsType[(int)EntityType.BuilderUnit] == true)
+                attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit, EntityType.MeleeUnit, EntityType.BuilderUnit });
+            else
+                attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { });
+
+            actions.Add(id, new EntityAction(null, null, attackAction, null));
+        }
+
+        bool[] FindAvailableTargetType(int sx, int sy, int size, int range)
+        {
+            bool[] availableType = new bool[entityTypesArray.Length];
+            foreach(var i in entityTypesArray)
+            {
+                availableType[(int)i] = false;
+            }
+
+            EntityType type = EntityType.Resource;
+
+            int sxRight = sx + size - 1;
+            int syUp = sy + size - 1;
+            for (int si = 0; si < size; si++)
+            {
+                //my base
+                for (int siy = 0; siy < size; siy++)
+                {
+                    if (GetEnemiesTypeSafeByXY(sx + si, sy + siy, ref type)) availableType[(int)type] = true;
+                }
+
+                //straight
+                for (int di = 1; di < range; di++)
+                {
+                    if (GetEnemiesTypeSafeByXY(sx - di, sy + si, ref type)) availableType[(int)type] = true; // left
+                    if (GetEnemiesTypeSafeByXY(sx + si, sy - di, ref type)) availableType[(int)type] = true; // down
+                    if (GetEnemiesTypeSafeByXY(sxRight + di, sy + si, ref type)) availableType[(int)type] = true; // right
+                    if (GetEnemiesTypeSafeByXY(sx + si, syUp + di, ref type)) availableType[(int)type] = true; // up
+                }
+            }
+            //diagonal
+            for (int aa = 1; aa < range - 1; aa++)
+            {
+                for (int bb = 1; bb < range - aa; bb++)
+                {
+                    if (GetEnemiesTypeSafeByXY(sx - aa, sy - bb, ref type)) availableType[(int)type] = true; // left-down
+                    if (GetEnemiesTypeSafeByXY(sx - aa, syUp + bb, ref type)) availableType[(int)type] = true; // left-up
+                    if (GetEnemiesTypeSafeByXY(sxRight + aa, syUp + bb, ref type)) availableType[(int)type] = true; // right-up
+                    if (GetEnemiesTypeSafeByXY(sxRight + aa, sy - bb, ref type)) availableType[(int)type] = true; // right-down
+                }
+            }
+            return availableType;
+        }
+        bool GetEnemiesTypeSafeByXY(int x, int y, ref EntityType type)
+        {
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize)
+            {
+                if (cellWithIdAny[x][y] >= 0)
+                {
+                    return GetEnemiesTypeSafe(cellWithIdAny[x][y], ref type);
+                }
+            }
+            return false;
+        }
+        bool GetEnemiesTypeSafe(int enemyID, ref EntityType type)
+        {
+            if (enemiesById.ContainsKey(enemyID))
+            {
+                type = enemiesById[enemyID].EntityType;
+                return true;
+            } else
+            {
+                return false;
+            }
+        }
+
         Vec2Int FindPositionToBuildHouse()
         {
             int buildingSize = properties[EntityType.House].Size;
@@ -1141,8 +1272,7 @@ namespace Aicup2020
                     SetCurrentVisibleMapSafe(sxRight + aa, syUp + bb);//right-up
                     SetCurrentVisibleMapSafe(sxRight + aa, sy - bb);//right-down
                 }
-            }
-            
+            }            
         }
         void SetOnceVisibleMapSafe(int x, int y, int value)
         {
@@ -1583,7 +1713,9 @@ namespace Aicup2020
                 }
                 #endregion
             }
-            return new StartAndTargetPoint(0, 0, 0, 0);// странно, как это произошло?
+            return new StartAndTargetPoint(0, 0, 0, 0);
+            // странно, как это произошло? 
+            // 1) нет места строительства вокруг базы
         }
         Vec2Int FindNearestEnemy(int sx, int sy)
         {
