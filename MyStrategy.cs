@@ -1816,57 +1816,57 @@ namespace Aicup2020
             debugInterface.Send(new DebugCommand.Clear());
             DebugState debugState = debugInterface.GetState();
 
-            
-
-            #region draw CPA
-            string text = $"{howMuchResourcesCollectAll} all";
-            int textSize = 16;
-            int margin = 2;
-            int sx = debugState.WindowSize.X - 10;
-            int sy = debugState.WindowSize.Y - 100;
-            int index = 0;
-            int col1 = 27;
-            int col2 = 55;
-            DebugData.PlacedText cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), text, 1, textSize);
-            debugInterface.Send(new DebugCommand.Add(cpa));
-            index++;
-            cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), "add / bui / cpa", 1, textSize);
-            debugInterface.Send(new DebugCommand.Add(cpa));
-
-            for (int i = 0; i < howMuchResourcesCollectLastNTurns.Length; i++)
+            if (playerView.Players[0].Id == playerView.MyId)
             {
+                #region draw CPA
+                string text = $"{howMuchResourcesCollectAll} all";
+                int textSize = 16;
+                int margin = 2;
+                int sx = debugState.WindowSize.X - 10;
+                int sy = debugState.WindowSize.Y - 100;
+                int index = 0;
+                int col1 = 27;
+                int col2 = 55;
+                DebugData.PlacedText cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), text, 1, textSize);
+                debugInterface.Send(new DebugCommand.Add(cpa));
                 index++;
-                debugInterface.Send(new DebugCommand.Add(
-                    new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col2, sy - index * (textSize + margin)), colorGreen),
-                    howMuchResourcesCollectLastNTurns[i] + " / ", 1, textSize)));
-                debugInterface.Send(new DebugCommand.Add(
-                    new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col1, sy - index * (textSize + margin)), colorGreen),
-                    howMuchLiveBuildersLast10Turns[i] + " / ", 1, textSize)));
-                debugInterface.Send(new DebugCommand.Add(
-                    new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen),
-                    howMuchResourcesCollectCPALastNTurns[i] + "", 1, textSize)));
-            }
-            #endregion
+                cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), "add / bui / cpa", 1, textSize);
+                debugInterface.Send(new DebugCommand.Add(cpa));
 
-            #region draw unvisible resources
-            int currentTick = playerView.CurrentTick - 1;
-            for (int x = 0; x < mapSize; x++)
-            {
-                for (int y = 0; y < mapSize; y++)
+                for (int i = 0; i < howMuchResourcesCollectLastNTurns.Length; i++)
                 {
-                    if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                    index++;
+                    debugInterface.Send(new DebugCommand.Add(
+                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col2, sy - index * (textSize + margin)), colorGreen),
+                        howMuchResourcesCollectLastNTurns[i] + " / ", 1, textSize)));
+                    debugInterface.Send(new DebugCommand.Add(
+                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col1, sy - index * (textSize + margin)), colorGreen),
+                        howMuchLiveBuildersLast10Turns[i] + " / ", 1, textSize)));
+                    debugInterface.Send(new DebugCommand.Add(
+                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen),
+                        howMuchResourcesCollectCPALastNTurns[i] + "", 1, textSize)));
+                }
+                #endregion
+
+                #region draw unvisible resources
+                int currentTick = playerView.CurrentTick - 1;
+                for (int x = 0; x < mapSize; x++)
+                {
+                    for (int y = 0; y < mapSize; y++)
                     {
-                        ColoredVertex[] vertices = new ColoredVertex[] {
+                        if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                        {
+                            ColoredVertex[] vertices = new ColoredVertex[] {
                             new ColoredVertex(new Vec2Float(x, y), new Vec2Float(), colorBlue),
                             new ColoredVertex(new Vec2Float(x+1,y+1), new Vec2Float(), colorBlue)
                         };
-                        DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
-                        debugInterface.Send(new DebugCommand.Add(lines));
+                            DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                            debugInterface.Send(new DebugCommand.Add(lines));
+                        }
                     }
                 }
+                #endregion
             }
-            #endregion
-
             //if (playerView.CurrentTick == 10)
             //{
             //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
