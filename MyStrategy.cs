@@ -508,7 +508,7 @@ namespace Aicup2020
                         AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
                         AddEntityViewToCurrentVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
 
-                        howMuchResourcesCollectLastTurn += properties[e.EntityType].Cost + currentMyEntityCount[e.EntityType] - 1;
+                        howMuchResourcesCollectLastTurn += properties[e.EntityType].InitialCost + currentMyEntityCount[e.EntityType] - 1;
 
                         //check my builder units
                         if (properties[em.myEntity.EntityType].CanMove == false)
@@ -701,7 +701,7 @@ namespace Aicup2020
                         if (currentMyEntityCount[EntityType.BuilderBase] > 0)
                         {
                             //i have resources
-                            int newCost = properties[EntityType.BuilderUnit].Cost + currentMyEntityCount[EntityType.BuilderUnit] - 1;
+                            int newCost = properties[EntityType.BuilderUnit].InitialCost + currentMyEntityCount[EntityType.BuilderUnit] - 1;
                             if (howMuchResourcesIHaveNextTurn >= newCost)
                             {
                                 plans.Add(PlanType.PlanCreateBuilders);
@@ -713,7 +713,7 @@ namespace Aicup2020
                         if (currentMyEntityCount[EntityType.RangedBase] > 0)
                         {
                             //i have resources
-                            int newCost = properties[EntityType.RangedUnit].Cost + currentMyEntityCount[EntityType.RangedUnit] - 1;
+                            int newCost = properties[EntityType.RangedUnit].InitialCost + currentMyEntityCount[EntityType.RangedUnit] - 1;
                             if (howMuchResourcesIHaveNextTurn >= newCost)
                             {
                                 plans.Add(PlanType.PlanCreateRangers);
@@ -725,7 +725,7 @@ namespace Aicup2020
                         if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
                         {
                             //i have resources
-                            int newCost = properties[EntityType.House].Cost;
+                            int newCost = properties[EntityType.House].InitialCost;
                             if (howMuchResourcesIHaveNextTurn >= newCost)
                             {
                                 // ограничение на одновременное строительство
@@ -1420,7 +1420,7 @@ namespace Aicup2020
             //need build houses or not
             if (buildEntityPriority[EntityType.House] > 0)
             {
-                if (myResources >= properties[EntityType.House].Cost)
+                if (myResources >= properties[EntityType.House].InitialCost)
                 {
                     //need build houses
                     if (houseBuilderGroup.members.Count == 0)
