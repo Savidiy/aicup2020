@@ -15,11 +15,6 @@ namespace Aicup2020
         bool needPrepare = true;
         #endregion
 
-        int[] maxTargetCountTiers = { 5, 15, 40, 80};
-        float[] builderTargetCountTiers = { 1f, 0.75f, 0.7f, 0.6f , 0.3f};
-        float[] rangerTargetCountTiers = { 0f, 0.25f, 0.3f, 0.4f, 0.7f };
-        float housePopulationDelay = 5f;
-
         #region клетки где можно построить юнита вокруг здани€
         int largeBuildingSize = 5;
         int[] buildingPositionDX = {-1, -1, -1, -1, -1, 0, 1, 2, 3 ,4, 5, 5, 5, 5, 5,  4,  3,  2,  1,  0 };
@@ -1414,69 +1409,7 @@ namespace Aicup2020
                 e.Value.SavePrevState();
             }
         }
-        void CheckEntitiesGroup()
-        {
-           
-            //need build houses or not
-            if (buildEntityPriority[EntityType.House] > 0)
-            {
-                if (myResources >= properties[EntityType.House].InitialCost)
-                {
-                    //need build houses
-                    if (houseBuilderGroup.members.Count == 0)
-                    {
-                        //check available life builders
-                        if (basicEntityIdGroups[EntityType.BuilderUnit].members.Count > 0)
-                        {
-                            //select new builder
-                            TrySelectFreeBuilderForBuild(EntityType.House);
-                        }
-                    }
-                }
-            }
-            //else
-            //{
-            //    //don't need build houses
-            //    if (houseBuilderGroup.members.Count > 0)
-            //    {
-            //        //remove all builders
-            //        while (houseBuilderGroup.members.Count > 0)
-            //        {
-            //            entityMemories[houseBuilderGroup.members[0]].SetGroup(basicEntityIdGroups[EntityType.BuilderUnit]);
-            //        }
-            //    }
-            //}
-            
-
-            //check current repairs
-
-
-            //check new repairs
-            foreach (var buildingId in needRepairEntityIdList)
-            {
-                bool needFindRepair = true;
-                foreach(var builderId in repairBuilderGroup.members)
-                {
-                    if (entityMemories[builderId].targetId == buildingId)
-                    {
-                        needFindRepair = false;
-                        break;
-                    }
-                }
-                if (needFindRepair)
-                {
-                    if (basicEntityIdGroups[EntityType.BuilderUnit].members.Count > 0)
-                    {
-                        int index = random.Next(basicEntityIdGroups[EntityType.BuilderUnit].members.Count);
-                        int id = basicEntityIdGroups[EntityType.BuilderUnit].members[index];
-                        entityMemories[id].SetGroup(repairBuilderGroup);
-                        entityMemories[id].SetTargetId(buildingId);
-                    }
-                }
-            }
-
-        }
-
+        
         Vec2Int FindSpawnPosition(int myX, int myY, bool agressive)
         {
             //find nearest enemy
@@ -2199,127 +2132,6 @@ namespace Aicup2020
             //theoreticaly same population using
             //unitCount = currentMyEntityCount[EntityType.BuilderUnit] + currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit];
         }
-
-        //void CheckEntitiesNeedRepair()
-        //{
-        //    needRepairEntityIdList.Clear();
-
-        //    EntityType entityType = EntityType.BuilderBase;
-        //    foreach (var id in basicEntityIdGroups[entityType].members)
-        //    {
-        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-        //        {
-        //            needRepairEntityIdList.Add(id);
-        //        }
-        //    }
-
-        //    entityType = EntityType.RangedBase;
-        //    foreach (var id in basicEntityIdGroups[entityType].members)
-        //    {
-        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-        //        {
-        //            needRepairEntityIdList.Add(id);
-        //        }
-        //    }
-        //    entityType = EntityType.Turret;
-        //    foreach (var id in basicEntityIdGroups[entityType].members)
-        //    {
-        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-        //        {
-        //            needRepairEntityIdList.Add(id);
-        //        }
-        //    }
-        //    entityType = EntityType.House;
-        //    foreach (var id in basicEntityIdGroups[entityType].members)
-        //    {
-        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-        //        {
-        //            needRepairEntityIdList.Add(id);
-        //        }
-        //    }
-        //    entityType = EntityType.MeleeBase;
-        //    foreach (var id in basicEntityIdGroups[entityType].members)
-        //    {
-        //        if (entityMemories[id].myEntity.Health < properties[entityType].MaxHealth)
-        //        {
-        //            needRepairEntityIdList.Add(id);
-        //        }
-        //    }
-        //}
-        //void FindBuildPriorities()
-        //{
-        //    foreach (var ent in entityTypesArray)
-        //    {
-        //        buildEntityPriority[ent] = FindBuildEntityPriority(ent);
-        //    }
-        //}
-        //float GetTargetEntityCount(EntityType entityType)
-        //{
-        //    switch (entityType)
-        //    {
-        //        case EntityType.BuilderBase:
-        //            if (currentMyEntityCount[entityType] == 0)
-        //                return 1f;
-        //            break;
-        //        case EntityType.RangedBase:
-        //            if (currentMyEntityCount[entityType] == 0)
-        //                return 1f;
-        //            break;
-        //        case EntityType.BuilderUnit:
-        //            if (populationUsing == populationMax)
-        //                return 0f;
-        //            for (int i = 0; i < maxTargetCountTiers.Length; i++)
-        //            {
-        //                if (populationUsing <= maxTargetCountTiers[i])
-        //                {
-        //                    return populationMax * builderTargetCountTiers[i];
-        //                }
-        //            }
-        //            return populationMax * builderTargetCountTiers[builderTargetCountTiers.Length - 1];
-        //        case EntityType.RangedUnit:
-        //            if (populationUsing == populationMax)
-        //                return 0f;
-        //            for (int i = 0; i < maxTargetCountTiers.Length; i++)
-        //            {
-        //                if (populationUsing <= maxTargetCountTiers[i])
-        //                {
-        //                    return populationMax * rangerTargetCountTiers[i];
-        //                }
-        //            }
-        //            return populationMax * rangerTargetCountTiers[rangerTargetCountTiers.Length - 1];
-        //        case EntityType.House:
-        //            if (populationMax - populationUsing < housePopulationDelay)
-        //                return currentMyEntityCount[entityType] + 1f;
-        //            break;
-        //    }
-        //    return 0f;
-        //}
-
-        //float FindBuildEntityPriority(EntityType entityType)
-        //{
-        //    float targetCount = GetTargetEntityCount(entityType);
-
-        //    switch (entityType)
-        //    {
-
-        //        case EntityType.MeleeUnit:
-        //            return 0f;
-        //        case EntityType.BuilderUnit:
-        //        case EntityType.RangedUnit:                    
-        //            return 1f - currentMyEntityCount[entityType] / targetCount;
-        //        case EntityType.House:
-        //            if (targetCount != 0)
-        //                return 1 - (populationMax - populationUsing) / housePopulationDelay;
-        //            break;
-        //        case EntityType.BuilderBase:
-        //            return targetCount * 10f;//0 or 10
-        //        case EntityType.RangedBase:
-        //            return targetCount * 5f;//0 or 5
-        //    }
-
-        //    return 0f;
-        //}
-
     }
 
     class EntityMemory
