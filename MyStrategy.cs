@@ -705,7 +705,7 @@ namespace Aicup2020
             desires.Add(DesireType.WantExtractResources);
 
             desires.Add(DesireType.WantTurretAttacks);
-            //desires.Add(DesireType.WantAllWarriorsAttack);
+            desires.Add(DesireType.WantAllWarriorsAttack);
 
 
             //// retreat from enemies
@@ -895,9 +895,9 @@ namespace Aicup2020
                             bool needAttackEnemyBuilders = false;
                             foreach (var em in entityMemories)
                             {
-                                if (em.Value.myEntity.EntityType == EntityType.BuilderUnit
-                                    || em.Value.myEntity.EntityType == EntityType.MeleeUnit
-                                    || em.Value.myEntity.EntityType == EntityType.RangedUnit)
+                                if (em.Value.myEntity.EntityType == EntityType.BuilderUnit)
+                                    //|| em.Value.myEntity.EntityType == EntityType.MeleeUnit
+                                    //|| em.Value.myEntity.EntityType == EntityType.RangedUnit)
                                 {
                                     EnemyDangerCell enemyDangerCell = enemyDangerCells[em.Value.myEntity.Position.X][em.Value.myEntity.Position.Y];
                                     if ((enemyDangerCell.meleesWarning + enemyDangerCell.meleesAim + enemyDangerCell.rangersAim + enemyDangerCell.rangersWarning) > 0)
@@ -1184,14 +1184,15 @@ namespace Aicup2020
             List<Vec2Int> targetsWarning = new List<Vec2Int>();
             List<Vec2Int> targetsSafe = new List<Vec2Int>();
 
-            int x = sx;
-            int y = sy;
+            
             for (int k = 0; k < 4; k++)
             {
-                if (k == 0) x = sx - 1;
-                if (k == 1) x = sx + 1;
-                if (k == 2) y = sy - 1;
-                if (k == 3) y = sy + 1;
+                int x = sx;
+                int y = sy;
+                if (k == 0) x--;
+                if (k == 1) x++;
+                if (k == 2) y--;
+                if (k == 3) y++;
 
                 if (x >= 0  && y >= 0 && x < mapSize && y < mapSize) // valid XY
                 {
@@ -1219,7 +1220,7 @@ namespace Aicup2020
                 moveAction.BreakThrough = false;
                 moveAction.FindClosestPosition = true;
                 moveAction.Target = targetsSafe[random.Next(targetsSafe.Count)];
-                debugLines.Add(new DebugLine(sx + 0.5f, sy + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorWhite, colorGreen));
+                debugLines.Add(new DebugLine(sx + 0.5f, sy + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorGreen, colorGreen));
                 actions.Add(id, new EntityAction(moveAction, null, null, null));
                 
             } else if(targetsWarning.Count > 0)
@@ -1228,7 +1229,7 @@ namespace Aicup2020
                 moveAction.BreakThrough = false;
                 moveAction.FindClosestPosition = true;
                 moveAction.Target = targetsWarning[random.Next(targetsWarning.Count)];
-                debugLines.Add(new DebugLine(sx + 0.5f, sy + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorWhite, colorMagenta));
+                debugLines.Add(new DebugLine(sx + 0.5f, sy + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorBlue, colorBlue));
                 actions.Add(id, new EntityAction(moveAction, null, null, null));
 
             }
@@ -1236,6 +1237,7 @@ namespace Aicup2020
             {
                 AttackAction attackAction = new AttackAction();
                 attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, new EntityType[] { });
+                debugLines.Add(new DebugLine(sx, sy, sx + 1, sy + 1, colorRed, colorRed));
                 actions.Add(id, new EntityAction(null, null, attackAction, null));
             }
 
@@ -2461,15 +2463,17 @@ namespace Aicup2020
 
                 #endregion
 
+                #region draw debugLines
                 foreach (var li in debugLines)
                 {
                     ColoredVertex[] vertices = new ColoredVertex[] {
-                        new ColoredVertex(new Vec2Float(li._x1 ,li._y2), new Vec2Float(), li._color1),
+                        new ColoredVertex(new Vec2Float(li._x1 ,li._y1), new Vec2Float(), li._color1),
                         new ColoredVertex(new Vec2Float(li._x2, li._y2), new Vec2Float(), li._color2),
                     };
                     DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
                     debugInterface.Send(new DebugCommand.Add(lines));
                 }
+                #endregion
             }
             //if (playerView.CurrentTick == 10)
             //{
