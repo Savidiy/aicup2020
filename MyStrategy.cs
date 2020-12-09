@@ -47,6 +47,28 @@ namespace Aicup2020
         bool[][] currentVisibleMap;
         int[][] resourceMemoryMap;
 
+        struct EnemyDangerCell
+        {
+            public byte rangersWarning; // могут подойти в следующий ход
+            public byte rangersAim; // могут атаковать сейчас
+            public byte turretsAim;
+            public byte meleesWarning;
+            public byte meleesAim;
+            public byte buildersWarning;
+            public byte buildersAim;
+            //public EnemyDangerCell()
+            //{
+            //    rangersWarning = 0; // могут подойти в следующий ход
+            //    rangersAim = 0; // могут атаковать сейчас
+            //    turretsAim = 0;
+            //    meleesWarning = 0;
+            //    meleesAim = 0;
+            //    builderWarning = 0;
+            //    builderAim = 0;
+            //}
+        }
+        EnemyDangerCell[][] enemyDangerCells;
+
         int distToFindResThenSpawnBuilder = 30; // дистанция поиска пути при создании строителя иначе просто справа вверху создается
 
         int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
@@ -415,6 +437,7 @@ namespace Aicup2020
             onceVisibleMap = new int[mapSize][];
             currentVisibleMap = new bool[mapSize][];
             resourceMemoryMap = new int[mapSize][];
+            enemyDangerCells = new EnemyDangerCell[mapSize][];
             for (var i = 0; i < mapSize; i++)
             {
                 cellWithIdAny[i] = new int[mapSize];
@@ -422,6 +445,7 @@ namespace Aicup2020
                 onceVisibleMap[i] = new int[mapSize];
                 currentVisibleMap[i] = new bool[mapSize];
                 resourceMemoryMap[i] = new int[mapSize];
+                enemyDangerCells[i] = new EnemyDangerCell[mapSize];
                 // auto zeroing all when created
             }
 
@@ -469,6 +493,13 @@ namespace Aicup2020
             }
             // zero enemies dictionary
             enemiesById.Clear();
+            // zero enemy danger cells
+            for (var x = 0; x < mapSize; x++) {
+                for (var y = 0; y < mapSize; y++)
+                {
+                    enemyDangerCells[x][y] = new EnemyDangerCell();
+                }
+            }
 
             //uncheck memory
             foreach (var m in entityMemories)
@@ -519,22 +550,6 @@ namespace Aicup2020
                                     }
                                 }
                             }
-
-                            //for(int i = 0; i < houseBuilderGroup.members.Count; )
-                            //{
-                            //    int id = houseBuilderGroup.members[i];
-                            //    bool removed = false;
-                            //    if (entityMemories[id].targetPos.X == em.myEntity.Position.X 
-                            //        && entityMemories[id].targetPos.Y == em.myEntity.Position.Y)
-                            //    {
-                            //        removed = true;
-                            //        entityMemories[id].SetGroup(repairBuilderGroup);
-                            //        entityMemories[id].SetTargetId(e.Id);
-                            //    }
-
-                            //    if (!removed)
-                            //        i++;
-                            //}
                         }
                     }
                 }
@@ -544,6 +559,7 @@ namespace Aicup2020
                 } else // it's enemy
                 {
                     enemiesById.Add(e.Id, e);
+                    AddEnemyDangerCells(e.Position.X, e.Position.Y, e.EntityType);
                 }
             }
 
@@ -596,6 +612,7 @@ namespace Aicup2020
                 }
             }
         }
+
         void GenerateDesires()
         {
             prevDesires.Clear();
@@ -985,6 +1002,7 @@ namespace Aicup2020
                 }
             }
         }
+
         void ActCreateUnit(int baseId, bool agressive)
         {
             BuildAction buildAction = new BuildAction();
@@ -1309,6 +1327,93 @@ namespace Aicup2020
             return list;
         }
 
+
+        void AddEnemyDangerCells(int sx, int sy, EntityType entityType)
+        {
+            if ((entityType == EntityType.BuilderUnit) || (entityType == EntityType.MeleeUnit) || (entityType == EntityType.RangedUnit) || (entityType == EntityType.Turret))
+            {
+                int range = properties[entityType].Attack.Value.AttackRange;
+                int size = properties[entityType].Size;
+                int sxRight = sx + size - 1;
+                int syUp = sy + size - 1;
+                for (int si = 0; si < size; si++)
+                {
+                    //my base
+                    for (int siy = 0; siy < size; siy++)
+                    {
+                        // сам себе не угрожает
+                        //AddEnemyDangerValueToCellSafe(sx + si, sy + siy, entityType, true);
+                    }
+
+                    //straight
+                    for (int di = 1; di <= range; di++)
+                    {
+                        AddEnemyDangerValueToCellSafe(sx - di, sy + si, entityType);// left
+                        AddEnemyDangerValueToCellSafe(sx + si, sy - di, entityType);// down
+                        AddEnemyDangerValueToCellSafe(sxRight + di, sy + si, entityType);// right
+                        AddEnemyDangerValueToCellSafe(sx + si, syUp + di, entityType);// up
+                    }
+                }
+                //diagonal quarter
+                for (int aa = 1; aa <= range - 1; aa++)
+                {
+                    for (int bb = 1; bb <= range - aa; bb++)
+                    {
+                        AddEnemyDangerValueToCellSafe(sx - aa, sy - bb, entityType);//left-down
+                        AddEnemyDangerValueToCellSafe(sx - aa, syUp + bb, entityType);//left-up
+                        AddEnemyDangerValueToCellSafe(sxRight + aa, syUp + bb, entityType);//right-up
+                        AddEnemyDangerValueToCellSafe(sxRight + aa, sy - bb, entityType);//right-down
+                    }
+                }
+
+                //warning diagonal
+                for (int cc = 0; cc <= range; cc++)
+                {
+                    AddEnemyDangerValueToCellSafe(sx - range - 1 + cc, sy - cc, entityType, false);//left-down
+                    AddEnemyDangerValueToCellSafe(sx - cc, syUp + range + 1 - cc, entityType, false);//left-up
+                    AddEnemyDangerValueToCellSafe(sxRight + range + 1 - cc, syUp + cc, entityType, false);//right-up
+                    AddEnemyDangerValueToCellSafe(sxRight + cc, sy - range - 1 + cc, entityType, false);//right-down
+                }
+                if (entityType == EntityType.Turret)
+                {
+                    AddEnemyDangerValueToCellSafe(sx - range - 1, syUp, entityType, false);//left
+                    AddEnemyDangerValueToCellSafe(sxRight, syUp + range + 1, entityType, false);//up
+                    AddEnemyDangerValueToCellSafe(sxRight + range + 1, sy, entityType, false);//right
+                    AddEnemyDangerValueToCellSafe(sx, sy - range - 1, entityType, false);//down
+                }
+            }
+        }
+        void AddEnemyDangerValueToCellSafe(int x, int y, EntityType entityType, bool aim = true)
+        {
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize)
+            {
+                switch (entityType)
+                {
+                    case EntityType.BuilderUnit:
+                        if (aim)
+                            enemyDangerCells[x][y].buildersAim++;
+                        else
+                            enemyDangerCells[x][y].buildersWarning++;
+                        break;
+                    case EntityType.MeleeUnit:
+                        if (aim)
+                            enemyDangerCells[x][y].meleesAim++;
+                        else
+                            enemyDangerCells[x][y].meleesWarning++;
+                        break;
+                    case EntityType.RangedUnit:
+                        if (aim)
+                            enemyDangerCells[x][y].rangersAim++;
+                        else
+                            enemyDangerCells[x][y].rangersWarning++;
+                        break;
+                    case EntityType.Turret:
+                        if (aim)
+                            enemyDangerCells[x][y].turretsAim++;
+                        break;
+                }
+            }
+        }
         void AddEntityViewToOnceVisibleMap(EntityType entityType, int sx, int sy)
         {
             int sightRange = properties[entityType].SightRange;
@@ -1989,85 +2094,6 @@ namespace Aicup2020
                 }
             }
         }
-
-        Color colorRed = new Color(1, 0, 0, 1);
-        Color colorGreen = new Color(0, 1, 0, 1);
-        Color colorBlue = new Color(0, 0, 1, 1);
-        public void DebugUpdate(PlayerView playerView, DebugInterface debugInterface)
-        {
-            debugInterface.Send(new DebugCommand.Clear());
-            DebugState debugState = debugInterface.GetState();
-
-            if (playerView.Players[0].Id == playerView.MyId)
-            {
-                #region draw CPA
-                string text = $"{howMuchResourcesCollectAll} all";
-                int textSize = 16;
-                int margin = 2;
-                int sx = debugState.WindowSize.X - 10;
-                int sy = debugState.WindowSize.Y - 100;
-                int index = 0;
-                int col1 = 27;
-                int col2 = 55;
-                DebugData.PlacedText cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), text, 1, textSize);
-                debugInterface.Send(new DebugCommand.Add(cpa));
-                index++;
-                cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), "add / bui / cpa", 1, textSize);
-                debugInterface.Send(new DebugCommand.Add(cpa));
-
-                for (int i = 0; i < howMuchResourcesCollectLastNTurns.Length; i++)
-                {
-                    index++;
-                    debugInterface.Send(new DebugCommand.Add(
-                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col2, sy - index * (textSize + margin)), colorGreen),
-                        howMuchResourcesCollectLastNTurns[i] + " / ", 1, textSize)));
-                    debugInterface.Send(new DebugCommand.Add(
-                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col1, sy - index * (textSize + margin)), colorGreen),
-                        howMuchLiveBuildersLast10Turns[i] + " / ", 1, textSize)));
-                    debugInterface.Send(new DebugCommand.Add(
-                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen),
-                        howMuchResourcesCollectCPALastNTurns[i] + "", 1, textSize)));
-                }
-                #endregion
-
-                #region draw unvisible resources
-                int currentTick = playerView.CurrentTick - 1;
-                for (int x = 0; x < mapSize; x++)
-                {
-                    for (int y = 0; y < mapSize; y++)
-                    {
-                        if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
-                        {
-                            ColoredVertex[] vertices = new ColoredVertex[] {
-                            new ColoredVertex(new Vec2Float(x, y), new Vec2Float(), colorBlue),
-                            new ColoredVertex(new Vec2Float(x+1,y+1), new Vec2Float(), colorBlue)
-                        };
-                            DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
-                            debugInterface.Send(new DebugCommand.Add(lines));
-                        }
-                    }
-                }
-                #endregion
-            }
-            //if (playerView.CurrentTick == 10)
-            //{
-            //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
-
-            //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
-            //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
-            //    debugInterface.Send(new DebugCommand.Add(text));
-
-            //    ColoredVertex[] vertices = new ColoredVertex[] {
-            //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
-            //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
-            //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
-            //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
-            //    };
-            //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
-            //    debugInterface.Send(new DebugCommand.Add(lines));
-            //}
-        }
-
         void CountNumberOfEntitiesAndMap()
         {           
             //clear map
@@ -2132,6 +2158,149 @@ namespace Aicup2020
             //theoreticaly same population using
             //unitCount = currentMyEntityCount[EntityType.BuilderUnit] + currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit];
         }
+
+        Color colorMagenta = new Color(1, 0, 1, 1);
+        Color colorRed = new Color(1, 0, 0, 1);
+        Color colorBlack = new Color(0, 0, 0, 1);
+        Color colorGreen = new Color(0, 1, 0, 1);
+        Color colorBlue = new Color(0, 0, 1, 1);
+        public void DebugUpdate(PlayerView playerView, DebugInterface debugInterface)
+        {
+            debugInterface.Send(new DebugCommand.Clear());
+            DebugState debugState = debugInterface.GetState();
+
+            if (playerView.Players[0].Id == playerView.MyId)
+            {
+                #region draw CPA
+                string text = $"{howMuchResourcesCollectAll} all";
+                int textSize = 16;
+                int margin = 2;
+                int sx = debugState.WindowSize.X - 10;
+                int sy = debugState.WindowSize.Y - 100;
+                int index = 0;
+                int col1 = 27;
+                int col2 = 55;
+                DebugData.PlacedText cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), text, 1, textSize);
+                debugInterface.Send(new DebugCommand.Add(cpa));
+                index++;
+                cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), "add / bui / cpa", 1, textSize);
+                debugInterface.Send(new DebugCommand.Add(cpa));
+
+                for (int i = 0; i < howMuchResourcesCollectLastNTurns.Length; i++)
+                {
+                    index++;
+                    debugInterface.Send(new DebugCommand.Add(
+                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col2, sy - index * (textSize + margin)), colorGreen),
+                        howMuchResourcesCollectLastNTurns[i] + " / ", 1, textSize)));
+                    debugInterface.Send(new DebugCommand.Add(
+                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col1, sy - index * (textSize + margin)), colorGreen),
+                        howMuchLiveBuildersLast10Turns[i] + " / ", 1, textSize)));
+                    debugInterface.Send(new DebugCommand.Add(
+                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen),
+                        howMuchResourcesCollectCPALastNTurns[i] + "", 1, textSize)));
+                }
+                #endregion
+
+                #region draw unvisible resources
+                int currentTick = playerView.CurrentTick - 1;
+                for (int x = 0; x < mapSize; x++)
+                {
+                    for (int y = 0; y < mapSize; y++)
+                    {
+                        if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                        {
+                            ColoredVertex[] vertices = new ColoredVertex[] {
+                            new ColoredVertex(new Vec2Float(x, y), new Vec2Float(), colorBlue),
+                            new ColoredVertex(new Vec2Float(x+1,y+1), new Vec2Float(), colorBlue)
+                        };
+                            DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                            debugInterface.Send(new DebugCommand.Add(lines));
+                        }
+                    }
+                }
+                #endregion
+
+                #region draw danger level
+                bool showTurretsZone = false;
+                bool showBuildersZone = false;
+                bool showMeleesZone = false;
+                bool showRangersZone = false;
+
+                for (int x = 0; x < mapSize; x++)
+                {
+                    for (int y = 0; y < mapSize; y++)
+                    {
+                        if (showRangersZone)
+                        {
+                            if (enemyDangerCells[x][y].rangersAim > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x, y), new Vec2Float(0, 0), colorBlack);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].rangersAim.ToString(), 0, 12)));
+                            }
+                            if (enemyDangerCells[x][y].rangersWarning > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x, y + 0.5f), new Vec2Float(0, 0), colorRed);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].rangersWarning.ToString(), 0, 12)));
+                            }
+                        }
+                        if (showTurretsZone)
+                        {
+                            if (enemyDangerCells[x][y].turretsAim > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlack);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].turretsAim.ToString(), 0.5f, 12)));
+                            }
+                        }
+                        if (showMeleesZone)
+                        {
+                            if (enemyDangerCells[x][y].meleesAim > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 1, y), new Vec2Float(0, 0), colorBlack);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].meleesAim.ToString(), 1f, 12)));
+                            }
+                            if (enemyDangerCells[x][y].meleesWarning > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 1, y + 0.5f), new Vec2Float(0, 0), colorRed);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].meleesWarning.ToString(), 1f, 12)));
+                            }
+                        }
+                        if (showBuildersZone)
+                        {
+                            if (enemyDangerCells[x][y].buildersAim > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y), new Vec2Float(0, 0), colorGreen);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].buildersAim.ToString(), 1f, 12)));
+                            }
+                            if (enemyDangerCells[x][y].buildersWarning > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.5f), new Vec2Float(0, 0), colorMagenta);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].buildersWarning.ToString(), 1f, 12)));
+                            }
+                        }
+                    }
+                }
+
+                #endregion
+            }
+            //if (playerView.CurrentTick == 10)
+            //{
+            //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
+
+            //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
+            //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
+            //    debugInterface.Send(new DebugCommand.Add(text));
+
+            //    ColoredVertex[] vertices = new ColoredVertex[] {
+            //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
+            //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
+            //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
+            //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
+            //    };
+            //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+            //    debugInterface.Send(new DebugCommand.Add(lines));
+            //}
+        }
+
     }
 
     class EntityMemory
