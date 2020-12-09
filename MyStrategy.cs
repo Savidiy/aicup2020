@@ -164,6 +164,27 @@ namespace Aicup2020
         Dictionary<int, EntityAction> actions = new Dictionary<int, EntityAction>();
         #endregion
 
+        struct DebugLine
+        {
+            public float _x1;
+            public float _x2;
+            public float _y1;
+            public float _y2;
+            public Color _color1;
+            public Color _color2;
+            public DebugLine(float x1, float y1, float x2, float y2, Color color1, Color color2 )
+            {
+                _x1 = x1;
+                _y1 = y1;
+                _x2 = x2;
+                _y2 = y2;
+                _color1 = color1;
+                _color2 = color2;
+            }
+        }
+        List<DebugLine> debugLines = new List<DebugLine>();
+
+
         public Action GetAction(PlayerView playerView, DebugInterface debugInterface)
         {
             _playerView = playerView;
@@ -196,6 +217,8 @@ namespace Aicup2020
             CheckAliveAndDieEntities();
             CheckDeadResourceOnCurrentVisibleMap();
             #endregion
+
+            debugLines.Clear();
 
             GenerateDesires(); // Желания - Что я хочу сделать?       
             ConvertDesiresToPlans(); // Планы - Какие из желаний я могу сейчас сделать?
@@ -682,7 +705,7 @@ namespace Aicup2020
             desires.Add(DesireType.WantExtractResources);
 
             desires.Add(DesireType.WantTurretAttacks);
-            desires.Add(DesireType.WantAllWarriorsAttack);
+            //desires.Add(DesireType.WantAllWarriorsAttack);
 
 
             //// retreat from enemies
@@ -872,7 +895,9 @@ namespace Aicup2020
                             bool needAttackEnemyBuilders = false;
                             foreach (var em in entityMemories)
                             {
-                                if (em.Value.myEntity.EntityType == EntityType.BuilderUnit)
+                                if (em.Value.myEntity.EntityType == EntityType.BuilderUnit
+                                    || em.Value.myEntity.EntityType == EntityType.MeleeUnit
+                                    || em.Value.myEntity.EntityType == EntityType.RangedUnit)
                                 {
                                     EnemyDangerCell enemyDangerCell = enemyDangerCells[em.Value.myEntity.Position.X][em.Value.myEntity.Position.Y];
                                     if ((enemyDangerCell.meleesWarning + enemyDangerCell.meleesAim + enemyDangerCell.rangersAim + enemyDangerCell.rangersWarning) > 0)
@@ -1153,69 +1178,37 @@ namespace Aicup2020
         }
         void ActRetreatFromEnemy (int id)
         {
-            int x = entityMemories[id].myEntity.Position.X;
-            int y = entityMemories[id].myEntity.Position.Y;
+            int sx = entityMemories[id].myEntity.Position.X;
+            int sy = entityMemories[id].myEntity.Position.Y;
 
             List<Vec2Int> targetsWarning = new List<Vec2Int>();
             List<Vec2Int> targetsSafe = new List<Vec2Int>();
 
-            if (x > 0)
+            int x = sx;
+            int y = sy;
+            for (int k = 0; k < 4; k++)
             {
-                var cell = enemyDangerCells[x - 1][y];
+                if (k == 0) x = sx - 1;
+                if (k == 1) x = sx + 1;
+                if (k == 2) y = sy - 1;
+                if (k == 3) y = sy + 1;
 
-                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
+                if (x >= 0  && y >= 0 && x < mapSize && y < mapSize) // valid XY
                 {
-                    targetsSafe.Add(new Vec2Int(x-1, y));
-                } else
-                {
-                    if (cell.meleesAim + cell.rangersAim == 0)
+                    if (cellWithIdAny[x][y] < 0) // empty cell
                     {
-                        targetsWarning.Add(new Vec2Int(x - 1, y));
-                    }
-                }
-            }
-            if (x + 1 < mapSize)
-            {
-                var cell = enemyDangerCells[x + 1][y];
-                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
-                {
-                    targetsSafe.Add(new Vec2Int(x + 1, y));
-                }
-                else
-                {
-                    if (cell.meleesAim + cell.rangersAim == 0)
-                    {
-                        targetsWarning.Add(new Vec2Int(x + 1, y));
-                    }
-                }
-            }
-            if (y > 0)
-            {
-                var cell = enemyDangerCells[x][y - 1];
-                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
-                {
-                    targetsSafe.Add(new Vec2Int(x, y - 1));
-                }
-                else
-                {
-                    if (cell.meleesAim + cell.rangersAim == 0)
-                    {
-                        targetsWarning.Add(new Vec2Int(x, y - 1));
-                    }
-                }
-            }
-            if (y + 1 < mapSize)
-            {
-                var cell = enemyDangerCells[x][y + 1];
-                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
-                {
-                    targetsSafe.Add(new Vec2Int(x, y + 1));
-                }
-                else
-                {
-                    if (cell.meleesAim + cell.rangersAim == 0)
-                    {
-                        targetsWarning.Add(new Vec2Int(x, y + 1));
+                        var cell = enemyDangerCells[x][y];
+                        if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
+                        {
+                            targetsSafe.Add(new Vec2Int(x, y));
+                        }
+                        else
+                        {
+                            if (cell.meleesAim + cell.rangersAim == 0)
+                            {
+                                targetsWarning.Add(new Vec2Int(x, y));
+                            }
+                        }
                     }
                 }
             }
@@ -1226,13 +1219,16 @@ namespace Aicup2020
                 moveAction.BreakThrough = false;
                 moveAction.FindClosestPosition = true;
                 moveAction.Target = targetsSafe[random.Next(targetsSafe.Count)];
+                debugLines.Add(new DebugLine(sx + 0.5f, sy + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorWhite, colorGreen));
                 actions.Add(id, new EntityAction(moveAction, null, null, null));
+                
             } else if(targetsWarning.Count > 0)
             {
                 MoveAction moveAction = new MoveAction();
                 moveAction.BreakThrough = false;
                 moveAction.FindClosestPosition = true;
                 moveAction.Target = targetsWarning[random.Next(targetsWarning.Count)];
+                debugLines.Add(new DebugLine(sx + 0.5f, sy + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorWhite, colorMagenta));
                 actions.Add(id, new EntityAction(moveAction, null, null, null));
 
             }
@@ -2341,6 +2337,7 @@ namespace Aicup2020
             //unitCount = currentMyEntityCount[EntityType.BuilderUnit] + currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit];
         }
 
+        Color colorWhite = new Color(1, 1, 1, 1);
         Color colorMagenta = new Color(1, 0, 1, 1);
         Color colorRed = new Color(1, 0, 0, 1);
         Color colorBlack = new Color(0, 0, 0, 1);
@@ -2406,7 +2403,7 @@ namespace Aicup2020
                 bool showTurretsZone = false;
                 bool showBuildersZone = false;
                 bool showMeleesZone = false;
-                bool showRangersZone = true;
+                bool showRangersZone = false;
 
                 for (int x = 0; x < mapSize; x++)
                 {
@@ -2463,6 +2460,16 @@ namespace Aicup2020
                 }
 
                 #endregion
+
+                foreach (var li in debugLines)
+                {
+                    ColoredVertex[] vertices = new ColoredVertex[] {
+                        new ColoredVertex(new Vec2Float(li._x1 ,li._y2), new Vec2Float(), li._color1),
+                        new ColoredVertex(new Vec2Float(li._x2, li._y2), new Vec2Float(), li._color2),
+                    };
+                    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                    debugInterface.Send(new DebugCommand.Add(lines));
+                }
             }
             //if (playerView.CurrentTick == 10)
             //{
