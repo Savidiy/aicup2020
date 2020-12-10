@@ -797,11 +797,18 @@ namespace Aicup2020
             bool needCreateWarriors = false;
             if (countEnemiesOnMyTerritory > 0)
             {
+                /// тесты показали эффективность этого расчета над
+                /// + populationMax / 3
+                /// + populationMax / 4
+                /// + populationMax / 5
+                /// соответствует версии basic_retreat1 до исправления ошибки подсчета populationMax
+                /// см. 10.12_13:51 и 10.12_14:00 и 10.12_14:19
                 int potencyPopul = 0;
                 foreach (var e in properties)
                 {
                     potencyPopul += currentMyEntityCount[e.Key] * e.Value.PopulationProvide;
                 }
+
                 if (currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit] <= countEnemiesOnMyTerritory + potencyPopul / 5)
                 {
                     needCreateWarriors = true;
@@ -1423,7 +1430,7 @@ namespace Aicup2020
                 else
                 {
                     AttackAction attackAction = new AttackAction();
-                    attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, new EntityType[] { });
+                    attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypesArray); // атаковать абсолютно всех
                     debugLines.Add(new DebugLine(ex, ey, ex + 1, ey + 1, colorRed, colorRed));
                     actions.Add(id, new EntityAction(null, null, attackAction, null));
                 }
