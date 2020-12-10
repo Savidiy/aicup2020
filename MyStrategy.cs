@@ -50,6 +50,11 @@ namespace Aicup2020
         int[][] onceVisibleMap;
         bool[][] currentVisibleMap;
         int[][] resourceMemoryMap;
+        int[][] resourcePotentialField;
+        const int RPFmyBuildingWeight = -4;
+        const int RPFenemyEntityWeight = -3;
+        const int RPFdangerCellWeight = -2;
+        const int RPFdeniedBuilderWeight = -1;
 
         struct EnemyDangerCell
         {
@@ -106,7 +111,7 @@ namespace Aicup2020
 
         enum DesireType {WantCreateBuilders, WantCreateRangers,
             WantCreateHouses, 
-            WantExtractResources, WantReatreatBuilders,
+            WantExtractResources, WantRetreatBuilders,
             WantTurretAttacks, WantAllWarriorsAttack };
         List<DesireType> desires = new List<DesireType>();
         List<DesireType> prevDesires = new List<DesireType>();
@@ -216,6 +221,7 @@ namespace Aicup2020
             CountNumberOfEntitiesAndMap();
             CheckAliveAndDieEntities();
             CheckDeadResourceOnCurrentVisibleMap();
+            GenerateResourcePotentialField();
             #endregion
 
             debugLines.Clear();
@@ -468,6 +474,8 @@ namespace Aicup2020
             currentVisibleMap = new bool[mapSize][];
             resourceMemoryMap = new int[mapSize][];
             enemyDangerCells = new EnemyDangerCell[mapSize][];
+            resourcePotentialField = new int[mapSize][];
+
             for (var i = 0; i < mapSize; i++)
             {
                 cellWithIdAny[i] = new int[mapSize];
@@ -476,6 +484,7 @@ namespace Aicup2020
                 currentVisibleMap[i] = new bool[mapSize];
                 resourceMemoryMap[i] = new int[mapSize];
                 enemyDangerCells[i] = new EnemyDangerCell[mapSize];
+                resourcePotentialField[i] = new int[mapSize];
                 // auto zeroing all when created
             }
 
@@ -642,6 +651,109 @@ namespace Aicup2020
                 }
             }
         }
+        void GenerateResourcePotentialField()
+        {
+            //zeroing
+            for (int i = 0; i < mapSize; i++)
+            {
+                resourcePotentialField[i] = new int[mapSize]; 
+            }
+
+            //стартовое значение, которое будем уменьшать
+            int startWeight = mapSize * mapSize;
+            //int firstCellWeight = startWeight - 1; // соседние клетки с ресурсом. Считаем, что строители на них всегда добывают ресурс и не строим путь через него
+            //int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать            
+
+            //добавляем стартовые клетки поиска
+            List<XYWeight> findCells = new List<XYWeight>();
+            foreach (var en in _playerView.Entities)
+            {
+                if (en.EntityType == EntityType.Resource) // it is resource
+                {
+                    findCells.Add(new XYWeight(en.Position.X, en.Position.Y, startWeight));
+                    resourcePotentialField[en.Position.X][en.Position.Y] = startWeight;
+                }
+            }
+
+            while (findCells.Count > 0)
+            {
+                int bx = findCells[0].x;
+                int by = findCells[0].y;
+                int w = findCells[0].weight;
+
+                for (int jj = 0; jj < 4; jj++)
+                {
+                    int nx = bx;
+                    int ny = by;
+                    if (jj == 0) nx--;
+                    if (jj == 1) ny--;
+                    if (jj == 2) nx++;
+                    if (jj == 3) ny++;
+
+                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                    {
+                        if (resourcePotentialField[nx][ny] == 0)
+                        {
+                            
+                            bool canContinueField = true;
+
+                            // проверка опасной зоны
+                            var dCell = enemyDangerCells[nx][ny];
+                            if (dCell.meleesAim + dCell.meleesWarning + dCell.rangersAim + dCell.rangersWarning + dCell.turretsAim > 0)
+                            {
+                                canContinueField = false;
+                                resourcePotentialField[nx][ny] = RPFdangerCellWeight;
+                            }
+
+                            // проверка занятой клетки
+                            if (canContinueField == true)
+                            {
+                                int id = cellWithIdAny[nx][ny];
+                                if (id >= 0)// occupied cell
+                                {
+                                    if (entityMemories.ContainsKey(id))
+                                    {
+                                        if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+                                        {
+                                            if (w == startWeight)//check my builder на соседней клетке с ресурсомs
+                                            {
+                                                canContinueField = false;
+                                                resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+                                            {
+                                                canContinueField = false;
+                                                resourcePotentialField[nx][ny] = RPFmyBuildingWeight;
+                                            }
+                                        }
+                                    }
+                                    else // enemy 
+                                    {
+                                        if (enemiesById.ContainsKey(id))
+                                        {
+                                            canContinueField = false;
+                                            resourcePotentialField[nx][ny] = RPFenemyEntityWeight;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (canContinueField == true) // empty, safe cell or through free unit
+                            {
+                                //add weight and findCell
+                                resourcePotentialField[nx][ny] = w - 1;
+                                findCells.Add(new XYWeight(nx, ny, w - 1));
+                            }
+                        }
+                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                    }
+                }
+                findCells.RemoveAt(0);
+            }
+        }
 
         void GenerateDesires()
         {
@@ -701,7 +813,7 @@ namespace Aicup2020
             }
             #endregion
 
-            desires.Add(DesireType.WantReatreatBuilders);
+            desires.Add(DesireType.WantRetreatBuilders);
             desires.Add(DesireType.WantExtractResources);
 
             desires.Add(DesireType.WantTurretAttacks);
@@ -792,7 +904,7 @@ namespace Aicup2020
                         }
                         break;
                     #endregion
-                    case DesireType.WantReatreatBuilders:
+                    case DesireType.WantRetreatBuilders:
                         #region хочу чтобы строители сбегали от врагов
                         plans.Add(PlanType.PlanRetreatBuilders);
                         break;
@@ -2354,6 +2466,7 @@ namespace Aicup2020
         {
             debugInterface.Send(new DebugCommand.Clear());
             DebugState debugState = debugInterface.GetState();
+            debugInterface.Send(new DebugCommand.SetAutoFlush(false));
 
             if (playerView.Players[0].Id == playerView.MyId)
             {
@@ -2479,7 +2592,56 @@ namespace Aicup2020
                     debugInterface.Send(new DebugCommand.Add(lines));
                 }
                 #endregion
+
+                #region draw resource potential field
+                bool drawResourcePotentialField = true;
+                int maxXY = mapSize / 2;
+                if (drawResourcePotentialField)
+                {
+                    int maxWeight = mapSize * mapSize;
+                    for (int x = 0; x < maxXY; x++)
+                    {
+                        for (int y = 0; y < maxXY; y++)
+                        {
+                            int weight = resourcePotentialField[x][y];
+                            if (weight == RPFdangerCellWeight)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorRed);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
+                            }
+                            else if (weight == RPFdeniedBuilderWeight)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorGreen);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "v", 0.5f, 14)));
+                            }
+                            else if (weight == RPFenemyEntityWeight)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorWhite);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "-", 0.5f, 14)));
+                            }
+                            else if (weight == RPFmyBuildingWeight)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorWhite);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "-", 0.5f, 14)));
+                            }
+                            else if (weight == 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlack);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "-", 0.5f, 14)));
+                            }
+                            else if (weight < maxWeight)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlue);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, (maxWeight - weight).ToString(), 0.5f, 14)));
+                            }
+
+                        }
+                    }
+                }
+
+                #endregion
             }
+            #region примеры использования
             //if (playerView.CurrentTick == 10)
             //{
             //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
@@ -2497,6 +2659,8 @@ namespace Aicup2020
             //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
             //    debugInterface.Send(new DebugCommand.Add(lines));
             //}
+            #endregion
+            debugInterface.Send(new DebugCommand.Flush());
         }
 
     }
