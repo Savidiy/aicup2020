@@ -1257,8 +1257,8 @@ namespace Aicup2020
             } else
             {
                 //make builder
-                var a = FindNearestToBaseResourceReturnSpawnPlace(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y, distToFindResThenSpawnBuilder);
-                target = new Vec2Int(a.startX, a.startY);
+                target = FindNearestToBaseResourceReturnSpawnPlace(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y);
+                //target = new Vec2Int(a.startX, a.startY);
             }
 
             buildAction.EntityType = properties[entityMemories[baseId].myEntity.EntityType].Build.Value.Options[0];
@@ -2061,188 +2061,35 @@ namespace Aicup2020
         /// <param name="baseX">положение Х базы родителя </param>
         /// <param name="baseY">положение У базы родителя</param>
         /// <returns>  </returns>
-        StartAndTargetPoint FindNearestToBaseResourceReturnSpawnPlace(int baseX, int baseY, int maxDistance)
+        Vec2Int FindNearestToBaseResourceReturnSpawnPlace(int baseX, int baseY)
         {
-            int size = properties[EntityType.BuilderBase].Size;
-            int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
-            int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
+            //int size = properties[EntityType.BuilderBase].Size;
+            //int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
+            //int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
 
-            bool iFind = false;
-            int resourceX = 0;
-            int resourceY = 0;
+            int tx = 0;
+            int ty = 0;
+            int maxFindWeight = 0;
 
-            #region найди ближайший ресурс
-            int[][] map = new int[mapSize][];
-            for (int i = 0; i < mapSize; i++)
+            for (int i = 0; i < buildingPositionDX.Length; i++)
             {
-                map[i] = new int[mapSize];
-            }
-
-            //заполняем максимальными значениями на клетках текущей позиции
-            for (int x = baseX; x < size + baseX; x++)
-            {
-                for (int y = baseY; y < size + baseY; y++)
+                int nx = baseX + buildingPositionDX[i];
+                int ny = baseY + buildingPositionDY[i];
+                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                 {
-                    if (x >= 0 && y >= 0 && x < mapSize && y < mapSize)
+                    if (cellWithIdAny[nx][ny] < 0)
                     {
-                        map[x][y] = startIndex;
+                        int w = resourcePotentialField[nx][ny];
+                        if (w > maxFindWeight)
+                        {
+                            maxFindWeight = w;
+                            tx = nx;
+                            ty = ny;
+                        }
                     }
                 }
             }
-
-            //добавляем стартовые клетки поиска
-            List<XYWeight> findCells = new List<XYWeight>();
-            for (int x = baseX; x < size + baseX; x++)
-            {
-                findCells.Add(new XYWeight(x, baseY, startIndex));
-                if (size > 1)
-                    findCells.Add(new XYWeight(x, baseY + size - 1, startIndex));
-            }
-            for (int y = baseY + 1; y < size + baseY - 1; y++)
-            {
-                findCells.Add(new XYWeight(baseX, y, startIndex));
-                findCells.Add(new XYWeight(baseX + size - 1, y, startIndex));
-            }
-
-            while (findCells.Count > 0)
-            {
-                int x = findCells[0].x;
-                int y = findCells[0].y;
-                int w = findCells[0].weight;
-
-                for (int jj = 0; jj < 4; jj++)// обследование четырех соседних клеток
-                {
-                    int nx = x;
-                    int ny = y;
-                    if (jj == 0) nx--;
-                    if (jj == 1) ny--;
-                    if (jj == 2) nx++;
-                    if (jj == 3) ny++;
-
-                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
-                    {
-                        if (map[nx][ny] == 0)
-                        {
-                            // это ресурс?
-                            if (resourceMemoryMap[nx][ny] > 0)
-                            {
-                                resourceX = nx;
-                                resourceY = ny;
-                                map[nx][ny] = w - 1;
-                                iFind = true;
-                                break;
-                            }
-                            // ищем путь дальше или что-то мешает?                                                        
-                            int id = cellWithIdAny[nx][ny];
-                            if (id >= 0)
-                            {
-                                // что-то мешает, но это не ресурс
-                            }
-                            else
-                            {
-                                // ищем дальше
-                                map[nx][ny] = w - 1;
-                                if (w > minIndex)
-                                    findCells.Add(new XYWeight(nx, ny, w - 1));
-                            }
-                        }
-                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
-                    }
-                }
-                findCells.RemoveAt(0);
-
-                if (iFind)
-                    break;
-            }
-            #endregion
-
-            int targetX = resourceX;
-            int targetY = resourceY;
-
-            if (iFind)
-            {
-                #region распутай путь до первой клетки и верни его
-                int currentNum = map[targetX][targetY];
-                int targetNum = startIndex - 1;
-
-                while(currentNum < targetNum)
-                {
-                    int nextNum = currentNum + 1;
-                    bool find = false;
-                    if (targetX > 0)//can check left
-                    {
-                        if (map[targetX - 1][targetY] == nextNum)
-                        {
-                            targetX--;
-                            find = true;
-                        }   
-                    } 
-                    if (!find && targetX + 1 < mapSize)//can check right
-                    {
-                        if (map[targetX + 1][targetY] == nextNum)
-                        {
-                            targetX++;
-                            find = true;
-                        }
-                    } 
-                    if (!find && targetY + 1 < mapSize)//can check up
-                    {
-                        if (map[targetX][targetY+1] == nextNum)
-                        {
-                            find = true;
-                            targetY++;
-                        }
-                    } 
-                    if (!find && targetY > 0)
-                    {
-                        if (map[targetX][targetY - 1] == nextNum)
-                        {
-                            targetY--;
-                            find = true;
-                        }
-                    }
-                    if (find)
-                    {
-                        currentNum = map[targetX][targetY];
-                    } else
-                    {
-                        break;//не должно быть такого
-                    }
-                }
-
-                return new StartAndTargetPoint(targetX, targetY, resourceX, resourceY);
-                #endregion
-            }
-            else
-            {
-                #region если не нашелся, то верни правую-верхнюю свободную
-                //find nearest building cell
-                int positionDindex = 9; //left upper
-
-                //if needed select nearest free 
-                for (int i = 0; i < 20; i++)
-                {
-                    int index = positionDindex + buildingPositionIter[i];
-                    if (index < 0) index += 20;
-                    if (index >= 20) index -= 20;
-
-                    int kx = baseX + buildingPositionDX[index];
-                    int ky = baseY + buildingPositionDY[index];
-
-                    if (kx >= 0
-                        && kx < _playerView.MapSize
-                        && ky >= 0
-                        && ky < _playerView.MapSize)
-                    {
-                        if (cellWithIdAny[kx][ky] < 0)
-                        {
-                            return new StartAndTargetPoint(kx, ky, kx, ky);
-                        }
-                    }
-                }
-                #endregion
-            }
-            return new StartAndTargetPoint(0, 0, 0, 0);
+            return new Vec2Int(tx, ty);
             // странно, как это произошло? 
             // 1) нет места строительства вокруг базы
         }
