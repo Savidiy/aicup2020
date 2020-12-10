@@ -1217,7 +1217,7 @@ namespace Aicup2020
                     case IntentionType.IntentionRetreatBuilders:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            ActRetreatFromEnemy(id);
+                            ActRetreatBuilderFromEnemy(id);
                         }
                         break;
                     case IntentionType.IntentionMyBuiAttackEnemyBui:
@@ -1255,15 +1255,43 @@ namespace Aicup2020
         }
         void ActExtractResources(int id, int distance)
         {
+            int ex = entityMemories[id].myEntity.Position.X;
+            int ey = entityMemories[id].myEntity.Position.Y;
+
+            int tx = ex;
+            int ty = ey;
+            int maxW = 0;
+
+            for (int i = 0; i < 4; i++)
+            {
+                int nx = ex;
+                int ny = ey;
+                if (i == 0) nx++;
+                if (i == 1) nx--;
+                if (i == 2) ny++;
+                if (i == 3) ny--;
+
+                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                {
+                    if (resourcePotentialField[nx][ny] > maxW)
+                    {
+                        tx = nx;
+                        ty = ny;
+                        maxW = resourcePotentialField[nx][ny];
+                    }
+                } 
+            }
+
+
             MoveAction moveAction = new MoveAction();
             moveAction.BreakThrough = true;
-            moveAction.FindClosestPosition = true;
-            moveAction.Target = new Vec2Int(_playerView.MapSize - 1, _playerView.MapSize - 1);
+            moveAction.FindClosestPosition = false;
+            moveAction.Target = new Vec2Int(tx, ty);
+                        
+            //AttackAction attackAction = new AttackAction();
+            //attackAction.AutoAttack = new AutoAttack(distance, new EntityType[] { EntityType.Resource });
 
-            AttackAction attackAction = new AttackAction();
-            attackAction.AutoAttack = new AutoAttack(distance, new EntityType[] { EntityType.Resource });
-
-            actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
+            actions.Add(id, new EntityAction(moveAction, null, null, null));
         }
         void ActStartCreateBuilding(int id, Vec2Int pos, EntityType type)
         {            
@@ -1288,71 +1316,108 @@ namespace Aicup2020
             RepairAction repairAction = new RepairAction(targetId);
             actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
         }
-        void ActRetreatFromEnemy (int id)
+        void ActRetreatBuilderFromEnemy(int id)
         {
-            int sx = entityMemories[id].myEntity.Position.X;
-            int sy = entityMemories[id].myEntity.Position.Y;
+            int ex = entityMemories[id].myEntity.Position.X;
+            int ey = entityMemories[id].myEntity.Position.Y;
 
-            List<Vec2Int> targetsWarning = new List<Vec2Int>();
-            List<Vec2Int> targetsSafe = new List<Vec2Int>();
+            int tx = ex;
+            int ty = ey;
+            int maxFindWeight = 0;
+            int limitWeight = mapSize * mapSize; // вес клеток ресурсов не подходит, так как надо убегать, а не добывать
 
-            
-            for (int k = 0; k < 4; k++)
+            for (int i = 0; i < 4; i++)
             {
-                int x = sx;
-                int y = sy;
-                if (k == 0) x--;
-                if (k == 1) x++;
-                if (k == 2) y--;
-                if (k == 3) y++;
+                int nx = ex;
+                int ny = ey;
+                if (i == 0) nx++;
+                if (i == 1) nx--;
+                if (i == 2) ny++;
+                if (i == 3) ny--;
 
-                if (x >= 0  && y >= 0 && x < mapSize && y < mapSize) // valid XY
+                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                 {
-                    if (cellWithIdAny[x][y] < 0) // empty cell
+                    int w = resourcePotentialField[nx][ny];
+                    if (w < limitWeight && w > maxFindWeight)
                     {
-                        var cell = enemyDangerCells[x][y];
-                        if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
-                        {
-                            targetsSafe.Add(new Vec2Int(x, y));
-                        }
-                        else
-                        {
-                            if (cell.meleesAim + cell.rangersAim == 0)
-                            {
-                                targetsWarning.Add(new Vec2Int(x, y));
-                            }
-                        }
+                        tx = nx;
+                        ty = ny;
+                        maxFindWeight = w;
                     }
                 }
             }
 
-            if (targetsSafe.Count > 0)
+            if (maxFindWeight > 0) // есть путь отхода по клеткам RPF
             {
                 MoveAction moveAction = new MoveAction();
-                moveAction.BreakThrough = false;
-                moveAction.FindClosestPosition = true;
-                moveAction.Target = targetsSafe[random.Next(targetsSafe.Count)];
-                debugLines.Add(new DebugLine(sx + 0.5f, sy + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorGreen, colorGreen));
-                actions.Add(id, new EntityAction(moveAction, null, null, null));
-                
-            } else if(targetsWarning.Count > 0)
-            {
-                MoveAction moveAction = new MoveAction();
-                moveAction.BreakThrough = false;
-                moveAction.FindClosestPosition = true;
-                moveAction.Target = targetsWarning[random.Next(targetsWarning.Count)];
-                debugLines.Add(new DebugLine(sx + 0.5f, sy + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorBlue, colorBlue));
-                actions.Add(id, new EntityAction(moveAction, null, null, null));
+                moveAction.BreakThrough = true;
+                moveAction.FindClosestPosition = false;
+                moveAction.Target = new Vec2Int(tx, ty);
 
+                actions.Add(id, new EntityAction(moveAction, null, null, null));
             }
             else
             {
-                AttackAction attackAction = new AttackAction();
-                attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, new EntityType[] { });
-                debugLines.Add(new DebugLine(sx, sy, sx + 1, sy + 1, colorRed, colorRed));
-                actions.Add(id, new EntityAction(null, null, attackAction, null));
-            }
+                List<Vec2Int> targetsWarning = new List<Vec2Int>();
+                List<Vec2Int> targetsSafe = new List<Vec2Int>();
 
+                for (int k = 0; k < 4; k++)
+                {
+                    int x = ex;
+                    int y = ey;
+                    if (k == 0) x--;
+                    if (k == 1) x++;
+                    if (k == 2) y--;
+                    if (k == 3) y++;
+
+                    if (x >= 0 && y >= 0 && x < mapSize && y < mapSize) // valid XY
+                    {
+                        if (cellWithIdAny[x][y] < 0) // empty cell
+                        {
+                            var cell = enemyDangerCells[x][y];
+                            if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning == 0)
+                            {
+                                targetsSafe.Add(new Vec2Int(x, y));
+                            }
+                            else
+                            {
+                                if (cell.meleesAim + cell.rangersAim == 0)
+                                {
+                                    targetsWarning.Add(new Vec2Int(x, y));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (targetsSafe.Count > 0)
+                {
+                    MoveAction moveAction = new MoveAction();
+                    moveAction.BreakThrough = false;
+                    moveAction.FindClosestPosition = true;
+                    moveAction.Target = targetsSafe[random.Next(targetsSafe.Count)];
+                    debugLines.Add(new DebugLine(ex + 0.5f, ey + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorGreen, colorGreen));
+                    actions.Add(id, new EntityAction(moveAction, null, null, null));
+
+                }
+                else if (targetsWarning.Count > 0)
+                {
+                    MoveAction moveAction = new MoveAction();
+                    moveAction.BreakThrough = false;
+                    moveAction.FindClosestPosition = true;
+                    moveAction.Target = targetsWarning[random.Next(targetsWarning.Count)];
+                    debugLines.Add(new DebugLine(ex + 0.5f, ey + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorBlue, colorBlue));
+                    actions.Add(id, new EntityAction(moveAction, null, null, null));
+
+                }
+                else
+                {
+                    AttackAction attackAction = new AttackAction();
+                    attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, new EntityType[] { });
+                    debugLines.Add(new DebugLine(ex, ey, ex + 1, ey + 1, colorRed, colorRed));
+                    actions.Add(id, new EntityAction(null, null, attackAction, null));
+                }
+            }
         }
         void ActTurretAttack(int id)
         {
