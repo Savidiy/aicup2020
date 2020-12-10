@@ -51,10 +51,11 @@ namespace Aicup2020
         bool[][] currentVisibleMap;
         int[][] resourceMemoryMap;
         int[][] resourcePotentialField;
-        const int RPFmyBuildingWeight = -4;
-        const int RPFenemyEntityWeight = -3;
+        const int RPFmyBuildingWeight = -10;
+        const int RPFenemyEntityWeight = -5;
+        const int RPFdeniedBuilderWeight = -3;
         const int RPFdangerCellWeight = -2;
-        const int RPFdeniedBuilderWeight = -1;
+        const int RPFwarningCellWeight = 1;
 
         struct EnemyDangerCell
         {
@@ -693,16 +694,20 @@ namespace Aicup2020
                     if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                     {
                         if (resourcePotentialField[nx][ny] == 0)
-                        {
-                            
+                        {                            
                             bool canContinueField = true;
 
                             // проверка опасной зоны
                             var dCell = enemyDangerCells[nx][ny];
-                            if (dCell.meleesAim + dCell.meleesWarning + dCell.rangersAim + dCell.rangersWarning + dCell.turretsAim > 0)
+                            if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
                             {
                                 canContinueField = false;
                                 resourcePotentialField[nx][ny] = RPFdangerCellWeight;
+                            } else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                            {
+                                canContinueField = false;
+                                resourcePotentialField[nx][ny] = RPFwarningCellWeight;
+                                //findCells.Add(new XYWeight(nx, ny, RPFwarningCellWeight));
                             }
 
                             // проверка занятой клетки
@@ -2674,6 +2679,11 @@ namespace Aicup2020
                                 ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorRed);
                                 debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
                             }
+                            else if (weight == RPFwarningCellWeight)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorMagenta);
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "!", 0.5f, 14)));
+                            }
                             else if (weight == RPFdeniedBuilderWeight)
                             {
                                 ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorGreen);
@@ -2692,7 +2702,7 @@ namespace Aicup2020
                             else if (weight == 0)
                             {
                                 ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlack);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "-", 0.5f, 14)));
+                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
                             }
                             else if (weight < maxWeight)
                             {
