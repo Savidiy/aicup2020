@@ -2297,6 +2297,10 @@ namespace Aicup2020
             {
                 currentMyEntityCount[ent] = 0;
             }
+
+
+            populationMax = 0;
+
             //count current entities
             foreach (var entity in _playerView.Entities)
             {
@@ -2324,14 +2328,15 @@ namespace Aicup2020
                 {
                     //count number of my enitites
                     currentMyEntityCount[entity.EntityType]++;
+                    // calc max population
+                    if (entity.Active)
+                        populationMax += properties[entity.EntityType].PopulationProvide;
                 } 
             }
             //calc max and current population
-            populationMax = 0;
             populationUsing = 0;
             foreach (var e in properties)
-            {
-                populationMax += currentMyEntityCount[e.Key] * e.Value.PopulationProvide;
+            {                
                 populationUsing += currentMyEntityCount[e.Key] * e.Value.PopulationUse;
             }
 
