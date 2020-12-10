@@ -36,7 +36,6 @@ namespace Aicup2020
         Group groupRetreatBuilders = new Group();
         Group groupMyBuildersAttackEnemyBuilders = new Group();
 
-
         List<int> needRepairEntityIdList = new List<int>();
         bool hasInactiveHouse = false;
 
@@ -47,6 +46,7 @@ namespace Aicup2020
 
         int[][] cellWithIdOnlyBuilding;
         int[][] cellWithIdAny;
+        int[][] nextPositionMyUnitsMap;
         int[][] onceVisibleMap;
         bool[][] currentVisibleMap;
         int[][] resourceMemoryMap;
@@ -190,7 +190,6 @@ namespace Aicup2020
         }
         List<DebugLine> debugLines = new List<DebugLine>();
 
-
         public Action GetAction(PlayerView playerView, DebugInterface debugInterface)
         {
             _playerView = playerView;
@@ -234,18 +233,12 @@ namespace Aicup2020
             ConvertPlansToIntentions(); // Ќамерени€ -  ак и кем € буду выполн€ть планы?
             CorrectCrossIntentions();// ѕровер€ем взаимоискулючающие и противоречащие намерени€. ќставл€ем только нужные.
 
-            ConvertIntentionsToActions(); // ѕриказы -  то будет выполн€ть намерени€?
-            //приказы превращаютс€ в конкретные action дл€ entities
+            ConvertIntentionsToOrders(); // определ€ем конкретные приказы дл€ каждой сущности
+            OptimizeOrders(); // корректируем приказы, чтобы не было столкновений
 
-            //old logics
-            // FindBuildPriorities();
-            //CheckEntitiesNeedRepair();
-            //CheckEntitiesGroup();
+            ConvertOrdersToActions(); // ѕриказы -  то будет выполн€ть намерени€? //приказы превращаютс€ в конкретные action дл€ entities        
 
-            //var actions = GenerateActions();
-
-            //save previous entity state
-            //SaveEntitiesMemory();
+            SaveEntitiesMemory();
 
             return new Action(actions);
         }
@@ -476,6 +469,7 @@ namespace Aicup2020
             resourceMemoryMap = new int[mapSize][];
             enemyDangerCells = new EnemyDangerCell[mapSize][];
             resourcePotentialField = new int[mapSize][];
+            nextPositionMyUnitsMap = new int[mapSize][]; 
 
             for (var i = 0; i < mapSize; i++)
             {
@@ -486,6 +480,7 @@ namespace Aicup2020
                 resourceMemoryMap[i] = new int[mapSize];
                 enemyDangerCells[i] = new EnemyDangerCell[mapSize];
                 resourcePotentialField[i] = new int[mapSize];
+                nextPositionMyUnitsMap[i] = new int[mapSize];
                 // auto zeroing all when created
             }
 
@@ -1178,99 +1173,192 @@ namespace Aicup2020
                 else { i++; }
             }
         }
-        void ConvertIntentionsToActions()
+
+        void ConvertIntentionsToOrders()
         {
-            actions.Clear();
+            foreach (var em in entityMemories)
+            {
+                em.Value.ResetTarget();
+            }
 
             foreach (var ni in intentions)
             {
                 switch (ni.intentionType)
                 {
                     case IntentionType.IntentionCreateBuilder:
-                        ActCreateUnit(ni.targetId, false);
+                        OrderCreateUnit(ni.targetId, false);
                         break;
                     case IntentionType.IntentionStopCreatingBuilder:
-                        ActCancelAll(ni.targetId);
+                        OrderCancelAll(ni.targetId);
                         break;
                     case IntentionType.IntentionCreateRanger:
-                        ActCreateUnit(ni.targetId, true);
+                        OrderCreateUnit(ni.targetId, true);
                         break;
                     case IntentionType.IntentionStopCreatingRanger:
-                        ActCancelAll(ni.targetId);
+                        OrderCancelAll(ni.targetId);
                         break;
                     case IntentionType.IntentionExtractResources:
                         {
-                            int dist = properties[EntityType.BuilderUnit].SightRange;
+                            //int dist = properties[EntityType.BuilderUnit].SightRange;
                             foreach (var id in ni.targetGroup.members)
                             {
-                                ActExtractResources(id, dist);
+                                OrderCollectResources(id);
                             }
                         }
                         break;
                     case IntentionType.IntentionCreateHouseStart:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            ActStartCreateBuilding(id, ni.position, EntityType.House);
+                            OrderStartCreateBuilding(id, ni.position, EntityType.House);
                         }
                         break;
                     case IntentionType.IntentionRepairBuilding:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            ActRepairBuilding(id, ni.targetId);
+                            OrderRepairBuilding(id, ni.targetId);
                         }
                         break;
                     case IntentionType.IntentionTurretAttacks:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            ActTurretAttack(id);
+                            OrderTurretAttack(id);
                         }
                         break;
                     case IntentionType.IntentionAllWarriorsAttack:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            ActAttackNearbyEnemy(id, new EntityType[] { });
+                            OrderAttackNearbyEnemy(id, new EntityType[] { });
                         }
                         break;
                     case IntentionType.IntentionRetreatBuilders:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            ActRetreatBuilderFromEnemy(id);
+                            OrderRetreatBuilderFromEnemy(id);
                         }
                         break;
                     case IntentionType.IntentionMyBuiAttackEnemyBui:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            ActAttackNearbyEnemy(id, new EntityType[] { EntityType.BuilderUnit});
+                            OrderAttackNearbyEnemy(id, new EntityType[] { EntityType.BuilderUnit });
                         }
                         break;
                 }
             }
         }
-
-        void ActCreateUnit(int baseId, bool agressive)
+        void OptimizeOrders()
         {
-            BuildAction buildAction = new BuildAction();
+
+        }
+
+        void ConvertOrdersToActions()
+        {
+            // zeroing
+            for (int x = 0; x < mapSize; x++)
+            {
+                nextPositionMyUnitsMap[x] = new int[mapSize];
+            }
+
+            actions.Clear();            
+
+            foreach(var em in entityMemories)
+            {
+                BuildAction buildAction = new BuildAction();
+                MoveAction moveAction = new MoveAction();
+                RepairAction repairAction = new RepairAction();
+                AttackAction attackAction = new AttackAction();
+
+                switch (em.Value.order)
+                {
+                    case EntityOrders.spawnUnit:
+                        buildAction.EntityType = em.Value.targetEntityType;
+                        buildAction.Position = em.Value.targetPos;
+                        actions.Add(em.Key, new EntityAction(null, buildAction, null, null));
+                        break;
+                    case EntityOrders.cancelAll:
+                        actions.Add(em.Key, new EntityAction(null, null, null, null));
+                        break;
+                    case EntityOrders.build:
+                        moveAction.BreakThrough = em.Value.moveBreakThrough;
+                        moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
+                        moveAction.Target = em.Value.movePos;
+
+                        buildAction.EntityType = em.Value.targetEntityType;
+                        buildAction.Position = em.Value.targetPos;
+
+                        actions.Add(em.Key, new EntityAction(moveAction, buildAction, null, null));
+                        break;
+                    case EntityOrders.repair:
+                        moveAction.BreakThrough = em.Value.moveBreakThrough;
+                        moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
+                        moveAction.Target = em.Value.movePos;
+
+                        repairAction.Target = em.Value.targetId;
+                        actions.Add(em.Key, new EntityAction(moveAction, null, null, repairAction));
+                        break;
+                    case EntityOrders.collect:
+                    case EntityOrders.retreat:
+                    case EntityOrders.move:
+                        moveAction.BreakThrough = em.Value.moveBreakThrough;
+                        moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
+                        moveAction.Target = em.Value.movePos;
+                        actions.Add(em.Key, new EntityAction(moveAction, null, null, null));
+                        break;
+                    case EntityOrders.attack:
+                        attackAction.AutoAttack = em.Value.autoAttack;
+                        actions.Add(em.Key, new EntityAction(null, null, attackAction, null));
+                        break;
+                    case EntityOrders.attackAndMove:
+                        moveAction.BreakThrough = em.Value.moveBreakThrough;
+                        moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
+                        moveAction.Target = em.Value.movePos;
+
+                        attackAction.AutoAttack = em.Value.autoAttack;
+                        actions.Add(em.Key, new EntityAction(moveAction, null, attackAction, null));
+                        break;
+                }
+            }            
+        }
+
+        void OrderCreateUnit(int baseId, bool agressive)
+        {
             Vec2Int target;
             if (agressive)
             {
                 target = FindSpawnPosition(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y, agressive);
-            } else
+            }
+            else
             {
                 //make builder
                 target = FindNearestToBaseResourceReturnSpawnPlace(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y);
-                //target = new Vec2Int(a.startX, a.startY);
             }
 
-            buildAction.EntityType = properties[entityMemories[baseId].myEntity.EntityType].Build.Value.Options[0];
-            buildAction.Position = target;
+            entityMemories[baseId].order = EntityOrders.spawnUnit;
+            entityMemories[baseId].targetPos = target;
+            entityMemories[baseId].targetEntityType = properties[entityMemories[baseId].myEntity.EntityType].Build.Value.Options[0];
 
-            actions.Add(baseId, new EntityAction(null, buildAction, null, null));
+
+            //BuildAction buildAction = new BuildAction();
+            //Vec2Int target;
+            //if (agressive)
+            //{
+            //    target = FindSpawnPosition(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y, agressive);
+            //} else
+            //{
+            //    //make builder
+            //    target = FindNearestToBaseResourceReturnSpawnPlace(entityMemories[baseId].myEntity.Position.X, entityMemories[baseId].myEntity.Position.Y);
+            //    //target = new Vec2Int(a.startX, a.startY);
+            //}
+
+            //buildAction.EntityType = properties[entityMemories[baseId].myEntity.EntityType].Build.Value.Options[0];
+            //buildAction.Position = target;
+
+            //actions.Add(baseId, new EntityAction(null, buildAction, null, null));
         }
-        void ActCancelAll(int id)
+        void OrderCancelAll(int id)
         {
-            actions.Add(id, new EntityAction(null, null, null, null));
+            entityMemories[id].order = EntityOrders.cancelAll;
         }
-        void ActExtractResources(int id, int distance)
+        void OrderCollectResources(int id)
         {
             int ex = entityMemories[id].myEntity.Position.X;
             int ey = entityMemories[id].myEntity.Position.Y;
@@ -1299,41 +1387,59 @@ namespace Aicup2020
                 } 
             }
 
+            entityMemories[id].order = EntityOrders.collect;
+            //entityMemories[id].targetPos = new Vec2Int(tx, ty);// duplicate
+            entityMemories[id].movePos = new Vec2Int(tx, ty);
+            entityMemories[id].moveBreakThrough = true;
+            entityMemories[id].moveFindClosestPosition = false;
 
-            MoveAction moveAction = new MoveAction();
-            moveAction.BreakThrough = true;
-            moveAction.FindClosestPosition = false;
-            moveAction.Target = new Vec2Int(tx, ty);
-                        
-            //AttackAction attackAction = new AttackAction();
-            //attackAction.AutoAttack = new AutoAttack(distance, new EntityType[] { EntityType.Resource });
+            //MoveAction moveAction = new MoveAction();
+            //moveAction.BreakThrough = true;
+            //moveAction.FindClosestPosition = false;
+            //moveAction.Target = new Vec2Int(tx, ty);
 
-            actions.Add(id, new EntityAction(moveAction, null, null, null));
+            ////AttackAction attackAction = new AttackAction();
+            ////attackAction.AutoAttack = new AutoAttack(distance, new EntityType[] { EntityType.Resource });
+
+            //actions.Add(id, new EntityAction(moveAction, null, null, null));
         }
-        void ActStartCreateBuilding(int id, Vec2Int pos, EntityType type)
-        {            
-            MoveAction moveAction = new MoveAction();
-            moveAction.BreakThrough = false;
-            moveAction.FindClosestPosition = true;
-            moveAction.Target = new Vec2Int( pos.X + properties[type].Size / 2, pos.Y + properties[type].Size);
-
-            BuildAction buildAction = new BuildAction(type, pos);
-
-            actions.Add(id, new EntityAction(moveAction, buildAction, null, null));
-            
-        }
-        void ActRepairBuilding(int id, int targetId)
+        void OrderStartCreateBuilding(int id, Vec2Int pos, EntityType type)
         {
-            //repair
-            MoveAction moveAction = new MoveAction();
-            moveAction.BreakThrough = false;
-            moveAction.FindClosestPosition = true;
-            moveAction.Target = entityMemories[targetId].myEntity.Position;
+            entityMemories[id].order = EntityOrders.build;
+            entityMemories[id].movePos = new Vec2Int(pos.X + properties[type].Size / 2, pos.Y + properties[type].Size);
+            entityMemories[id].moveBreakThrough = false;
+            entityMemories[id].moveFindClosestPosition = true;
 
-            RepairAction repairAction = new RepairAction(targetId);
-            actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
+            entityMemories[id].targetEntityType = type;
+            entityMemories[id].targetPos = pos;
+
+            //MoveAction moveAction = new MoveAction();
+            //moveAction.BreakThrough = false;
+            //moveAction.FindClosestPosition = true;
+            //moveAction.Target = new Vec2Int( pos.X + properties[type].Size / 2, pos.Y + properties[type].Size);
+
+            //BuildAction buildAction = new BuildAction(type, pos);
+
+            //actions.Add(id, new EntityAction(moveAction, buildAction, null, null));            
         }
-        void ActRetreatBuilderFromEnemy(int id)
+        void OrderRepairBuilding(int id, int targetId)
+        {
+            entityMemories[id].order = EntityOrders.repair;
+            entityMemories[id].movePos = entityMemories[targetId].myEntity.Position;
+            entityMemories[id].moveBreakThrough = false;
+            entityMemories[id].moveFindClosestPosition = true;
+            entityMemories[id].targetId = targetId;
+
+            ////repair
+            //MoveAction moveAction = new MoveAction();
+            //moveAction.BreakThrough = false;
+            //moveAction.FindClosestPosition = true;
+            //moveAction.Target = entityMemories[targetId].myEntity.Position;
+
+            //RepairAction repairAction = new RepairAction(targetId);
+            //actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
+        }
+        void OrderRetreatBuilderFromEnemy(int id)
         {
             int ex = entityMemories[id].myEntity.Position.X;
             int ey = entityMemories[id].myEntity.Position.Y;
@@ -1366,12 +1472,17 @@ namespace Aicup2020
 
             if (maxFindWeight > 0) // есть путь отхода по клеткам RPF
             {
-                MoveAction moveAction = new MoveAction();
-                moveAction.BreakThrough = true;
-                moveAction.FindClosestPosition = false;
-                moveAction.Target = new Vec2Int(tx, ty);
+                entityMemories[id].order = EntityOrders.retreat;
+                entityMemories[id].moveBreakThrough = true;
+                entityMemories[id].moveFindClosestPosition = false;
+                entityMemories[id].movePos = new Vec2Int(tx, ty);
 
-                actions.Add(id, new EntityAction(moveAction, null, null, null));
+                //MoveAction moveAction = new MoveAction();
+                //moveAction.BreakThrough = true;
+                //moveAction.FindClosestPosition = false;
+                //moveAction.Target = new Vec2Int(tx, ty);
+
+                //actions.Add(id, new EntityAction(moveAction, null, null, null));
             }
             else
             {
@@ -1409,34 +1520,47 @@ namespace Aicup2020
 
                 if (targetsSafe.Count > 0)
                 {
-                    MoveAction moveAction = new MoveAction();
-                    moveAction.BreakThrough = false;
-                    moveAction.FindClosestPosition = true;
-                    moveAction.Target = targetsSafe[random.Next(targetsSafe.Count)];
-                    debugLines.Add(new DebugLine(ex + 0.5f, ey + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorGreen, colorGreen));
-                    actions.Add(id, new EntityAction(moveAction, null, null, null));
+                    entityMemories[id].order = EntityOrders.retreat;
+                    entityMemories[id].moveBreakThrough = false;
+                    entityMemories[id].moveFindClosestPosition = true;
+                    entityMemories[id].movePos = targetsSafe[random.Next(targetsSafe.Count)];
+
+                    //MoveAction moveAction = new MoveAction();
+                    //moveAction.BreakThrough = false;
+                    //moveAction.FindClosestPosition = true;
+                    //moveAction.Target = targetsSafe[random.Next(targetsSafe.Count)];
+                    //debugLines.Add(new DebugLine(ex + 0.5f, ey + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorGreen, colorGreen));
+                    //actions.Add(id, new EntityAction(moveAction, null, null, null));
 
                 }
                 else if (targetsWarning.Count > 0)
                 {
-                    MoveAction moveAction = new MoveAction();
-                    moveAction.BreakThrough = false;
-                    moveAction.FindClosestPosition = true;
-                    moveAction.Target = targetsWarning[random.Next(targetsWarning.Count)];
-                    debugLines.Add(new DebugLine(ex + 0.5f, ey + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorBlue, colorBlue));
-                    actions.Add(id, new EntityAction(moveAction, null, null, null));
+                    entityMemories[id].order = EntityOrders.retreat;
+                    entityMemories[id].moveBreakThrough = false;
+                    entityMemories[id].moveFindClosestPosition = true;
+                    entityMemories[id].movePos = targetsWarning[random.Next(targetsWarning.Count)];
+
+                    //MoveAction moveAction = new MoveAction();
+                    //moveAction.BreakThrough = false;
+                    //moveAction.FindClosestPosition = true;
+                    //moveAction.Target = targetsWarning[random.Next(targetsWarning.Count)];
+                    //debugLines.Add(new DebugLine(ex + 0.5f, ey + 0.5f, moveAction.Target.X + 0.5f, moveAction.Target.Y + 0.5f, colorBlue, colorBlue));
+                    //actions.Add(id, new EntityAction(moveAction, null, null, null));
 
                 }
                 else
                 {
-                    AttackAction attackAction = new AttackAction();
-                    attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypesArray); // атаковать абсолютно всех
-                    debugLines.Add(new DebugLine(ex, ey, ex + 1, ey + 1, colorRed, colorRed));
-                    actions.Add(id, new EntityAction(null, null, attackAction, null));
+                    entityMemories[id].order = EntityOrders.attack;
+                    entityMemories[id].autoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypesArray); // атаковать абсолютно всех
+
+                    //AttackAction attackAction = new AttackAction();
+                    //attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypesArray); // атаковать абсолютно всех
+                    //debugLines.Add(new DebugLine(ex, ey, ex + 1, ey + 1, colorRed, colorRed));
+                    //actions.Add(id, new EntityAction(null, null, attackAction, null));
                 }
             }
         }
-        void ActTurretAttack(int id)
+        void OrderTurretAttack(int id)
         {
             int range = properties[EntityType.Turret].SightRange;
 
@@ -1446,29 +1570,39 @@ namespace Aicup2020
                 properties[EntityType.Turret].Size,
                 range);
 
-            AttackAction attackAction = new AttackAction();
+            entityMemories[id].order = EntityOrders.attack;            
+
+            //AttackAction attackAction = new AttackAction();
             if (availableTargetsType[(int)EntityType.RangedUnit] == true)
-                attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit });
+                entityMemories[id].autoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit });
             else if (availableTargetsType[(int)EntityType.MeleeUnit] == true)
-                attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit, EntityType.MeleeUnit });
+                entityMemories[id].autoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit, EntityType.MeleeUnit });
             else if (availableTargetsType[(int)EntityType.BuilderUnit] == true)
-                attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit, EntityType.MeleeUnit, EntityType.BuilderUnit });
+                entityMemories[id].autoAttack = new AutoAttack(range, new EntityType[] { EntityType.RangedUnit, EntityType.MeleeUnit, EntityType.BuilderUnit });
             else
-                attackAction.AutoAttack = new AutoAttack(range, new EntityType[] { });
+                entityMemories[id].autoAttack = new AutoAttack(range, new EntityType[] { });
 
-            actions.Add(id, new EntityAction(null, null, attackAction, null));
+            //actions.Add(id, new EntityAction(null, null, attackAction, null));
         }
-        void ActAttackNearbyEnemy(int id, EntityType[] entityTypes)
+        void OrderAttackNearbyEnemy(int id, EntityType[] entityTypes)
         {
-            MoveAction moveAction = new MoveAction();
-            moveAction.BreakThrough = true;
-            moveAction.FindClosestPosition = true;
-            moveAction.Target = FindNearestEnemy(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y);
 
-            AttackAction attackAction = new AttackAction();
-            attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypes);
+            entityMemories[id].order = EntityOrders.attackAndMove;
+            entityMemories[id].moveBreakThrough = true;
+            entityMemories[id].moveFindClosestPosition = true;
+            entityMemories[id].movePos = FindNearestEnemy(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y);
 
-            actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
+            entityMemories[id].autoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypes);
+
+            //MoveAction moveAction = new MoveAction();
+            //moveAction.BreakThrough = true;
+            //moveAction.FindClosestPosition = true;
+            //moveAction.Target = FindNearestEnemy(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y);
+
+            //AttackAction attackAction = new AttackAction();
+            //attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypes);
+
+            //actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
         }
 
         bool[] FindAvailableTargetType(int sx, int sy, int size, int range)
@@ -2259,62 +2393,61 @@ namespace Aicup2020
             return false;
         }
 
-        void TrySelectFreeBuilderForBuild(EntityType buildingType)
-        {
-            int buildingSize = properties[buildingType].Size;
-            foreach(var id in basicEntityIdGroups[EntityType.BuilderUnit].members)
-            {
-                Vec2Int pos = entityMemories[id].myEntity.Position;
-                bool posFinded = false;
+        //void TrySelectFreeBuilderForBuild(EntityType buildingType)
+        //{
+        //    int buildingSize = properties[buildingType].Size;
+        //    foreach(var id in basicEntityIdGroups[EntityType.BuilderUnit].members)
+        //    {
+        //        Vec2Int pos = entityMemories[id].myEntity.Position;
+        //        bool posFinded = false;
 
-                //left 
-                int x = pos.X - buildingSize;
-                int y = pos.Y;
-                if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
-                {
-                    posFinded = true;
-                }
-                else
-                {
-                    //down
-                    x = pos.X;
-                    y = pos.Y - buildingSize;
-                    if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
-                    {
-                        posFinded = true;
-                    }
-                    else
-                    {
-                        //right
-                        x = pos.X+1;
-                        y = pos.Y;
-                        if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
-                        {
-                            posFinded = true;
-                        }
-                        else
-                        {
-                            //up
-                            x = pos.X;
-                            y = pos.Y + 1;
-                            if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
-                            {
-                                posFinded = true;
-                            }
-                        }
-                    }
-                }
-
-                if (posFinded)
-                {
-                    entityMemories[id].SetGroup(groupHouseBuilders);                    
-                    entityMemories[id].SetTargetPos(new Vec2Int(x, y));
-                    entityMemories[id].SetMovePos(entityMemories[id].myEntity.Position);
-                    entityMemories[id].SetTargetEntityType(EntityType.House);
-                    break;
-                }
-            }
-        }
+        //        //left 
+        //        int x = pos.X - buildingSize;
+        //        int y = pos.Y;
+        //        if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
+        //        {
+        //            posFinded = true;
+        //        }
+        //        else
+        //        {
+        //            //down
+        //            x = pos.X;
+        //            y = pos.Y - buildingSize;
+        //            if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
+        //            {
+        //                posFinded = true;
+        //            }
+        //            else
+        //            {
+        //                //right
+        //                x = pos.X+1;
+        //                y = pos.Y;
+        //                if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
+        //                {
+        //                    posFinded = true;
+        //                }
+        //                else
+        //                {
+        //                    //up
+        //                    x = pos.X;
+        //                    y = pos.Y + 1;
+        //                    if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
+        //                    {
+        //                        posFinded = true;
+        //                    }
+        //                }
+        //            }
+        //        }
+        //        if (posFinded)
+        //        {
+        //            entityMemories[id].SetGroup(groupHouseBuilders);                    
+        //            entityMemories[id].SetTargetPos(new Vec2Int(x, y));
+        //            entityMemories[id].SetMovePos(entityMemories[id].myEntity.Position);
+        //            entityMemories[id].SetTargetEntityType(EntityType.House);
+        //            break;
+        //        }
+        //    }
+        //}
         void CountNumberOfEntitiesAndMap()
         {           
             //clear map
@@ -2599,16 +2732,21 @@ namespace Aicup2020
 
     }
 
+    enum EntityOrders { spawnUnit, build, repair, retreat, attack, attackAndMove, collect, move, cancelAll, none}
     class EntityMemory
     {
         public Group group { get; private set; }
-        public int prevHealth { get; private set; }
-        public Vec2Int prevPosition { get; private set; }
-        public int myId { get; private set; }
-        public int targetId { get; private set; }
-        public Vec2Int targetPos { get; private set; }
-        public Vec2Int movePos { get; private set; }
-        public EntityType targetEntityType { get; private set; }
+        public int prevHealth;
+        public Vec2Int prevPosition;
+        public int myId;
+        public int targetId;
+        public Vec2Int targetPos;
+        public Vec2Int movePos;
+        public bool moveBreakThrough;
+        public bool moveFindClosestPosition;
+        public AutoAttack autoAttack;
+        public EntityType targetEntityType;
+        public EntityOrders order;
 
         public Entity myEntity { get; private set; } 
 
@@ -2631,6 +2769,9 @@ namespace Aicup2020
             myId = entity.Id;
             myEntity = entity;
             checkedNow = true;
+            moveFindClosestPosition = false;
+            moveBreakThrough = false;
+            autoAttack = new AutoAttack();
             targetId = -1;
             targetPos = new Vec2Int(-1, -1);
             movePos = new Vec2Int(-1, -1);
@@ -2646,6 +2787,10 @@ namespace Aicup2020
             targetId = -1;
             targetPos = new Vec2Int(-1, -1);
             movePos = new Vec2Int(-1, -1);
+            moveBreakThrough = false;
+            moveFindClosestPosition = false;
+            autoAttack = new AutoAttack();
+            order = EntityOrders.none;
         }
         public void SetGroup(Group g)
         {
@@ -2656,23 +2801,7 @@ namespace Aicup2020
             group = g;
             group.AddMember(myId);
         }
-
-        public void SetTargetId(int id)
-        {
-            targetId = id;
-        }
-        public void SetTargetPos(Vec2Int vec)
-        {
-            targetPos = vec;
-        }
-        public void SetMovePos(Vec2Int vec)
-        {
-            movePos = vec;
-        }
-        public void SetTargetEntityType(EntityType entityType)
-        {
-            targetEntityType = entityType;
-        }
+               
         public void SavePrevState ()
         {
             prevHealth = myEntity.Health;
