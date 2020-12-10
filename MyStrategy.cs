@@ -797,7 +797,12 @@ namespace Aicup2020
             bool needCreateWarriors = false;
             if (countEnemiesOnMyTerritory > 0)
             {
-                if (currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit] <= countEnemiesOnMyTerritory + populationMax / 3)
+                int potencyPopul = 0;
+                foreach (var e in properties)
+                {
+                    potencyPopul += currentMyEntityCount[e.Key] * e.Value.PopulationProvide;
+                }
+                if (currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit] <= countEnemiesOnMyTerritory + potencyPopul / 5)
                 {
                     needCreateWarriors = true;
                     desires.Add(DesireType.WantCreateRangers);
