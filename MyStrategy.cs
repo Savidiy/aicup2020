@@ -39,7 +39,11 @@ namespace Aicup2020
         List<int> needRepairEntityIdList = new List<int>();
         bool hasInactiveHouse = false;
 
+        bool drawStepDebug = true; // ===================================================================================
+        bool drawAdditionalDebug = false; // ===================================================================================
+
         PlayerView _playerView;
+        DebugInterface _debugInterface;
         public IDictionary<EntityType, EntityProperties> properties;
 
         System.Random random = new System.Random();
@@ -52,10 +56,10 @@ namespace Aicup2020
         int[][] resourceMemoryMap;
         int[][] resourcePotentialField;
         const int RPFmyBuildingWeight = -10;
-        const int RPFenemyEntityWeight = -5;
-        const int RPFdeniedBuilderWeight = -3;
-        const int RPFdangerCellWeight = -2;
-        const int RPFwarningCellWeight = 1;
+        const int RPFdangerCellWeight = -6;
+        const int RPFenemyEntityWeight = -2;
+        const int RPFdeniedBuilderWeight = 1;
+        const int RPFwarningCellWeight = 2;
 
         struct EnemyDangerCell
         {
@@ -193,6 +197,8 @@ namespace Aicup2020
         public Action GetAction(PlayerView playerView, DebugInterface debugInterface)
         {
             _playerView = playerView;
+            _debugInterface = debugInterface;
+            _debugInterface.Send(new DebugCommand.Clear());
             #region first initialization arrays and lists (once)
             if (needPrepare == true)
             {
@@ -1247,6 +1253,250 @@ namespace Aicup2020
         }
         void OptimizeOrders()
         {
+            // all retreats - ищем всех отступающих и строим глобальный граф отступления. Путь ищется до
+            int startWeight = mapSize * mapSize;
+            int CWfree = 1;
+            int CWdanger = -10;
+            int CWenemy = -5;
+            int CWmyBuilding = -2;
+            int CWresources = -3;
+            int CWtargetToRetreat = -7;
+            int CWfreeAfterRetreat = -8;
+
+            //init map of calculation
+            int[][] map = new int[mapSize][];
+            for (int x = 0; x < mapSize; x++)
+                map[x] = new int[mapSize];
+
+            List<XYWeight> findCells = new List<XYWeight>();
+            List<int> tryRetreatEntities = new List<int>();
+            List<int> canRetreatEntities = new List<int>();
+
+            //init lists
+            foreach (var em in entityMemories)
+            {
+                if (em.Value.order == EntityOrders.tryRetreat)
+                {
+                    tryRetreatEntities.Add(em.Key);                    
+                }
+            }
+
+            bool canFindNext = true;
+
+            // распутываем клубок
+            do {
+                findCells.Clear();
+                for (int x = 0; x < mapSize; x++)
+                {
+                    map[x] = new int[mapSize];
+                }
+
+                foreach (var tid in tryRetreatEntities)
+                {
+                    findCells.Add(new XYWeight(entityMemories[tid].myEntity.Position.X, entityMemories[tid].myEntity.Position.Y, startWeight));
+                    map[entityMemories[tid].myEntity.Position.X][entityMemories[tid].myEntity.Position.Y] = startWeight;
+                }
+                foreach(var cid in canRetreatEntities)
+                {
+                    map[entityMemories[cid].myEntity.Position.X][entityMemories[cid].myEntity.Position.Y] = CWfreeAfterRetreat;
+                    map[entityMemories[cid].movePos.X][entityMemories[cid].movePos.Y] = CWtargetToRetreat;                    
+                }
+
+            }
+            while (canFindNext == true);
+
+            foreach (var em in entityMemories)
+            {
+                if (em.Value.order == EntityOrders.tryRetreat)
+                {
+                    //retreaters.Add(em.Key);
+                    findCells.Add(new XYWeight(em.Value.myEntity.Position.X, em.Value.myEntity.Position.Y, startWeight));
+                    map[em.Value.myEntity.Position.X][em.Value.myEntity.Position.Y] = startWeight;
+                }
+                if (em.Value.order == EntityOrders.canRetreat)
+                {
+                    map[em.Value.myEntity.Position.X][em.Value.myEntity.Position.Y] = CWfreeAfterRetreat;
+                    map[em.Value.movePos.X][em.Value.movePos.Y] = CWtargetToRetreat;
+                }
+            }
+
+            //find conflicts
+            for (int kk = 0; kk < findCells.Count; kk++)
+            {
+                int ex = findCells[kk].x;
+                int ey = findCells[kk].y;
+                int w = findCells[kk].weight;
+
+                if ((map[ex][ey] == CWfree || map[ex][ey] == CWfreeAfterRetreat) == false) // не продолжать поиск от свободных ячеек
+                {
+                    for (int rlud = 0; rlud < 4; rlud++) // RightLeftUpDown
+                    {
+                        int nx = ex;
+                        int ny = ey;
+                        if (rlud == 0) nx++;
+                        if (rlud == 1) nx--;
+                        if (rlud == 2) ny++;
+                        if (rlud == 3) ny--;
+
+                        if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                        {
+                            /// останавливают поиск непроходимые клетки
+                            /// - клетки ресурсов
+                            /// - клетки врагов
+                            /// - клетки моих зданий
+
+                            if (map[nx][ny] == CWfreeAfterRetreat)
+                            {
+                                // ================================================================
+                                // особая логика для освобождаемой клетки
+                            }
+
+                            if (map[nx][ny] == 0)// поиск двигается через моих подданных, в которых он еще не был (в начале они не отступали)
+                            {
+                                // it is danger cell?
+                                EnemyDangerCell cell = enemyDangerCells[nx][ny];
+                                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning + cell.turretsAim > 0) // it is danger!
+                                {
+                                    map[nx][ny] = CWdanger;
+                                }
+                                else
+                                {
+                                    int id = cellWithIdAny[nx][ny];
+                                    if (id > 0) // здесь ктото есть
+                                    {
+                                        if (enemiesById.ContainsKey(id)) // it is enemy!
+                                        {
+                                            map[nx][ny] = CWenemy;
+                                        }
+                                        else if (entityMemories.ContainsKey(id)) // it is my entity!
+                                        {
+                                            if (properties[entityMemories[id].myEntity.EntityType].CanMove == false) // it is a building
+                                            {
+                                                map[nx][ny] = CWmyBuilding;
+                                            }
+                                            else // it is a unit!
+                                            {
+                                                map[nx][ny] = w - 1;
+                                                findCells.Add(new XYWeight(nx, ny, w - 1));
+                                            }
+
+                                        }
+                                        else // it is resources!
+                                        {
+                                            map[nx][ny] = CWresources;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        map[nx][ny] = CWfree;// можем хранить здесь разные значения на карте и в массиве
+                                        findCells.Add(new XYWeight(nx, ny, w - 1));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            //разрешаем конфликты
+            for (int tt = 0; tt < findCells.Count;)
+            {
+                int fx = findCells[tt].x;
+                int fy = findCells[tt].y;
+                int fw = findCells[tt].weight;
+                int mw = map[fx][fy];
+
+                
+            }
+
+
+
+            //просмотре состояния
+            if (drawStepDebug == true)
+            {
+                DebugState debugState = _debugInterface.GetState();
+                _debugInterface.Send(new DebugCommand.SetAutoFlush(false));
+
+                if (_playerView.Players[0].Id == myId)
+                {
+
+                    bool drawMap = true;
+                    int maxXY = mapSize;
+                    #region draw map
+                    if (drawMap == true && findCells.Count > 0)
+                    {
+                        int maxWeight = mapSize * mapSize;
+                        for (int x = 0; x < maxXY; x++)
+                        {
+                            for (int y = 0; y < maxXY; y++)
+                            {
+                                int weight = map[x][y];
+                                if (weight == CWfree)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorGreen);
+                                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "F", 0.5f, 14)));
+                                }
+                                else if (weight == CWdanger)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorRed);
+                                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
+                                }
+                                else if (weight == CWenemy)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorMagenta);
+                                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "!", 0.5f, 14)));
+                                }
+                                else if (weight == CWmyBuilding)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorWhite);
+                                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
+                                }
+                                else if (weight == CWresources)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorWhite);
+                                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
+                                }
+                                else if (weight == 0)
+                                {
+                                    //ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorMagenta);
+                                    //_debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "R", 0.5f, 14)));
+                                }
+                                else if (weight == startWeight)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlack);
+                                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "R", 0.5f, 16)));
+                                }
+                                else if (weight < maxWeight)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorMagenta);
+                                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, (maxWeight - weight).ToString(), 0.5f, 16)));
+                                }
+                            }
+                        }
+                    }
+                    #endregion
+                }
+                #region примеры использования
+                //if (playerView.CurrentTick == 10)
+                //{
+                //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
+
+                //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
+                //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
+                //    debugInterface.Send(new DebugCommand.Add(text));
+
+                //    ColoredVertex[] vertices = new ColoredVertex[] {
+                //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
+                //    };
+                //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                //    debugInterface.Send(new DebugCommand.Add(lines));
+                //}
+                #endregion
+                _debugInterface.Send(new DebugCommand.Flush());
+            }
 
         }
 
@@ -1296,7 +1546,7 @@ namespace Aicup2020
                         actions.Add(em.Key, new EntityAction(moveAction, null, null, repairAction));
                         break;
                     case EntityOrders.collect:
-                    case EntityOrders.retreat:
+                    case EntityOrders.tryRetreat:
                     case EntityOrders.move:
                         moveAction.BreakThrough = em.Value.moveBreakThrough;
                         moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
@@ -1461,7 +1711,7 @@ namespace Aicup2020
                 if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                 {
                     int w = resourcePotentialField[nx][ny];
-                    if (w < limitWeight && w > maxFindWeight)
+                    if ((w < limitWeight && w > maxFindWeight) || w == RPFdeniedBuilderWeight)//свободная клетка или клетка занятая строителем
                     {
                         tx = nx;
                         ty = ny;
@@ -1472,10 +1722,11 @@ namespace Aicup2020
 
             if (maxFindWeight > 0) // есть путь отхода по клеткам RPF
             {
-                entityMemories[id].order = EntityOrders.retreat;
+                entityMemories[id].order = EntityOrders.tryRetreat;
                 entityMemories[id].moveBreakThrough = true;
                 entityMemories[id].moveFindClosestPosition = false;
                 entityMemories[id].movePos = new Vec2Int(tx, ty);
+                //nextPositionMyUnitsMap[tx][ty] = id;
 
                 //MoveAction moveAction = new MoveAction();
                 //moveAction.BreakThrough = true;
@@ -1520,10 +1771,12 @@ namespace Aicup2020
 
                 if (targetsSafe.Count > 0)
                 {
-                    entityMemories[id].order = EntityOrders.retreat;
+                    entityMemories[id].order = EntityOrders.tryRetreat;
                     entityMemories[id].moveBreakThrough = false;
                     entityMemories[id].moveFindClosestPosition = true;
-                    entityMemories[id].movePos = targetsSafe[random.Next(targetsSafe.Count)];
+                    Vec2Int target = targetsSafe[random.Next(targetsSafe.Count)];
+                    entityMemories[id].movePos = target;
+                    //nextPositionMyUnitsMap[target.X][target.Y] = id;
 
                     //MoveAction moveAction = new MoveAction();
                     //moveAction.BreakThrough = false;
@@ -1535,10 +1788,12 @@ namespace Aicup2020
                 }
                 else if (targetsWarning.Count > 0)
                 {
-                    entityMemories[id].order = EntityOrders.retreat;
+                    entityMemories[id].order = EntityOrders.tryRetreat;
                     entityMemories[id].moveBreakThrough = false;
                     entityMemories[id].moveFindClosestPosition = true;
-                    entityMemories[id].movePos = targetsWarning[random.Next(targetsWarning.Count)];
+                    Vec2Int target = targetsWarning[random.Next(targetsWarning.Count)];
+                    entityMemories[id].movePos = target;
+                    //nextPositionMyUnitsMap[target.X][target.Y] = id;
 
                     //MoveAction moveAction = new MoveAction();
                     //moveAction.BreakThrough = false;
@@ -2526,213 +2781,216 @@ namespace Aicup2020
         Color colorBlue = new Color(0, 0, 1, 1);
         public void DebugUpdate(PlayerView playerView, DebugInterface debugInterface)
         {
-            debugInterface.Send(new DebugCommand.Clear());
-            DebugState debugState = debugInterface.GetState();
-            debugInterface.Send(new DebugCommand.SetAutoFlush(false));
-
-            if (playerView.Players[0].Id == playerView.MyId)
+            if (drawAdditionalDebug == true)
             {
-                #region draw CPA
-                string text = $"{howMuchResourcesCollectAll} all";
-                int textSize = 16;
-                int margin = 2;
-                int sx = debugState.WindowSize.X - 10;
-                int sy = debugState.WindowSize.Y - 100;
-                int index = 0;
-                int col1 = 27;
-                int col2 = 55;
-                DebugData.PlacedText cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), text, 1, textSize);
-                debugInterface.Send(new DebugCommand.Add(cpa));
-                index++;
-                cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), "add / bui / cpa", 1, textSize);
-                debugInterface.Send(new DebugCommand.Add(cpa));
+                debugInterface.Send(new DebugCommand.Clear());
+                DebugState debugState = debugInterface.GetState();
+                debugInterface.Send(new DebugCommand.SetAutoFlush(false));
 
-                for (int i = 0; i < howMuchResourcesCollectLastNTurns.Length; i++)
+                if (playerView.Players[0].Id == playerView.MyId)
                 {
+                    #region draw CPA
+                    string text = $"{howMuchResourcesCollectAll} all";
+                    int textSize = 16;
+                    int margin = 2;
+                    int sx = debugState.WindowSize.X - 10;
+                    int sy = debugState.WindowSize.Y - 100;
+                    int index = 0;
+                    int col1 = 27;
+                    int col2 = 55;
+                    DebugData.PlacedText cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), text, 1, textSize);
+                    debugInterface.Send(new DebugCommand.Add(cpa));
                     index++;
-                    debugInterface.Send(new DebugCommand.Add(
-                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col2, sy - index * (textSize + margin)), colorGreen),
-                        howMuchResourcesCollectLastNTurns[i] + " / ", 1, textSize)));
-                    debugInterface.Send(new DebugCommand.Add(
-                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col1, sy - index * (textSize + margin)), colorGreen),
-                        howMuchLiveBuildersLast10Turns[i] + " / ", 1, textSize)));
-                    debugInterface.Send(new DebugCommand.Add(
-                        new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen),
-                        howMuchResourcesCollectCPALastNTurns[i] + "", 1, textSize)));
-                }
-                #endregion
+                    cpa = new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen), "add / bui / cpa", 1, textSize);
+                    debugInterface.Send(new DebugCommand.Add(cpa));
 
-                #region draw unvisible resources
-                int currentTick = playerView.CurrentTick - 1;
-                for (int x = 0; x < mapSize; x++)
-                {
-                    for (int y = 0; y < mapSize; y++)
+                    for (int i = 0; i < howMuchResourcesCollectLastNTurns.Length; i++)
                     {
-                        if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                        index++;
+                        debugInterface.Send(new DebugCommand.Add(
+                            new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col2, sy - index * (textSize + margin)), colorGreen),
+                            howMuchResourcesCollectLastNTurns[i] + " / ", 1, textSize)));
+                        debugInterface.Send(new DebugCommand.Add(
+                            new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx - col1, sy - index * (textSize + margin)), colorGreen),
+                            howMuchLiveBuildersLast10Turns[i] + " / ", 1, textSize)));
+                        debugInterface.Send(new DebugCommand.Add(
+                            new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(sx, sy - index * (textSize + margin)), colorGreen),
+                            howMuchResourcesCollectCPALastNTurns[i] + "", 1, textSize)));
+                    }
+                    #endregion
+
+                    #region draw unvisible resources
+                    int currentTick = playerView.CurrentTick - 1;
+                    for (int x = 0; x < mapSize; x++)
+                    {
+                        for (int y = 0; y < mapSize; y++)
                         {
-                            ColoredVertex[] vertices = new ColoredVertex[] {
+                            if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                            {
+                                ColoredVertex[] vertices = new ColoredVertex[] {
                             new ColoredVertex(new Vec2Float(x, y), new Vec2Float(), colorBlue),
                             new ColoredVertex(new Vec2Float(x+1,y+1), new Vec2Float(), colorBlue)
                         };
-                            DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
-                            debugInterface.Send(new DebugCommand.Add(lines));
+                                DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                                debugInterface.Send(new DebugCommand.Add(lines));
+                            }
                         }
                     }
-                }
-                #endregion
+                    #endregion
 
-                #region draw danger level
-                bool showTurretsZone = false;
-                bool showBuildersZone = false;
-                bool showMeleesZone = false;
-                bool showRangersZone = false;
+                    #region draw danger level
+                    bool showTurretsZone = false;
+                    bool showBuildersZone = false;
+                    bool showMeleesZone = false;
+                    bool showRangersZone = false;
 
-                for (int x = 0; x < mapSize; x++)
-                {
-                    for (int y = 0; y < mapSize; y++)
+                    for (int x = 0; x < mapSize; x++)
                     {
-                        if (showRangersZone)
+                        for (int y = 0; y < mapSize; y++)
                         {
-                            if (enemyDangerCells[x][y].rangersAim > 0)
+                            if (showRangersZone)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x, y), new Vec2Float(0, 0), colorBlack);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].rangersAim.ToString(), 0, 12)));
+                                if (enemyDangerCells[x][y].rangersAim > 0)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x, y), new Vec2Float(0, 0), colorBlack);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].rangersAim.ToString(), 0, 12)));
+                                }
+                                if (enemyDangerCells[x][y].rangersWarning > 0)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x, y + 0.5f), new Vec2Float(0, 0), colorRed);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].rangersWarning.ToString(), 0, 12)));
+                                }
                             }
-                            if (enemyDangerCells[x][y].rangersWarning > 0)
+                            if (showTurretsZone)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x, y + 0.5f), new Vec2Float(0, 0), colorRed);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].rangersWarning.ToString(), 0, 12)));
+                                if (enemyDangerCells[x][y].turretsAim > 0)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlack);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].turretsAim.ToString(), 0.5f, 12)));
+                                }
                             }
-                        }
-                        if (showTurretsZone)
-                        {
-                            if (enemyDangerCells[x][y].turretsAim > 0)
+                            if (showMeleesZone)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlack);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].turretsAim.ToString(), 0.5f, 12)));
+                                if (enemyDangerCells[x][y].meleesAim > 0)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 1, y), new Vec2Float(0, 0), colorBlack);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].meleesAim.ToString(), 1f, 12)));
+                                }
+                                if (enemyDangerCells[x][y].meleesWarning > 0)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 1, y + 0.5f), new Vec2Float(0, 0), colorRed);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].meleesWarning.ToString(), 1f, 12)));
+                                }
                             }
-                        }
-                        if (showMeleesZone)
-                        {
-                            if (enemyDangerCells[x][y].meleesAim > 0)
+                            if (showBuildersZone)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 1, y), new Vec2Float(0, 0), colorBlack);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].meleesAim.ToString(), 1f, 12)));
-                            }
-                            if (enemyDangerCells[x][y].meleesWarning > 0)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 1, y + 0.5f), new Vec2Float(0, 0), colorRed);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].meleesWarning.ToString(), 1f, 12)));
-                            }
-                        }
-                        if (showBuildersZone)
-                        {
-                            if (enemyDangerCells[x][y].buildersAim > 0)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y), new Vec2Float(0, 0), colorGreen);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].buildersAim.ToString(), 1f, 12)));
-                            }
-                            if (enemyDangerCells[x][y].buildersWarning > 0)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.5f), new Vec2Float(0, 0), colorMagenta);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].buildersWarning.ToString(), 1f, 12)));
+                                if (enemyDangerCells[x][y].buildersAim > 0)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y), new Vec2Float(0, 0), colorGreen);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].buildersAim.ToString(), 1f, 12)));
+                                }
+                                if (enemyDangerCells[x][y].buildersWarning > 0)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.5f), new Vec2Float(0, 0), colorMagenta);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, enemyDangerCells[x][y].buildersWarning.ToString(), 1f, 12)));
+                                }
                             }
                         }
                     }
-                }
 
-                #endregion
+                    #endregion
 
-                #region draw debugLines
-                foreach (var li in debugLines)
-                {
-                    ColoredVertex[] vertices = new ColoredVertex[] {
+                    #region draw debugLines
+                    foreach (var li in debugLines)
+                    {
+                        ColoredVertex[] vertices = new ColoredVertex[] {
                         new ColoredVertex(new Vec2Float(li._x1 ,li._y1), new Vec2Float(), li._color1),
                         new ColoredVertex(new Vec2Float(li._x2, li._y2), new Vec2Float(), li._color2),
                     };
-                    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
-                    debugInterface.Send(new DebugCommand.Add(lines));
-                }
-                #endregion
+                        DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                        debugInterface.Send(new DebugCommand.Add(lines));
+                    }
+                    #endregion
 
-                #region draw resource potential field
-                bool drawResourcePotentialField = true;
-                int maxXY = mapSize / 2;
-                if (drawResourcePotentialField)
-                {
-                    int maxWeight = mapSize * mapSize;
-                    for (int x = 0; x < maxXY; x++)
+                    #region draw resource potential field
+                    bool drawResourcePotentialField = false;
+                    int maxXY = mapSize / 2;
+                    if (drawResourcePotentialField)
                     {
-                        for (int y = 0; y < maxXY; y++)
+                        int maxWeight = mapSize * mapSize;
+                        for (int x = 0; x < maxXY; x++)
                         {
-                            int weight = resourcePotentialField[x][y];
-                            if (weight == RPFdangerCellWeight)
+                            for (int y = 0; y < maxXY; y++)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorRed);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
-                            }
-                            else if (weight == RPFwarningCellWeight)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorMagenta);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "!", 0.5f, 14)));
-                            }
-                            else if (weight == RPFdeniedBuilderWeight)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorGreen);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "v", 0.5f, 14)));
-                            }
-                            else if (weight == RPFenemyEntityWeight)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorWhite);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "-", 0.5f, 14)));
-                            }
-                            else if (weight == RPFmyBuildingWeight)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorWhite);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "-", 0.5f, 14)));
-                            }
-                            else if (weight == 0)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlack);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
-                            }
-                            else if (weight < maxWeight)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlue);
-                                debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, (maxWeight - weight).ToString(), 0.5f, 14)));
-                            }
+                                int weight = resourcePotentialField[x][y];
+                                if (weight == RPFdangerCellWeight)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorRed);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
+                                }
+                                else if (weight == RPFwarningCellWeight)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorMagenta);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "!", 0.5f, 14)));
+                                }
+                                else if (weight == RPFdeniedBuilderWeight)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorGreen);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "v", 0.5f, 14)));
+                                }
+                                else if (weight == RPFenemyEntityWeight)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorWhite);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "-", 0.5f, 14)));
+                                }
+                                else if (weight == RPFmyBuildingWeight)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorWhite);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "-", 0.5f, 14)));
+                                }
+                                else if (weight == 0)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlack);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 14)));
+                                }
+                                else if (weight < maxWeight)
+                                {
+                                    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorBlue);
+                                    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, (maxWeight - weight).ToString(), 0.5f, 14)));
+                                }
 
+                            }
                         }
                     }
+
+                    #endregion
                 }
+                #region примеры использования
+                //if (playerView.CurrentTick == 10)
+                //{
+                //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
 
+                //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
+                //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
+                //    debugInterface.Send(new DebugCommand.Add(text));
+
+                //    ColoredVertex[] vertices = new ColoredVertex[] {
+                //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
+                //    };
+                //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                //    debugInterface.Send(new DebugCommand.Add(lines));
+                //}
                 #endregion
+                debugInterface.Send(new DebugCommand.Flush());
             }
-            #region примеры использования
-            //if (playerView.CurrentTick == 10)
-            //{
-            //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
-
-            //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
-            //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
-            //    debugInterface.Send(new DebugCommand.Add(text));
-
-            //    ColoredVertex[] vertices = new ColoredVertex[] {
-            //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
-            //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
-            //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
-            //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
-            //    };
-            //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
-            //    debugInterface.Send(new DebugCommand.Add(lines));
-            //}
-            #endregion
-            debugInterface.Send(new DebugCommand.Flush());
         }
 
     }
 
-    enum EntityOrders { spawnUnit, build, repair, retreat, attack, attackAndMove, collect, move, cancelAll, none}
+    enum EntityOrders { spawnUnit, build, repair, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll, none}
     class EntityMemory
     {
         public Group group { get; private set; }
