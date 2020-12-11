@@ -1269,146 +1269,265 @@ namespace Aicup2020
                 map[x] = new int[mapSize];
 
             List<XYWeight> findCells = new List<XYWeight>();
-            List<int> tryRetreatEntities = new List<int>();
-            List<int> canRetreatEntities = new List<int>();
+            List<int> tryRetreatEntitiesId = new List<int>();
+            List<int> canRetreatEntitiesId = new List<int>();
 
             //init lists
             foreach (var em in entityMemories)
             {
                 if (em.Value.order == EntityOrders.tryRetreat)
                 {
-                    tryRetreatEntities.Add(em.Key);                    
+                    tryRetreatEntitiesId.Add(em.Key);                    
                 }
             }
 
-            bool canFindNext = true;
+            bool canFindNext = tryRetreatEntitiesId.Count > 0;
 
             // распутываем клубок
-            do {
+            while (canFindNext == true) 
+            {
                 findCells.Clear();
                 for (int x = 0; x < mapSize; x++)
                 {
                     map[x] = new int[mapSize];
                 }
 
-                foreach (var tid in tryRetreatEntities)
+                // fill findCells and map
+                foreach (var tid in tryRetreatEntitiesId)
                 {
                     findCells.Add(new XYWeight(entityMemories[tid].myEntity.Position.X, entityMemories[tid].myEntity.Position.Y, startWeight));
                     map[entityMemories[tid].myEntity.Position.X][entityMemories[tid].myEntity.Position.Y] = startWeight;
                 }
-                foreach(var cid in canRetreatEntities)
+                foreach(var cid in canRetreatEntitiesId)
                 {
                     map[entityMemories[cid].myEntity.Position.X][entityMemories[cid].myEntity.Position.Y] = CWfreeAfterRetreat;
                     map[entityMemories[cid].movePos.X][entityMemories[cid].movePos.Y] = CWtargetToRetreat;                    
                 }
 
-            }
-            while (canFindNext == true);
-
-            foreach (var em in entityMemories)
-            {
-                if (em.Value.order == EntityOrders.tryRetreat)
+                // ищем клетки через которые можно дойти до свободных клеток
+                for (int kk = 0; kk < findCells.Count; kk++)
                 {
-                    //retreaters.Add(em.Key);
-                    findCells.Add(new XYWeight(em.Value.myEntity.Position.X, em.Value.myEntity.Position.Y, startWeight));
-                    map[em.Value.myEntity.Position.X][em.Value.myEntity.Position.Y] = startWeight;
-                }
-                if (em.Value.order == EntityOrders.canRetreat)
-                {
-                    map[em.Value.myEntity.Position.X][em.Value.myEntity.Position.Y] = CWfreeAfterRetreat;
-                    map[em.Value.movePos.X][em.Value.movePos.Y] = CWtargetToRetreat;
-                }
-            }
+                    int ex = findCells[kk].x;
+                    int ey = findCells[kk].y;
+                    int w = findCells[kk].weight;
 
-            //find conflicts
-            for (int kk = 0; kk < findCells.Count; kk++)
-            {
-                int ex = findCells[kk].x;
-                int ey = findCells[kk].y;
-                int w = findCells[kk].weight;
-
-                if ((map[ex][ey] == CWfree || map[ex][ey] == CWfreeAfterRetreat) == false) // не продолжать поиск от свободных ячеек
-                {
-                    for (int rlud = 0; rlud < 4; rlud++) // RightLeftUpDown
+                    if ((map[ex][ey] == CWfree || map[ex][ey] == CWfreeAfterRetreat) == false) // не продолжать поиск от свободных ячеек
                     {
-                        int nx = ex;
-                        int ny = ey;
-                        if (rlud == 0) nx++;
-                        if (rlud == 1) nx--;
-                        if (rlud == 2) ny++;
-                        if (rlud == 3) ny--;
-
-                        if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                        for (int rlud = 0; rlud < 4; rlud++) // RightLeftUpDown
                         {
-                            /// останавливают поиск непроходимые клетки
-                            /// - клетки ресурсов
-                            /// - клетки врагов
-                            /// - клетки моих зданий
+                            int nx = ex;
+                            int ny = ey;
+                            if (rlud == 0) nx++;
+                            if (rlud == 1) nx--;
+                            if (rlud == 2) ny++;
+                            if (rlud == 3) ny--;
 
-                            if (map[nx][ny] == CWfreeAfterRetreat)
+                            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                             {
-                                // ================================================================
-                                // особая логика для освобождаемой клетки
-                            }
-
-                            if (map[nx][ny] == 0)// поиск двигается через моих подданных, в которых он еще не был (в начале они не отступали)
-                            {
-                                // it is danger cell?
-                                EnemyDangerCell cell = enemyDangerCells[nx][ny];
-                                if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning + cell.turretsAim > 0) // it is danger!
-                                {
-                                    map[nx][ny] = CWdanger;
+                                if (map[nx][ny] == CWfreeAfterRetreat) // особая логика для освобождаемой клетки на предыдущем шаге
+                                {                                    
+                                    findCells.Add(new XYWeight(nx, ny, w - 1)); // отмечаем, что туда можно прийти, вес уже есть
+                                    findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // считаем количество свободных клеток у сущности
+                                    bool cellNotFinded = true;
+                                    for (int nnn = 0; nnn < findCells.Count; nnn++)
+                                    {
+                                        if (findCells[nnn].x == nx && findCells[nnn].y == ny)
+                                        {
+                                            findCells[nnn] = new XYWeight(nx, ny, findCells[nnn].weight, findCells[nnn].index - 1); // считаем количество соседей у свободной клетки
+                                            cellNotFinded = false;
+                                            break;
+                                        }
+                                    }
+                                    if (cellNotFinded == true)
+                                        findCells.Add(new XYWeight(nx, ny, w - 1, -1)); // добавляем свободную клетку если она не была найдена
                                 }
                                 else
                                 {
-                                    int id = cellWithIdAny[nx][ny];
-                                    if (id > 0) // здесь ктото есть
+                                    if (map[nx][ny] == CWfree)
                                     {
-                                        if (enemiesById.ContainsKey(id)) // it is enemy!
+                                        for (int nnn = 0; nnn < findCells.Count; nnn++)
                                         {
-                                            map[nx][ny] = CWenemy;
-                                        }
-                                        else if (entityMemories.ContainsKey(id)) // it is my entity!
-                                        {
-                                            if (properties[entityMemories[id].myEntity.EntityType].CanMove == false) // it is a building
+                                            if (findCells[nnn].x == nx && findCells[nnn].y == ny)
                                             {
-                                                map[nx][ny] = CWmyBuilding;
+                                                findCells[nnn] = new XYWeight(nx, ny, findCells[nnn].weight, findCells[nnn].index - 1); // считаем количество соседей у свободной клетки
+                                                break;
                                             }
-                                            else // it is a unit!
-                                            {
-                                                map[nx][ny] = w - 1;
-                                                findCells.Add(new XYWeight(nx, ny, w - 1));
-                                            }
-
                                         }
-                                        else // it is resources!
-                                        {
-                                            map[nx][ny] = CWresources;
-                                        }
+                                        findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // считаем количество свободных клеток
                                     }
                                     else
                                     {
-                                        map[nx][ny] = CWfree;// можем хранить здесь разные значения на карте и в массиве
-                                        findCells.Add(new XYWeight(nx, ny, w - 1));
+
+                                        if (map[nx][ny] == 0)// поиск двигается через моих подданных, в которых он еще не был (в начале они не отступали)
+                                        {
+                                            // it is danger cell?
+                                            EnemyDangerCell cell = enemyDangerCells[nx][ny];
+                                            if (cell.meleesAim + cell.meleesWarning + cell.rangersAim + cell.rangersWarning + cell.turretsAim > 0) // it is danger!
+                                            {
+                                                map[nx][ny] = CWdanger;
+                                            }
+                                            else
+                                            {
+                                                int id = cellWithIdAny[nx][ny];
+                                                if (id > 0) // здесь ктото есть
+                                                {
+                                                    if (enemiesById.ContainsKey(id)) // it is enemy!
+                                                    {
+                                                        map[nx][ny] = CWenemy;
+                                                    }
+                                                    else if (entityMemories.ContainsKey(id)) // it is my entity!
+                                                    {
+                                                        if (properties[entityMemories[id].myEntity.EntityType].CanMove == false) // it is a building
+                                                        {
+                                                            map[nx][ny] = CWmyBuilding;
+                                                        }
+                                                        else // it is a unit!
+                                                        {
+                                                            map[nx][ny] = w - 1;
+                                                            findCells.Add(new XYWeight(nx, ny, w - 1));
+                                                        }
+
+                                                    }
+                                                    else // it is resources!
+                                                    {
+                                                        map[nx][ny] = CWresources;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    map[nx][ny] = CWfree;// можем хранить здесь разные значения на карте и в массиве
+                                                    findCells.Add(new XYWeight(nx, ny, w - 1, -1));
+                                                    findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // считаем количество свободных клеток
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
+                    }                
+                }
+
+                if (tryRetreatEntitiesId.Count + tryRetreatEntitiesId.Count > 1)
+                {
+                    ; // место остановки для тестов
+                }
+
+
+                // распутываем начиная со свободных клеток с одним соседом
+                //int freeWeight = 0;
+                bool isFindCellsWithOneFreeNeighpour = false;
+                for (int num = 0; num < findCells.Count; num++)
+                {
+                    int fx = findCells[num].x;
+                    int fy = findCells[num].y;
+                    int fw = findCells[num].weight;
+                    int fi = findCells[num].index;
+                    int mw = map[fx][fy];
+
+                    if ((mw == CWfree || mw == CWfreeAfterRetreat) == false)
+                    {
+                        if (fi == 1)
+                        {
+                            /// can be optimized 
+                            /// Check All OneToOne, 
+                            /// check 1 OneToSome
+                            /// check 1 SometoOne/Some
+                            isFindCellsWithOneFreeNeighpour = true;
+                            int id = cellWithIdAny[fx][fy];
+                            tryRetreatEntitiesId.Remove(id);
+                            canRetreatEntitiesId.Add(id);
+
+                            for (int rlud = 0; rlud < 4; rlud++) // RightLeftUpDown
+                            {
+                                int nx = fx;
+                                int ny = fy;
+                                if (rlud == 0) nx++;
+                                if (rlud == 1) nx--;
+                                if (rlud == 2) ny++;
+                                if (rlud == 3) ny--;
+
+                                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                                {
+                                    if (map[nx][ny] == CWfree || map[nx][ny] == CWfreeAfterRetreat)
+                                    {
+                                        entityMemories[id].order = EntityOrders.canRetreat;
+                                        entityMemories[id].movePos = new Vec2Int(nx, ny);
+                                        break;
+                                    }
+                                }
+                                //int g = 5;// как это не нашлась клетка?
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // иначе распутываем свободные клетки с несколькими соседями
+                bool isFindCellsWithSomeFreeNeighpours = false; 
+                if (isFindCellsWithOneFreeNeighpour == false)
+                {
+                    for (int num = 0; num < findCells.Count; num++)
+                    {
+                        int fx = findCells[num].x;
+                        int fy = findCells[num].y;
+                        int fw = findCells[num].weight;
+                        int fi = findCells[num].index;
+                        int mw = map[fx][fy];
+
+                        if ((mw == CWfree || mw == CWfreeAfterRetreat) == false)
+                        {
+                            if (fi > 1)
+                            {
+                                /// can be optimized 
+                                /// Check All OneToOne, 
+                                /// check 1 OneToSome
+                                /// check 1 SometoOne/Some
+                                isFindCellsWithSomeFreeNeighpours = true;
+                                int id = cellWithIdAny[fx][fy];
+                                tryRetreatEntitiesId.Remove(id);
+                                canRetreatEntitiesId.Add(id);
+
+                                for (int rlud = 0; rlud < 4; rlud++) // RightLeftUpDown
+                                {
+                                    int nx = fx;
+                                    int ny = fy;
+                                    if (rlud == 0) nx++;
+                                    if (rlud == 1) nx--;
+                                    if (rlud == 2) ny++;
+                                    if (rlud == 3) ny--;
+
+                                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                                    {
+                                        if (map[nx][ny] == CWfree || map[nx][ny] == CWfreeAfterRetreat)
+                                        {
+                                            entityMemories[id].order = EntityOrders.canRetreat;
+                                            entityMemories[id].movePos = new Vec2Int(nx, ny);
+                                            break;
+                                        }
+                                    }
+                                    //int g = 5;// как это не нашлась клетка?
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // если нет свободных клеток, то отмечаем всех кто не смог сбежать на атаку и выходим из расчета
+                if (isFindCellsWithOneFreeNeighpour == false
+                    && isFindCellsWithSomeFreeNeighpours == false)
+                {
+                    canFindNext = false;
+                    foreach (var id in tryRetreatEntitiesId)
+                    {
+                        entityMemories[id].order = EntityOrders.attack;
+                        entityMemories[id].autoAttack = new AutoAttack(
+                            properties[entityMemories[id].myEntity.EntityType].Attack.Value.AttackRange, 
+                            entityTypesArray);
                     }
                 }
             }
-
-            //разрешаем конфликты
-            for (int tt = 0; tt < findCells.Count;)
-            {
-                int fx = findCells[tt].x;
-                int fy = findCells[tt].y;
-                int fw = findCells[tt].weight;
-                int mw = map[fx][fy];
-
-                
-            }
-
 
 
             //просмотре состояния
@@ -1420,7 +1539,7 @@ namespace Aicup2020
                 if (_playerView.Players[0].Id == myId)
                 {
 
-                    bool drawMap = true;
+                    bool drawMap = false;
                     int maxXY = mapSize;
                     #region draw map
                     if (drawMap == true && findCells.Count > 0)
@@ -1475,6 +1594,24 @@ namespace Aicup2020
                         }
                     }
                     #endregion
+
+                    foreach(var id in tryRetreatEntitiesId)
+                    {
+                        ColoredVertex position = new ColoredVertex(new Vec2Float(
+                            entityMemories[id].myEntity.Position.X + 0.5f,
+                            entityMemories[id].myEntity.Position.Y + 0.3f), new Vec2Float(0, 0), 
+                            colorRed);
+                        _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "X", 0.5f, 16)));
+                    }
+                    foreach(var id in canRetreatEntitiesId)
+                    {
+                        ColoredVertex[] vertices = new ColoredVertex[] {
+                            new ColoredVertex(new Vec2Float(entityMemories[id].myEntity.Position.X + 0.5f, entityMemories[id].myEntity.Position.Y + 0.5f), new Vec2Float(), colorBlack),
+                            new ColoredVertex(new Vec2Float(entityMemories[id].movePos.X +0.5f, entityMemories[id].movePos.Y + 0.5f), new Vec2Float(), colorGreen),
+                        };
+                        DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                        _debugInterface.Send(new DebugCommand.Add(lines));
+                    }
                 }
                 #region примеры использования
                 //if (playerView.CurrentTick == 10)
@@ -1547,6 +1684,7 @@ namespace Aicup2020
                         break;
                     case EntityOrders.collect:
                     case EntityOrders.tryRetreat:
+                    case EntityOrders.canRetreat:
                     case EntityOrders.move:
                         moveAction.BreakThrough = em.Value.moveBreakThrough;
                         moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
@@ -1564,6 +1702,12 @@ namespace Aicup2020
 
                         attackAction.AutoAttack = em.Value.autoAttack;
                         actions.Add(em.Key, new EntityAction(moveAction, null, attackAction, null));
+                        break;
+                    case EntityOrders.none:
+
+                        break;
+                    default:
+                        ; // тревога незнакомый приказ
                         break;
                 }
             }            
@@ -1989,11 +2133,20 @@ namespace Aicup2020
             public int x;
             public int y;
             public int weight;
+            public int index;
             public XYWeight(int _x, int _y, int _weight)
             {
                 x = _x;
                 y = _y;
                 weight = _weight;
+                index = 0;
+            }
+            public XYWeight(int _x, int _y, int _weight, int _index)
+            {
+                x = _x;
+                y = _y;
+                weight = _weight;
+                index = _index;
             }
         }
         List<int> FindFreeNearestBuilders(Vec2Int target, int size, int builderCount, int maxDistance)
