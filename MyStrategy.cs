@@ -39,8 +39,8 @@ namespace Aicup2020
         List<int> needRepairEntityIdList = new List<int>();
         bool hasInactiveHouse = false;
 
-        bool drawStepDebug = true; // ===================================================================================
-        bool drawAdditionalDebug = false; // ===================================================================================
+        bool drawDebugStep = true; // ===================================================================================
+        bool drawDebugInstance = false; // ===================================================================================
 
         PlayerView _playerView;
         DebugInterface _debugInterface;
@@ -198,7 +198,15 @@ namespace Aicup2020
         {
             _playerView = playerView;
             _debugInterface = debugInterface;
-            _debugInterface.Send(new DebugCommand.Clear());
+            if (debugInterface == null)
+            {
+                drawDebugInstance = false;
+                drawDebugStep = false;
+            } else
+            {
+                _debugInterface.Send(new DebugCommand.Clear());
+            }
+                
             #region first initialization arrays and lists (once)
             if (needPrepare == true)
             {
@@ -1531,7 +1539,7 @@ namespace Aicup2020
 
 
             //просмотре состояния
-            if (drawStepDebug == true)
+            if (drawDebugStep == true)
             {
                 DebugState debugState = _debugInterface.GetState();
                 _debugInterface.Send(new DebugCommand.SetAutoFlush(false));
@@ -2934,7 +2942,7 @@ namespace Aicup2020
         Color colorBlue = new Color(0, 0, 1, 1);
         public void DebugUpdate(PlayerView playerView, DebugInterface debugInterface)
         {
-            if (drawAdditionalDebug == true)
+            if (drawDebugInstance == true)
             {
                 debugInterface.Send(new DebugCommand.Clear());
                 DebugState debugState = debugInterface.GetState();
