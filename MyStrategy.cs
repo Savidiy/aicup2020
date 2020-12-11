@@ -1087,40 +1087,48 @@ namespace Aicup2020
                     case IntentionType.IntentionCreateBuilder:
                         #region  cancel base build 
                         {
-                            bool needStop = true;
-                            foreach (var ni in intentions)
+                            if (entityMemories.ContainsKey(prevIntentions[i].targetId)) // на случай если в этом ходу сущность уже мертва
                             {
-                                if (ni.intentionType == IntentionType.IntentionCreateBuilder)
+                                bool needStop = true;
+                                foreach (var ni in intentions)
                                 {
-                                    if (prevIntentions[i].targetId == ni.targetId)
+                                    if (ni.intentionType == IntentionType.IntentionCreateBuilder)
                                     {
-                                        needStop = false;
-                                        break;
+                                        if (prevIntentions[i].targetId == ni.targetId)
+                                        {
+                                            needStop = false;
+                                            break;
+                                        }
                                     }
                                 }
+                                if (needStop)
+                                    intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, prevIntentions[i].targetId));
                             }
-                            if (needStop)
-                                intentions.Add(new Intention(IntentionType.IntentionStopCreatingBuilder, prevIntentions[i].targetId));
                         }
                         break;
                     #endregion
                     case IntentionType.IntentionCreateRanger:
                         #region // cancel Ranger base build
                         {
-                            bool needStop = true;
-                            foreach (var ni in intentions)
+                            if (entityMemories.ContainsKey(prevIntentions[i].targetId)) // на случай если в этом ходу сущность уже мертва
                             {
-                                if (ni.intentionType == IntentionType.IntentionCreateRanger)
+                                bool needStop = true;
+                                foreach (var ni in intentions)
                                 {
-                                    if (prevIntentions[i].targetId == ni.targetId)
+                                    if (ni.intentionType == IntentionType.IntentionCreateRanger)
                                     {
-                                        needStop = false;
-                                        break;
+                                        if (prevIntentions[i].targetId == ni.targetId)
+                                        {
+                                            needStop = false;
+                                            break;
+                                        }
                                     }
                                 }
-                            }
-                            if (needStop)
-                                intentions.Add(new Intention(IntentionType.IntentionStopCreatingRanger, prevIntentions[i].targetId));
+                                if (needStop)
+                                {
+                                    intentions.Add(new Intention(IntentionType.IntentionStopCreatingRanger, prevIntentions[i].targetId));
+                                }
+                            }   
                         }
                         break;
                     #endregion
