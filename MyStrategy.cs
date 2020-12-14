@@ -41,6 +41,8 @@ namespace Aicup2020
 
         bool drawDebugStep = true; // ===================================================================================
         bool drawDebugInstance = false; // ===================================================================================
+        enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawRetreat, canDrawDebugUpdate, allOptionsCount }
+        bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
 
         PlayerView _playerView;
         DebugInterface _debugInterface;
@@ -60,6 +62,112 @@ namespace Aicup2020
         const int RPFenemyEntityWeight = -2;
         const int RPFdeniedBuilderWeight = 1;
         const int RPFwarningCellWeight = 2;
+        class BuildMapCell
+        {
+            public bool s2canBuildNow;
+            public bool s2canBuildAfter;
+            public bool s2noBuildingBarrier;
+            public bool s2noUnitsBarrier;
+            public bool s2noEnemiesBarrier;
+            public int s2howManyResBarrier;
+
+            public bool s3canBuildNow;
+            public bool s3canBuildAfter;
+            public bool s3noBuildingBarrier;
+            public bool s3noUnitsBarrier;
+            public bool s3noEnemiesBarrier;
+            public int s3howManyResBarrier;
+
+            public bool s5canBuildNow;
+            public bool s5canBuildAfter;
+            public bool s5noBuildingBarrier;
+            public bool s5noUnitsBarrier;
+            public bool s5noEnemiesBarrier;
+            public int s5howManyResBarrier;
+
+            public BuildMapCell()
+            {
+                Reset();
+            }
+
+            public void Check()
+            {
+                if (s2noBuildingBarrier
+                        && s2noEnemiesBarrier
+                        && s2howManyResBarrier == 0)
+                {
+                    if (s2noUnitsBarrier)
+                    {
+                        s2canBuildNow = true;
+                        s2canBuildAfter = true;
+                    }                             
+                    else
+                        s2canBuildAfter = true;
+                }
+                if (s3noBuildingBarrier
+                    && s3noEnemiesBarrier
+                    && s3howManyResBarrier == 0)
+                {
+                    if (s3noUnitsBarrier)
+                    {
+                        s3canBuildNow = true;
+                        s3canBuildAfter = true;
+                    }
+                    else
+                        s3canBuildAfter = true;
+                }
+                if (s5noBuildingBarrier
+                    && s5noEnemiesBarrier
+                    && s5noUnitsBarrier
+                    && s5howManyResBarrier == 0)
+                {
+                    if (s5noUnitsBarrier)
+                    {
+                        s5canBuildNow = true;
+                        s5canBuildAfter = true;
+                    }
+                    else
+                        s5canBuildAfter = true;
+                }
+            }
+
+            public void Reset()
+            {
+                s2canBuildNow = s3canBuildNow = s5canBuildNow = false;
+                s2canBuildAfter = s3canBuildAfter = s5canBuildAfter = false;
+                s2noBuildingBarrier = s3noBuildingBarrier = s5noBuildingBarrier = true;
+                s2noUnitsBarrier = s3noUnitsBarrier = s5noUnitsBarrier = true;
+                s2noEnemiesBarrier = s3noEnemiesBarrier = s5noEnemiesBarrier = true;
+                s2howManyResBarrier = s3howManyResBarrier = s5howManyResBarrier = 0;
+            }
+
+            public int HowManyResBarrier (int size)
+            {
+                switch (size)
+                {
+                    case 2: return s2howManyResBarrier;
+                    case 3: return s3howManyResBarrier;
+                    case 5: return s5howManyResBarrier;
+                    default:
+                        break;
+                }
+                return 0;
+            }
+
+            public bool CanBuildNow (int size)
+            {
+                switch (size)
+                {
+                    case 2: return s2canBuildNow;
+                    case 3: return s3canBuildNow;
+                    case 5: return s5canBuildNow;
+                    default:
+                        break;
+                }
+                return false;
+            }
+        }
+        BuildMapCell[,] buildBarrierMap;
 
         struct EnemyDangerCell
         {
@@ -82,8 +190,6 @@ namespace Aicup2020
             //}
         }
         EnemyDangerCell[][] enemyDangerCells;
-
-        int distToFindResThenSpawnBuilder = 30; // дистанция поиска пути при создании строителя иначе просто справа вверху создается
 
         int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
         float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
@@ -200,11 +306,12 @@ namespace Aicup2020
             _debugInterface = debugInterface;
             if (debugInterface == null)
             {
-                drawDebugInstance = false;
-                drawDebugStep = false;
+                debugOptions[(int)DebugOptions.canDrawGetAction] = false;
+                debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false; // отображение отладочной информации на стадии debugUpdate
             } else
             {
                 _debugInterface.Send(new DebugCommand.Clear());
+                _debugInterface.Send(new DebugCommand.SetAutoFlush(false));
             }
                 
             #region first initialization arrays and lists (once)
@@ -236,6 +343,7 @@ namespace Aicup2020
             CheckAliveAndDieEntities();
             CheckDeadResourceOnCurrentVisibleMap();
             GenerateResourcePotentialField();
+            GenerateBuildBarrierMap();
             #endregion
 
             debugLines.Clear();
@@ -475,7 +583,15 @@ namespace Aicup2020
         }
         void Prepare()
         {
-            //init arrays
+            #region draw debug settings
+            debugOptions[(int)DebugOptions.canDrawGetAction] = true;
+            debugOptions[(int)DebugOptions.drawRetreat] = true;
+            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = true;
+
+            debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
+            #endregion
+
+            #region init arrays
             cellWithIdAny = new int[mapSize][];
             cellWithIdOnlyBuilding = new int[mapSize][];
             onceVisibleMap = new int[mapSize][];
@@ -483,7 +599,7 @@ namespace Aicup2020
             resourceMemoryMap = new int[mapSize][];
             enemyDangerCells = new EnemyDangerCell[mapSize][];
             resourcePotentialField = new int[mapSize][];
-            nextPositionMyUnitsMap = new int[mapSize][]; 
+            nextPositionMyUnitsMap = new int[mapSize][];
 
             for (var i = 0; i < mapSize; i++)
             {
@@ -498,6 +614,16 @@ namespace Aicup2020
                 // auto zeroing all when created
             }
 
+            buildBarrierMap = new BuildMapCell[mapSize, mapSize];
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    buildBarrierMap[x, y] = new BuildMapCell();
+                }
+            }
+            #endregion
+
             if (!fogOfWar)
             {
                 for(int x = 0; x <mapSize; x++)
@@ -509,15 +635,6 @@ namespace Aicup2020
                     }
                 }                
             }
-            //for (int x = 0; x < mapSize; x++)
-            //{
-            //    for (int y = 0; y < mapSize; y++)
-            //    {
-            //        // cellWithIdAny - zeroing before use
-            //        // cellWithIdOnlyBuilding - zeroing before use
-            //        onceVisibleMap[x][y] = 0; //update once
-            //    }
-            //}
 
             //prepare current and previous entity counter
             foreach (var ent in entityTypesArray)
@@ -766,6 +883,141 @@ namespace Aicup2020
                     }
                 }
                 findCells.RemoveAt(0);
+            }
+        }
+        void GenerateBuildBarrierMap()
+        {
+            //zeroing
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    buildBarrierMap[x, y].Reset();
+                }
+            }
+
+            // check barriers
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    int id = cellWithIdAny[x][y];
+                    if (id >= 0)
+                    {
+                        for (int k = x - 4; k <=x; k++)
+                        {
+                            for (int m = y - 4; m <= y; m++)
+                            {
+                                bool s2 = (x - k < 2 && y - m < 2);
+                                bool s3 = (x - k < 3 && y - m < 3);
+                                bool s5 = (x - k < 5 && y - m < 5);
+
+                                if (k >= 0 && m >= 0) // больше mapSize никогда не станет
+                                {
+                                    if (entityMemories.ContainsKey(id))
+                                    {
+                                        if (properties[entityMemories[id].myEntity.EntityType].CanMove)
+                                        {
+                                            if (s2) buildBarrierMap[k, m].s2noUnitsBarrier = false;
+                                            if (s3) buildBarrierMap[k, m].s3noUnitsBarrier = false;
+                                            if (s5) buildBarrierMap[k, m].s5noUnitsBarrier = false;
+                                        } else
+                                        {
+                                            if (s2) buildBarrierMap[k, m].s2noBuildingBarrier = false;
+                                            if (s3) buildBarrierMap[k, m].s3noBuildingBarrier = false;
+                                            if (s5) buildBarrierMap[k, m].s5noBuildingBarrier = false;
+                                        }
+
+                                    } else if (enemiesById.ContainsKey(id))
+                                    {
+                                        if (s2) buildBarrierMap[k, m].s2noEnemiesBarrier = false;
+                                        if (s3) buildBarrierMap[k, m].s3noEnemiesBarrier = false;
+                                        if (s5) buildBarrierMap[k, m].s5noEnemiesBarrier = false;
+
+                                    } else // it's resource
+                                    {
+                                        if (s2) buildBarrierMap[k, m].s2howManyResBarrier++;
+                                        if (s3) buildBarrierMap[k, m].s3howManyResBarrier++;
+                                        if (s5) buildBarrierMap[k, m].s5howManyResBarrier++;
+                                    }
+
+                                    if (resourceMemoryMap[k][m] > 0)
+                                    {
+                                        if (s2) buildBarrierMap[k, m].s2howManyResBarrier++;
+                                        if (s3) buildBarrierMap[k, m].s3howManyResBarrier++;
+                                        if (s5) buildBarrierMap[k, m].s5howManyResBarrier++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }            
+
+            // calc can build now
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    BuildMapCell cell = buildBarrierMap[x, y];
+                    if (fogOfWar == true) { 
+                        if (onceVisibleMap[x][y] > 0)
+                        {
+                            cell.Check();
+                        }                        
+                    } else
+                    {
+                        cell.Check();
+                    }
+                }
+            }
+
+            if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawBuildBarrierMap])
+            {
+                for (int x = 0; x < mapSize; x++)
+                {
+                    for (int y = 0; y < mapSize; y++)
+                    {     
+                        if (buildBarrierMap[x,y].s5canBuildAfter == true)
+                        {
+                            ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0),
+                                (buildBarrierMap[x, y].s5canBuildNow) ? colorBlue : colorMagenta);
+                            _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "5", 0.5f, 16)));
+                        } else if (buildBarrierMap[x, y].s3canBuildAfter == true)
+                        {
+                            ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0),
+                                (buildBarrierMap[x, y].s3canBuildNow) ? colorBlue : colorMagenta);
+                            _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "3", 0.5f, 16)));
+                        } 
+                        // don't show 2 (turret) place
+                        //else if (buildBarrierMap[x, y].s2canBuildAfter == true)
+                        //{
+                        //    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0),
+                        //        (buildBarrierMap[x, y].s2canBuildNow) ? colorBlue : colorMagenta);
+                        //    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "2", 0.5f, 16)));
+                        //}
+                    }
+                }
+                 #region примеры использования
+                        //if (playerView.CurrentTick == 10)
+                        //{
+                        //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
+
+                        //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
+                        //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
+                        //    debugInterface.Send(new DebugCommand.Add(text));
+
+                        //    ColoredVertex[] vertices = new ColoredVertex[] {
+                        //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
+                        //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
+                        //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
+                        //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
+                        //    };
+                        //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                        //    debugInterface.Send(new DebugCommand.Add(lines));
+                        //}
+                        #endregion
+                 _debugInterface.Send(new DebugCommand.Flush());
             }
         }
 
@@ -1547,7 +1799,7 @@ namespace Aicup2020
 
 
             //просмотре состояния
-            if (drawDebugStep == true)
+            if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawRetreat])
             {
                 DebugState debugState = _debugInterface.GetState();
                 _debugInterface.Send(new DebugCommand.SetAutoFlush(false));
@@ -2950,7 +3202,7 @@ namespace Aicup2020
         Color colorBlue = new Color(0, 0, 1, 1);
         public void DebugUpdate(PlayerView playerView, DebugInterface debugInterface)
         {
-            if (drawDebugInstance == true)
+            if (debugOptions[(int)DebugOptions.canDrawDebugUpdate] == true)
             {
                 debugInterface.Send(new DebugCommand.Clear());
                 DebugState debugState = debugInterface.GetState();
