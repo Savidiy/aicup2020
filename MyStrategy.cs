@@ -233,7 +233,7 @@ namespace Aicup2020
         #region Желания, Планы, Намерения и т.д.
 
         enum DesireType {WantCreateBuilders, WantCreateRangers,
-            WantCreateHouses, 
+            WantCreateHouses, WantCreateRangerBase,
             WantRepairBuildings,
             WantCollectResources, WantRetreatBuilders,
             WantTurretAttacks, WantAllWarriorsAttack };
@@ -241,7 +241,7 @@ namespace Aicup2020
         List<DesireType> prevDesires = new List<DesireType>();
         
         enum PlanType {PlanCreateBuilders, PlanCreateRangers,
-            PlanCreateHouses, 
+            PlanCreateHouses, PlanCreateRangerBase,
             PlanRepairNewBuildings, PlanRepairOldBuildings,
             PlanExtractResources, PlanRetreatBuilders,
             PlanTurretAttacks, PlanAllWarriorsAttack }
@@ -250,7 +250,7 @@ namespace Aicup2020
         
         enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, 
             IntentionCreateRanger, IntentionStopCreatingRanger,
-            IntentionCreateHouseStart, IntentionCreateHouseContinue, 
+            IntentionCreateHouseStart,  
             IntentionRepairNewBuilding, IntentionRepairOldBuilding,
             IntentionExtractResources, IntentionFindResources, IntentionRetreatBuilders, IntentionMyBuiAttackEnemyBui,
             IntentionTurretAttacks,
@@ -1000,12 +1000,12 @@ namespace Aicup2020
                                 int count = 0;
                                 foreach(var ni in prevIntentions)
                                 {
-                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart || ni.intentionType == IntentionType.IntentionCreateHouseContinue) 
+                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart) 
                                         count++;
                                 }
                                 foreach (var ni in intentions)
                                 {
-                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart || ni.intentionType == IntentionType.IntentionCreateHouseContinue)
+                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart)
                                         count++;
                                 }
                                 if ((populationMax <= 30 && count == 0) || (populationMax <= 60 && count <= 2) || (count <= 4))
