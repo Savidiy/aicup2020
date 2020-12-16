@@ -36,11 +36,9 @@ namespace Aicup2020
         Group groupRetreatBuilders = new Group();
         Group groupMyBuildersAttackEnemyBuilders = new Group();
 
-        List<int> needRepairEntityIdList = new List<int>();
-        bool hasInactiveHouse = false;
+        List<int> needRepairBuildingIdList = new List<int>();
+        List<int> needRepairUnitsIdList = new List<int>();        
 
-        bool drawDebugStep = true; // ===================================================================================
-        bool drawDebugInstance = false; // ===================================================================================
         enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawRetreat, canDrawDebugUpdate, allOptionsCount }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
 
@@ -236,6 +234,7 @@ namespace Aicup2020
 
         enum DesireType {WantCreateBuilders, WantCreateRangers,
             WantCreateHouses, 
+            WantRepairBuildings,
             WantCollectResources, WantRetreatBuilders,
             WantTurretAttacks, WantAllWarriorsAttack };
         List<DesireType> desires = new List<DesireType>();
@@ -243,6 +242,7 @@ namespace Aicup2020
         
         enum PlanType {PlanCreateBuilders, PlanCreateRangers,
             PlanCreateHouses, 
+            PlanRepairNewBuildings, PlanRepairOldBuildings,
             PlanExtractResources, PlanRetreatBuilders,
             PlanTurretAttacks, PlanAllWarriorsAttack }
         List<PlanType> plans = new List<PlanType>();
@@ -278,7 +278,7 @@ namespace Aicup2020
                 targetId = _targetId;
                 targetGroup = new Group();
                 targetPosition = new Vec2Int();
-                targetEntityType = EntityType.Resource;
+                targetEntityType = EntityType.Resource;                
             }
             public Intention(IntentionType type, Group _targetGroup)
             {
@@ -454,7 +454,8 @@ namespace Aicup2020
         }
         void CheckAliveAndDieEntities()
         {
-            hasInactiveHouse = false;
+            needRepairBuildingIdList.Clear();
+            needRepairUnitsIdList.Clear();
 
             int currentTick = _playerView.CurrentTick;
 
@@ -487,12 +488,19 @@ namespace Aicup2020
                 {
                     if (e.Active == false)
                     {
-                        hasInactiveHouse = true;
+                        needRepairBuildingIdList.Add(e.Id);
                     }
                     if (entityMemories.ContainsKey(e.Id))
                     {
                         //update
                         entityMemories[e.Id].Update(e);
+                        if (e.Health < properties[e.EntityType].MaxHealth)
+                        {
+                            if (properties[e.EntityType].CanMove)
+                                needRepairUnitsIdList.Add(e.Id);
+                            else
+                                needRepairBuildingIdList.Add(e.Id);
+                        }
                         //once and current visible map update
                         AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
                         AddEntityViewToCurrentVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
@@ -905,6 +913,9 @@ namespace Aicup2020
             desires.Add(DesireType.WantTurretAttacks);
             desires.Add(DesireType.WantAllWarriorsAttack);
 
+            if (needRepairBuildingIdList.Count > 0)
+                desires.Add(DesireType.WantRepairBuildings);
+
 
             //// retreat from enemies
             /// info units about dangers zone
@@ -995,6 +1006,25 @@ namespace Aicup2020
                         }
                         break;
                     #endregion
+                    case DesireType.WantRepairBuildings:
+                        #region хочу ремонтировать здани€
+                        {
+                            bool needRepairOld = false;
+                            bool needRepairNew = false;
+                            foreach (var id in needRepairBuildingIdList)
+                            {
+                                if (entityMemories[id].myEntity.Active == true)
+                                    needRepairOld = true;
+                                else
+                                    needRepairNew = true;
+                            }
+                            if (needRepairNew)
+                                plans.Add(PlanType.PlanRepairNewBuildings);
+                            if (needRepairOld)
+                                plans.Add(PlanType.PlanRepairOldBuildings);
+                        }
+                        break;
+                    #endregion
                     case DesireType.WantRetreatBuilders:
                         #region хочу чтобы строители сбегали от врагов
                         plans.Add(PlanType.PlanRetreatBuilders);
@@ -1028,8 +1058,7 @@ namespace Aicup2020
                         break;
                     #endregion
                     default:
-                        int k = 5;//unknown type
-                        break;
+                        throw new System.Exception("Ќеизвестный тип ∆еланий");//unknown type                        
                 }
             }
         }
@@ -1073,23 +1102,21 @@ namespace Aicup2020
                         Vec2Int pos = FindPositionToBuilding(EntityType.House);
                         if (pos.X >= 0) {
                             Intention intention = new Intention(IntentionType.IntentionCreateHouseStart, pos, EntityType.House);
-                            intentions.Add(intention);
-                            //List<int> buildersId = FindFreeNearestBuilders(
-                            //    pos,
-                            //    properties[EntityType.House].Size,
-                            //    builderCountForStartBuilding,
-                            //    (int)(properties[EntityType.House].MaxHealth * startBuildingFindDistanceFromHealth));
-                            //if (buildersId.Count > 0)
-                            //{
-                            //    foreach (var id in buildersId)
-                            //    {
-                            //        entityMemories[id].SetGroup(intention.targetGroup);
-                            //    }
-                            //    intentions.Add(intention);
-                            //} else
-                            //{
-                            //    int j = 0;//yне должно такого быть
-                            //}
+                            intentions.Add(intention);                            
+                        }
+                        break;
+                    case PlanType.PlanRepairNewBuildings:
+                        foreach (var id in needRepairBuildingIdList)
+                        {
+                            if (entityMemories[id].myEntity.Active == false)
+                                intentions.Add(new Intention(IntentionType.IntentionRepairNewBuilding, id));
+                        }
+                        break;
+                    case PlanType.PlanRepairOldBuildings:
+                        foreach (var id in needRepairBuildingIdList)
+                        {
+                            if (entityMemories[id].myEntity.Active == true)
+                                intentions.Add(new Intention(IntentionType.IntentionRepairOldBuilding, id));
                         }
                         break;
                     case PlanType.PlanRetreatBuilders:
@@ -1137,8 +1164,7 @@ namespace Aicup2020
                         intentions.Add(new Intention(IntentionType.IntentionAllWarriorsAttack, basicEntityIdGroups[EntityType.RangedUnit]));
                         break;
                     default:
-                        int k = 5;// unknown type
-                        break;
+                        throw new System.Exception("неучтенный план");
                 }
             }
         }
@@ -1200,56 +1226,56 @@ namespace Aicup2020
                     #endregion
                     case IntentionType.IntentionCreateHouseStart:
                         #region —оздаем намерение на ремонт построенного или отмен€ем строительство
-                        if (prevIntentions[i].targetId >= 0)
-                        {
-                            // удачное строительство, создавем намерение на ремонт
-                            Intention intention = new Intention(IntentionType.IntentionRepairNewBuilding, prevIntentions[i].targetId);
-                            intention.targetGroup = prevIntentions[i].targetGroup;
-                            intentions.Add(intention);
-                        }
-                        else
-                        {
-                            // неудачное строительство, распускаем группу
-                            while (prevIntentions[i].targetGroup.members.Count > 0)
-                            {
-                                int id = prevIntentions[i].targetGroup.members[0];
-                                entityMemories[id].SetGroup(basicEntityIdGroups[entityMemories[id].myEntity.EntityType]);
-                            }
-                        }
+                        //if (prevIntentions[i].targetId >= 0)
+                        //{
+                        //    // удачное строительство, создавем намерение на ремонт
+                        //    Intention intention = new Intention(IntentionType.IntentionRepairNewBuilding, prevIntentions[i].targetId);
+                        //    intention.targetGroup = prevIntentions[i].targetGroup;
+                        //    intentions.Add(intention);
+                        //}
+                        //else
+                        //{
+                        //    // неудачное строительство, распускаем группу
+                        //    while (prevIntentions[i].targetGroup.members.Count > 0)
+                        //    {
+                        //        int id = prevIntentions[i].targetGroup.members[0];
+                        //        entityMemories[id].SetGroup(basicEntityIdGroups[entityMemories[id].myEntity.EntityType]);
+                        //    }
+                        //}
                         break;
                     #endregion
                     case IntentionType.IntentionRepairNewBuilding:
                         #region продолжаем ремонтировать или отмен€ем задание
-                        {
-                            bool removed = false;
-                            int targetId = prevIntentions[i].targetId;
+                        //{
+                        //    bool removed = false;
+                        //    int targetId = prevIntentions[i].targetId;
 
-                            if (entityMemories.ContainsKey(prevIntentions[i].targetId))
-                            {
-                                if (entityMemories[targetId].myEntity.Health == properties[entityMemories[targetId].myEntity.EntityType].MaxHealth)
-                                {
-                                    removed = true;
-                                }
-                            }
-                            else
-                            {
-                                //target die
-                                removed = true;
-                            }
+                        //    if (entityMemories.ContainsKey(prevIntentions[i].targetId))
+                        //    {
+                        //        if (entityMemories[targetId].myEntity.Health == properties[entityMemories[targetId].myEntity.EntityType].MaxHealth)
+                        //        {
+                        //            removed = true;
+                        //        }
+                        //    }
+                        //    else
+                        //    {
+                        //        //target die
+                        //        removed = true;
+                        //    }
                             
-                            if (removed)
-                            {
-                                while (prevIntentions[i].targetGroup.members.Count > 0)
-                                {
-                                    int id = prevIntentions[i].targetGroup.members[0];
-                                    entityMemories[id].SetGroup(basicEntityIdGroups[entityMemories[id].myEntity.EntityType]);
-                                }
-                            }
-                            else
-                            {
-                                intentions.Add(prevIntentions[i]);
-                            }
-                        }
+                        //    if (removed)
+                        //    {
+                        //        while (prevIntentions[i].targetGroup.members.Count > 0)
+                        //        {
+                        //            int id = prevIntentions[i].targetGroup.members[0];
+                        //            entityMemories[id].SetGroup(basicEntityIdGroups[entityMemories[id].myEntity.EntityType]);
+                        //        }
+                        //    }
+                        //    else
+                        //    {
+                        //        intentions.Add(prevIntentions[i]);
+                        //    }
+                        //}
                         break;
                         #endregion
                 }
@@ -1295,18 +1321,9 @@ namespace Aicup2020
                         }
                         break;
                     case IntentionType.IntentionCreateHouseStart:
-                        {
-                            //foreach (int id in ni.targetGroup.members)
-                            //{
-                            //    OrderStartCreateBuilding(id, ni.position, EntityType.House);
-                            //}
-                        }
                         break;
+                    case IntentionType.IntentionRepairOldBuilding:
                     case IntentionType.IntentionRepairNewBuilding:
-                        //foreach (int id in ni.targetGroup.members)
-                        //{
-                        //    OrderRepairBuilding(id, ni.targetId);
-                        //}
                         break;
                     case IntentionType.IntentionTurretAttacks:
                         foreach (int id in ni.targetGroup.members)
@@ -1332,6 +1349,8 @@ namespace Aicup2020
                             OrderAttackNearbyEnemy(id, new EntityType[] { EntityType.BuilderUnit });
                         }
                         break;
+                    default:
+                        throw new System.Exception("Ќе учтенное намерение!");
                 }
             }
         }
@@ -1810,10 +1829,27 @@ namespace Aicup2020
         {
             bool deleteIntention = false;
 
-            int sx = intention.targetPosition.X;
-            int sy = intention.targetPosition.Y;
-            int size = properties[intention.targetEntityType].Size;
-            int maxHealth = properties[intention.targetEntityType].MaxHealth;
+            int sx = 0;
+            int sy = 0;
+            int size = 1;
+            int maxHealth = 1;
+
+            switch (intention.intentionType) // различи€
+            {
+                case IntentionType.IntentionCreateHouseStart:
+                    sx = intention.targetPosition.X;
+                    sy = intention.targetPosition.Y;
+                    size = properties[intention.targetEntityType].Size;
+                    maxHealth = properties[intention.targetEntityType].MaxHealth;
+                    break;
+                case IntentionType.IntentionRepairNewBuilding:
+                case IntentionType.IntentionRepairOldBuilding:
+                    sx = entityMemories[intention.targetId].myEntity.Position.X;
+                    sy = entityMemories[intention.targetId].myEntity.Position.Y;
+                    size = properties[entityMemories[intention.targetId].myEntity.EntityType].Size;
+                    maxHealth = properties[entityMemories[intention.targetId].myEntity.EntityType].MaxHealth;
+                    break;
+            }
 
             if (intention.intentionType == IntentionType.IntentionCreateHouseStart) // == различие - провер€ем начинку только дл€ стройки нового здани€
             {
@@ -1903,7 +1939,7 @@ namespace Aicup2020
                                 {
                                     if (properties[entityMemories[id].myEntity.EntityType].CanMove)// только юниты, здани€ здесь не нужны
                                     {
-                                        //findCells.Add(new XYWeight(fx, fy, startWeight)); не ищем от тех что стоит на границе
+                                        findCells.Add(new XYWeight(fx, fy, startWeight)); //  ищем от тех что стоит на границе
                                         pathMap[fx, fy].weight = startWeight;
                                         borderMansId.Add(id); // учитываем тех кто стоит на границе места строительства в том числе ћогут быть войны
                                     }
@@ -2042,20 +2078,20 @@ namespace Aicup2020
                         freePlaceInIndexGroup[c.index] = 1;
                     }
                 }
-                // не провер€етс€, так как дл€ Ѕордеров не сохздают€с клетки поиска
-                //foreach (var id in borderMansId) // убираем тех кто стоит на границе
-                //{
-                //    int x = entityMemories[id].myEntity.Position.X;
-                //    int y = entityMemories[id].myEntity.Position.Y;
-                //    foreach (var c in findCells)
-                //    {
-                //        if (c.x == x && c.y == y)
-                //        {
-                //            freePlaceInIndexGroup[c.index]--;
-                //            break;
-                //        }
-                //    }
-                //}
+                foreach (var id in borderMansId) // убираем тех кто стоит на границе
+                {
+                    int x = entityMemories[id].myEntity.Position.X;
+                    int y = entityMemories[id].myEntity.Position.Y;
+                    for (int i = 0; i < findCells.Count;i++)
+                    {
+                        if (findCells[i].x == x && findCells[i].y == y)
+                        {
+                            freePlaceInIndexGroup[findCells[i].index]--;
+                            findCells.RemoveAt(i);
+                            break;
+                        }
+                    }
+                }
                 #endregion
 
                 // начинаем искать свободных строителей
@@ -2229,7 +2265,7 @@ namespace Aicup2020
                             else
                             {
                                 // MOD можно не провер€ть на совпадени€ если осталась всего одна группа
-                                if (pathMap[nx, ny].weight > 0) // это уже пройденна€ клетка, надо проверить, будем ли объедин€тьс€
+                                if (pathMap[nx, ny].weight > 0 && pathMap[nx, ny].weight < startWeight) // это уже пройденна€ клетка, надо проверить, будем ли объедин€тьс€
                                 {
                                     if (pathMap[nx, ny].index == 0)
                                     {
@@ -2240,6 +2276,11 @@ namespace Aicup2020
                                     {// встретили клетку с другим индексом, значит надо объединить группы
                                         int oldIndex = pathMap[nx, ny].index;
                                         int newIndex = fi;
+
+                                        if (freePlaceInIndexGroup.ContainsKey(oldIndex) == false || freePlaceInIndexGroup.ContainsKey(newIndex) == false)
+                                        {
+                                            ;
+                                        }
 
                                         for (int x = 0; x < mapSize; x++)//обновл€ем карту
                                         {
@@ -2255,8 +2296,8 @@ namespace Aicup2020
                                                 c.index = newIndex;
                                         }
 
-                                        if (oldIndex != 0)// стартовые клетки с сосед€ми
-                                            freePlaceInIndexGroup[newIndex] += freePlaceInIndexGroup[oldIndex];
+                                        
+                                        freePlaceInIndexGroup[newIndex] += freePlaceInIndexGroup[oldIndex];
                                         freePlaceInIndexGroup.Remove(oldIndex);
                                     }
                                 }
@@ -2343,7 +2384,6 @@ namespace Aicup2020
                         break;
                     default:
                         throw new System.Exception("неизвестный приказ"); // тревога незнакомый приказ
-                        break;
                 }
             }            
         }
@@ -3093,7 +3133,7 @@ namespace Aicup2020
             {
                 foreach(var v in preSetHousePositions)
                 {
-                    if (buildBarrierMap[v.X, v.Y].CanBuildAfter(buildingSize))
+                    if (buildBarrierMap[v.X, v.Y].CanBuildNow(buildingSize))
                     {
                         return new Vec2Int(v.X, v.Y);
                     }
