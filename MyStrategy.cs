@@ -66,22 +66,22 @@ namespace Aicup2020
         {
             public bool s2canBuildNow;
             public bool s2canBuildAfter;
-            public bool s2noBuildingBarrier;
-            public bool s2noUnitsBarrier;
+            public bool s2noBaseOrWarriorBarrier;
+            public bool s2noBuilderBarrier;
             public bool s2noEnemiesBarrier;
             public int s2howManyResBarrier;
 
             public bool s3canBuildNow;
             public bool s3canBuildAfter;
-            public bool s3noBuildingBarrier;
-            public bool s3noUnitsBarrier;
+            public bool s3noBaseOrWarriorBarrier;
+            public bool s3noBuilderBarrier;
             public bool s3noEnemiesBarrier;
             public int s3howManyResBarrier;
 
             public bool s5canBuildNow;
             public bool s5canBuildAfter;
-            public bool s5noBuildingBarrier;
-            public bool s5noUnitsBarrier;
+            public bool s5noBaseOrWarriorBarrier;
+            public bool s5noBuilderBarrier;
             public bool s5noEnemiesBarrier;
             public int s5howManyResBarrier;
 
@@ -92,11 +92,11 @@ namespace Aicup2020
 
             public void Check()
             {
-                if (s2noBuildingBarrier
+                if (s2noBaseOrWarriorBarrier
                         && s2noEnemiesBarrier
                         && s2howManyResBarrier == 0)
                 {
-                    if (s2noUnitsBarrier)
+                    if (s2noBuilderBarrier)
                     {
                         s2canBuildNow = true;
                         s2canBuildAfter = true;
@@ -104,11 +104,11 @@ namespace Aicup2020
                     else
                         s2canBuildAfter = true;
                 }
-                if (s3noBuildingBarrier
+                if (s3noBaseOrWarriorBarrier
                     && s3noEnemiesBarrier
                     && s3howManyResBarrier == 0)
                 {
-                    if (s3noUnitsBarrier)
+                    if (s3noBuilderBarrier)
                     {
                         s3canBuildNow = true;
                         s3canBuildAfter = true;
@@ -116,12 +116,12 @@ namespace Aicup2020
                     else
                         s3canBuildAfter = true;
                 }
-                if (s5noBuildingBarrier
+                if (s5noBaseOrWarriorBarrier
                     && s5noEnemiesBarrier
-                    && s5noUnitsBarrier
+                    && s5noBuilderBarrier
                     && s5howManyResBarrier == 0)
                 {
-                    if (s5noUnitsBarrier)
+                    if (s5noBuilderBarrier)
                     {
                         s5canBuildNow = true;
                         s5canBuildAfter = true;
@@ -135,8 +135,8 @@ namespace Aicup2020
             {
                 s2canBuildNow = s3canBuildNow = s5canBuildNow = false;
                 s2canBuildAfter = s3canBuildAfter = s5canBuildAfter = false;
-                s2noBuildingBarrier = s3noBuildingBarrier = s5noBuildingBarrier = true;
-                s2noUnitsBarrier = s3noUnitsBarrier = s5noUnitsBarrier = true;
+                s2noBaseOrWarriorBarrier = s3noBaseOrWarriorBarrier = s5noBaseOrWarriorBarrier = true;
+                s2noBuilderBarrier = s3noBuilderBarrier = s5noBuilderBarrier = true;
                 s2noEnemiesBarrier = s3noEnemiesBarrier = s5noEnemiesBarrier = true;
                 s2howManyResBarrier = s3howManyResBarrier = s5howManyResBarrier = 0;
             }
@@ -166,8 +166,22 @@ namespace Aicup2020
                 }
                 return false;
             }
+            public bool CanBuildAfter(int size)
+            {
+                switch (size)
+                {
+                    case 2: return s2canBuildAfter;
+                    case 3: return s3canBuildAfter;
+                    case 5: return s5canBuildAfter;
+                    default:
+                        break;
+                }
+                return false;
+            }
         }
         BuildMapCell[,] buildBarrierMap;
+        List<Vec2Int> preSetHousePositions;
+        bool preSetHousePlacingComplete = false;
 
         struct EnemyDangerCell
         {
@@ -222,7 +236,7 @@ namespace Aicup2020
 
         enum DesireType {WantCreateBuilders, WantCreateRangers,
             WantCreateHouses, 
-            WantExtractResources, WantRetreatBuilders,
+            WantCollectResources, WantRetreatBuilders,
             WantTurretAttacks, WantAllWarriorsAttack };
         List<DesireType> desires = new List<DesireType>();
         List<DesireType> prevDesires = new List<DesireType>();
@@ -236,7 +250,7 @@ namespace Aicup2020
         
         enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, 
             IntentionCreateRanger, IntentionStopCreatingRanger,
-            IntentionCreateHouseStart, IntentionCreateHouseContionue, IntentionRepairBuilding,
+            IntentionCreateHouseStart, IntentionCreateHouseContinue, IntentionRepairBuilding,
             IntentionExtractResources, IntentionFindResources, IntentionRetreatBuilders, IntentionMyBuiAttackEnemyBui,
             IntentionTurretAttacks,
             IntentionAllWarriorsAttack
@@ -246,32 +260,32 @@ namespace Aicup2020
             public IntentionType intentionType;
             public int targetId;
             public Group targetGroup;
-            public Vec2Int position;
-            public EntityType entityType;
+            public Vec2Int targetPosition;
+            public EntityType targetEntityType;
 
             public Intention(IntentionType type, Vec2Int pos, EntityType _entityType)
             {
                 intentionType = type;
                 targetId = -1;
                 targetGroup = new Group();
-                position = pos;
-                entityType = _entityType;
+                targetPosition = pos;
+                targetEntityType = _entityType;
             }
             public Intention(IntentionType type, int _targetId)
             {
                 intentionType = type;
                 targetId = _targetId;
                 targetGroup = new Group();
-                position = new Vec2Int();
-                entityType = EntityType.Resource;
+                targetPosition = new Vec2Int();
+                targetEntityType = EntityType.Resource;
             }
             public Intention(IntentionType type, Group _targetGroup)
             {
                 intentionType = type;
                 targetId = -1;
                 targetGroup = _targetGroup;
-                position = new Vec2Int();
-                entityType = EntityType.Resource;
+                targetPosition = new Vec2Int();
+                targetEntityType = EntityType.Resource;
             }
         }
         List<Intention> intentions = new List<Intention>();
@@ -332,7 +346,6 @@ namespace Aicup2020
             {
                 if (p.Id == myId)
                 {
-
                     howMuchResourcesCollectLastTurn = p.Resource - myResources; // не учитывает стоимость произведенных сущностей
                     myResources = p.Resource;
                     myScore = p.Score;
@@ -385,6 +398,7 @@ namespace Aicup2020
             resourcePotentialField = new int[mapSize][];
             nextPositionMyUnitsMap = new int[mapSize][];
 
+            
             for (var i = 0; i < mapSize; i++)
             {
                 cellWithIdAny[i] = new int[mapSize];
@@ -419,6 +433,14 @@ namespace Aicup2020
                     }
                 }                
             }
+
+            preSetHousePositions = new List<Vec2Int>();
+            preSetHousePositions.Add(new Vec2Int(2, 2));
+            preSetHousePositions.Add(new Vec2Int(5, 2));
+            preSetHousePositions.Add(new Vec2Int(8, 2));
+            preSetHousePositions.Add(new Vec2Int(2, 5));
+            preSetHousePositions.Add(new Vec2Int(2, 8));
+
 
             //prepare current and previous entity counter
             foreach (var ent in entityTypesArray)
@@ -493,7 +515,7 @@ namespace Aicup2020
                             {
                                 if (intentions[i].intentionType == IntentionType.IntentionCreateHouseStart)
                                 {
-                                    if (intentions[i].position.X == em.myEntity.Position.X && intentions[i].position.Y == em.myEntity.Position.Y)
+                                    if (intentions[i].targetPosition.X == em.myEntity.Position.X && intentions[i].targetPosition.Y == em.myEntity.Position.Y)
                                     {
                                         intentions[i].targetId = em.myEntity.Id;
                                         break;
@@ -546,6 +568,7 @@ namespace Aicup2020
                 sum += howMuchResourcesCollectLastNTurns[0];
             }
             howMuchResourcesIHaveNextTurn = myResources + sum / nextTurnResourcesSelectCount + nextTurnResourcesBonus;
+
         }
         void CheckDeadResourceOnCurrentVisibleMap()
         {
@@ -694,22 +717,22 @@ namespace Aicup2020
                             {
                                 bool s2 = (x - k < 2 && y - m < 2);
                                 bool s3 = (x - k < 3 && y - m < 3);
-                                bool s5 = (x - k < 5 && y - m < 5);
+                                bool s5 = true; // (x - k < 5 && y - m < 5);
 
                                 if (k >= 0 && m >= 0) // больше mapSize никогда не станет
                                 {
                                     if (entityMemories.ContainsKey(id))
                                     {
-                                        if (properties[entityMemories[id].myEntity.EntityType].CanMove)
+                                        if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
                                         {
-                                            if (s2) buildBarrierMap[k, m].s2noUnitsBarrier = false;
-                                            if (s3) buildBarrierMap[k, m].s3noUnitsBarrier = false;
-                                            if (s5) buildBarrierMap[k, m].s5noUnitsBarrier = false;
+                                            if (s2) buildBarrierMap[k, m].s2noBuilderBarrier = false;
+                                            if (s3) buildBarrierMap[k, m].s3noBuilderBarrier = false;
+                                            if (s5) buildBarrierMap[k, m].s5noBuilderBarrier = false;
                                         } else
                                         {
-                                            if (s2) buildBarrierMap[k, m].s2noBuildingBarrier = false;
-                                            if (s3) buildBarrierMap[k, m].s3noBuildingBarrier = false;
-                                            if (s5) buildBarrierMap[k, m].s5noBuildingBarrier = false;
+                                            if (s2) buildBarrierMap[k, m].s2noBaseOrWarriorBarrier = false;
+                                            if (s3) buildBarrierMap[k, m].s3noBaseOrWarriorBarrier = false;
+                                            if (s5) buildBarrierMap[k, m].s5noBaseOrWarriorBarrier = false;
                                         }
 
                                     } else if (enemiesById.ContainsKey(id))
@@ -876,7 +899,7 @@ namespace Aicup2020
             #endregion
 
             desires.Add(DesireType.WantRetreatBuilders);
-            desires.Add(DesireType.WantExtractResources);
+            desires.Add(DesireType.WantCollectResources);
 
             desires.Add(DesireType.WantTurretAttacks);
             desires.Add(DesireType.WantAllWarriorsAttack);
@@ -949,16 +972,21 @@ namespace Aicup2020
                         {
                             //i have resources
                             int newCost = properties[EntityType.House].InitialCost;
-                            if (howMuchResourcesIHaveNextTurn >= newCost)
+                            if (myResources >= newCost)
                             {
                                 // ограничение на одновременное строительство
                                 int count = 0;
-                                foreach(var ni in intentions)
+                                foreach(var ni in prevIntentions)
                                 {
-                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart || ni.intentionType == IntentionType.IntentionCreateHouseContionue) 
+                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart || ni.intentionType == IntentionType.IntentionCreateHouseContinue) 
                                         count++;
                                 }
-                                if ((populationMax <= 30 && count == 0) || (populationMax <= 60 && count <= 1) || (count <= 2))
+                                foreach (var ni in intentions)
+                                {
+                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart || ni.intentionType == IntentionType.IntentionCreateHouseContinue)
+                                        count++;
+                                }
+                                if ((populationMax <= 30 && count == 0) || (populationMax <= 60 && count <= 2) || (count <= 4))
                                 {
                                     plans.Add(PlanType.PlanCreateHouses);
                                 }
@@ -971,7 +999,7 @@ namespace Aicup2020
                         plans.Add(PlanType.PlanRetreatBuilders);
                         break;
                     #endregion
-                    case DesireType.WantExtractResources:
+                    case DesireType.WantCollectResources:
                         #region хочу добывать ресурсы
                         //i have builders
                         if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
@@ -1041,25 +1069,26 @@ namespace Aicup2020
                         break;
                     case PlanType.PlanCreateHouses:
                         // выбираем где будем строить
-                        Vec2Int pos = FindPositionToBuildHouse();
+                        Vec2Int pos = FindPositionToBuilding(EntityType.House);
                         if (pos.X >= 0) {
                             Intention intention = new Intention(IntentionType.IntentionCreateHouseStart, pos, EntityType.House);
-                            List<int> buildersId = FindFreeNearestBuilders(
-                                pos,
-                                properties[EntityType.House].Size,
-                                builderCountForStartBuilding,
-                                (int)(properties[EntityType.House].MaxHealth * startBuildingFindDistanceFromHealth));
-                            if (buildersId.Count > 0)
-                            {
-                                foreach (var id in buildersId)
-                                {
-                                    entityMemories[id].SetGroup(intention.targetGroup);
-                                }
-                                intentions.Add(intention);
-                            } else
-                            {
-                                int j = 0;//yне должно такого быть
-                            }
+                            intentions.Add(intention);
+                            //List<int> buildersId = FindFreeNearestBuilders(
+                            //    pos,
+                            //    properties[EntityType.House].Size,
+                            //    builderCountForStartBuilding,
+                            //    (int)(properties[EntityType.House].MaxHealth * startBuildingFindDistanceFromHealth));
+                            //if (buildersId.Count > 0)
+                            //{
+                            //    foreach (var id in buildersId)
+                            //    {
+                            //        entityMemories[id].SetGroup(intention.targetGroup);
+                            //    }
+                            //    intentions.Add(intention);
+                            //} else
+                            //{
+                            //    int j = 0;//yне должно такого быть
+                            //}
                         }
                         break;
                     case PlanType.PlanRetreatBuilders:
@@ -1265,9 +1294,11 @@ namespace Aicup2020
                         }
                         break;
                     case IntentionType.IntentionCreateHouseStart:
-                        foreach (int id in ni.targetGroup.members)
                         {
-                            OrderStartCreateBuilding(id, ni.position, EntityType.House);
+                            //foreach (int id in ni.targetGroup.members)
+                            //{
+                            //    OrderStartCreateBuilding(id, ni.position, EntityType.House);
+                            //}
                         }
                         break;
                     case IntentionType.IntentionRepairBuilding:
@@ -1305,6 +1336,16 @@ namespace Aicup2020
         }
         void OptimizeOrders()
         {
+            OptimizeOrderToRetreat();
+
+            // OptimizeOrderToRepairNew();
+            OptimizeOrderToBuildNew();
+            // OptimizeOrderToRepairOld();
+
+            
+        }
+        void OptimizeOrderToRetreat()
+        {
             // all retreats - ищем всех отступающих и строим глобальный граф отступления. Путь ищется до
             int startWeight = mapSize * mapSize;
             int CWfree = 1;
@@ -1329,14 +1370,14 @@ namespace Aicup2020
             {
                 if (em.Value.order == EntityOrders.tryRetreat)
                 {
-                    tryRetreatEntitiesId.Add(em.Key);                    
+                    tryRetreatEntitiesId.Add(em.Key);
                 }
             }
 
             bool canFindNext = tryRetreatEntitiesId.Count > 0;
 
             // распутываем клубок
-            while (canFindNext == true) 
+            while (canFindNext == true)
             {
                 findCells.Clear();
                 for (int x = 0; x < mapSize; x++)
@@ -1350,10 +1391,10 @@ namespace Aicup2020
                     findCells.Add(new XYWeight(entityMemories[tid].myEntity.Position.X, entityMemories[tid].myEntity.Position.Y, startWeight));
                     map[entityMemories[tid].myEntity.Position.X][entityMemories[tid].myEntity.Position.Y] = startWeight;
                 }
-                foreach(var cid in canRetreatEntitiesId)
+                foreach (var cid in canRetreatEntitiesId)
                 {
                     map[entityMemories[cid].myEntity.Position.X][entityMemories[cid].myEntity.Position.Y] = CWfreeAfterRetreat;
-                    map[entityMemories[cid].movePos.X][entityMemories[cid].movePos.Y] = CWtargetToRetreat;                    
+                    map[entityMemories[cid].movePos.X][entityMemories[cid].movePos.Y] = CWtargetToRetreat;
                 }
 
                 // ищем клетки через которые можно дойти до свободных клеток
@@ -1377,7 +1418,7 @@ namespace Aicup2020
                             if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                             {
                                 if (map[nx][ny] == CWfreeAfterRetreat) // особая логика для освобождаемой клетки на предыдущем шаге
-                                {                                    
+                                {
                                     findCells.Add(new XYWeight(nx, ny, w - 1)); // отмечаем, что туда можно прийти, вес уже есть
                                     findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // считаем количество свободных клеток у сущности
                                     bool cellNotFinded = true;
@@ -1457,7 +1498,7 @@ namespace Aicup2020
                                 }
                             }
                         }
-                    }                
+                    }
                 }
 
                 if (tryRetreatEntitiesId.Count + tryRetreatEntitiesId.Count > 1)
@@ -1503,8 +1544,8 @@ namespace Aicup2020
                                 {
                                     if (map[nx][ny] == CWfree || map[nx][ny] == CWfreeAfterRetreat)
                                     {
-                                        entityMemories[id].order = EntityOrders.canRetreat;
-                                        entityMemories[id].movePos = new Vec2Int(nx, ny);
+                                        entityMemories[id].OrderCanRetreat(new Vec2Int(nx, ny), true, true, true);
+                                        nextPositionMyUnitsMap[nx][ny] = id;
                                         break;
                                     }
                                 }
@@ -1516,7 +1557,7 @@ namespace Aicup2020
                 }
 
                 // иначе распутываем свободные клетки с несколькими соседями
-                bool isFindCellsWithSomeFreeNeighpours = false; 
+                bool isFindCellsWithSomeFreeNeighpours = false;
                 if (isFindCellsWithOneFreeNeighpour == false)
                 {
                     for (int num = 0; num < findCells.Count; num++)
@@ -1553,8 +1594,8 @@ namespace Aicup2020
                                     {
                                         if (map[nx][ny] == CWfree || map[nx][ny] == CWfreeAfterRetreat)
                                         {
-                                            entityMemories[id].order = EntityOrders.canRetreat;
-                                            entityMemories[id].movePos = new Vec2Int(nx, ny);
+                                            entityMemories[id].OrderCanRetreat(new Vec2Int(nx, ny), true, true, true);
+                                            nextPositionMyUnitsMap[nx][ny] = id;
                                             break;
                                         }
                                     }
@@ -1573,10 +1614,11 @@ namespace Aicup2020
                     canFindNext = false;
                     foreach (var id in tryRetreatEntitiesId)
                     {
-                        entityMemories[id].order = EntityOrders.attack;
-                        entityMemories[id].autoAttack = new AutoAttack(
-                            properties[entityMemories[id].myEntity.EntityType].Attack.Value.AttackRange, 
-                            entityTypesArray);
+                        entityMemories[id].OrderAttack(null,
+                            new AutoAttack(
+                            properties[entityMemories[id].myEntity.EntityType].Attack.Value.AttackRange,
+                            entityTypesArray),
+                            false);
                     }
                 }
             }
@@ -1647,15 +1689,15 @@ namespace Aicup2020
                     }
                     #endregion
 
-                    foreach(var id in tryRetreatEntitiesId)
+                    foreach (var id in tryRetreatEntitiesId)
                     {
                         ColoredVertex position = new ColoredVertex(new Vec2Float(
                             entityMemories[id].myEntity.Position.X + 0.5f,
-                            entityMemories[id].myEntity.Position.Y + 0.3f), new Vec2Float(0, 0), 
+                            entityMemories[id].myEntity.Position.Y + 0.3f), new Vec2Float(0, 0),
                             colorRed);
                         _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "X", 0.5f, 16)));
                     }
-                    foreach(var id in canRetreatEntitiesId)
+                    foreach (var id in canRetreatEntitiesId)
                     {
                         ColoredVertex[] vertices = new ColoredVertex[] {
                             new ColoredVertex(new Vec2Float(entityMemories[id].myEntity.Position.X + 0.5f, entityMemories[id].myEntity.Position.Y + 0.5f), new Vec2Float(), colorBlack),
@@ -1688,7 +1730,909 @@ namespace Aicup2020
             }
 
         }
+        class CellWI
+        {
+            public int weight;
+            public int index;
+            public CellWI()
+            {
+                weight = 0;
+                index = 0;
+            }
+        }
+        void OptimizeOrderToRepairNew()
+        {
+            // проверяем по очереди приказы на ремонт нового здания
+            // для каждого делаем:
+            for (int ni = 0; ni < intentions.Capacity;)
+            {
+                if (intentions[ni].intentionType == IntentionType.IntentionCreateHouseStart)
+                {
+                    bool deleteIntention = false;
 
+                    int sx = intentions[ni].targetPosition.X;
+                    int sy = intentions[ni].targetPosition.Y;
+                    int size = properties[intentions[ni].targetEntityType].Size;
+                    int maxHealth = properties[intentions[ni].targetEntityType].MaxHealth;
+
+                    for (int cx = sx; cx < sx + size; cx++) // проверка
+                    {
+                        for (int cy = sy; cy < sy + size; cy++)
+                        {
+                            if (cellWithIdAny[cx][cy] >= 0)// проверяем что никого нет внутри сейчас
+                            {
+                                deleteIntention = true;
+                                break;
+                            }
+                            if (nextPositionMyUnitsMap[cx][cy] > 0) // проверяем что никто не собирается идти внутрь стройки
+                            {
+                                deleteIntention = true;
+                                break;
+                            }
+
+                        }
+                        if (deleteIntention == true)// иначе отменяем намерение на строительство
+                            break;
+                    }
+
+                    if (deleteIntention == false) // помех нет, ищем строителей
+                    {
+                        #region стартовые значения
+                        CellWI[,] pathMap = new CellWI[mapSize, mapSize];
+                        for (int x = 0; x < mapSize; x++)
+                        {
+                            for (int y = 0; y < mapSize; y++)
+                            {
+                                pathMap[x, y] = new CellWI();
+                            }
+                        }
+
+                        //стартовое значение, которое будем уменьшать
+                        int startWeight = mapSize * mapSize;
+                        int minWeight = startWeight - maxHealth;
+                        int WInside = -1;
+                        int WBuilding = -2;
+                        int WEnemy = -3;
+                        int WResource = -4;
+                        int WDanger = -5;
+                        int WWarrior = -6;
+                        int WNextPosition = -7;
+                        int WDeniedBuilder = -8;
+                        #endregion
+
+                        #region определяем стартовые клетки
+                        List<int> borderMansId = new List<int>();
+                        //добавляем стартовые клетки поиска вокруг места строительства + юнитов на границе + отмечаем непроходимые клетки (здания, ресурсы, враги)
+                        List<XYWeight> findCells = new List<XYWeight>();
+                        for (int m = 0; m < size; m++)
+                        {
+                            for (int h = 0; h < 4; h++)
+                            {
+                                int fx = sx;
+                                int fy = sy;
+                                if (h == 0)
+                                {
+                                    fx = sx + m;
+                                    fy = sy + size;
+                                }
+                                else if (h == 1)
+                                {
+                                    fx = sx + m;
+                                    fy = sy - 1;
+                                }
+                                else if (h == 2)
+                                {
+                                    fx = sx - 1;
+                                    fy = sy + m;
+                                }
+                                else if (h == 3)
+                                {
+                                    fx = sx + size;
+                                    fy = sy + m;
+                                }
+                                if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize)
+                                {
+                                    int id = cellWithIdAny[fx][fy];
+                                    if (id >= 0)
+                                    {
+                                        if (entityMemories.ContainsKey(id))
+                                        {
+                                            if (properties[entityMemories[id].myEntity.EntityType].CanMove)// только юниты, здания здесь не нужны
+                                            {
+                                                //findCells.Add(new XYWeight(fx, fy, startWeight)); не ищем от тех что стоит на границе
+                                                pathMap[fx, fy].weight = startWeight;
+                                                borderMansId.Add(id); // учитываем тех кто стоит на границе места строительства в том числе Могут быть войны
+                                            }
+                                            else
+                                            {
+                                                pathMap[fx, fy].weight = WBuilding;
+                                            }
+                                        }
+                                        else if (enemiesById.ContainsKey(id))
+                                        {
+                                            pathMap[fx, fy].weight = WEnemy;
+                                        }
+                                        else
+                                        {
+                                            pathMap[fx, fy].weight = WResource;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        findCells.Add(new XYWeight(fx, fy, startWeight));
+                                        pathMap[fx, fy].weight = startWeight;
+                                    }
+                                }
+                            }
+                        }
+
+                        // обозначаем клетки внутри здания
+                        for (int cx = sx; cx < sx + size; cx++)
+                        {
+                            for (int cy = sy; cy < sy + size; cy++)
+                            {
+                                pathMap[cx, cy].weight = WInside;
+                            }
+                        }
+                        #endregion
+
+                        #region опредеялем количество соседов строителей и сколько нам осталось искать
+                        int builderCount = 0;
+                        foreach (var id in borderMansId)
+                        {
+                            if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+                            {
+                                if (entityMemories[id].optimized == false)
+                                {
+                                    builderCount++;
+
+                                    entityMemories[id].OrderBuild(
+                                        new Vec2Int(sx, sy),
+                                        EntityType.House,
+                                        new Vec2Int(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y),
+                                        false,
+                                        false,
+                                        true);
+                                }
+                            }
+                        }
+
+                        int planDistance = 0;
+                        int planHealth = 0;
+                        int prevDistContact = 0;
+                        if (builderCount > 0)
+                        {//ищем максимум на половину оставшегося времени строительства
+                            planDistance = (maxHealth - planHealth) / builderCount;
+                            minWeight = startWeight - planDistance / 2;
+                        }
+                        #endregion
+
+                        #region стартовые группы и место в них
+                        // объединяем стартовые ячейки в группы, у каждой группы соседей теперь должен быть одинаковый индекс (порядок номеров не важен, могут быть пропуски)
+                        int lastIndex = 1; // 0 используется у пустых групп
+                        for (int iter = 0; iter < findCells.Count; iter++)
+                        {
+                            int myIndex = findCells[iter].index;
+                            if (myIndex == 0)
+                            {
+                                myIndex = lastIndex;
+                                lastIndex++;
+                            }
+
+                            // ищем всех соседей и проверяем их индекс
+                            int mx = findCells[iter].x;
+                            int my = findCells[iter].y;
+                            for (int i = iter + 1; i < findCells.Count; i++)
+                            {
+                                int dist = Abs(mx - findCells[i].x) + Abs(my - findCells[i].y);
+
+                                if (dist == 1)// это мой сосед
+                                {
+                                    if (findCells[i].index == 0)
+                                    {
+                                        findCells[i].index = myIndex;
+                                    }
+                                    else
+                                    {
+                                        // это старший брат, надо взять его индекс себе и всем кому уже присвоили мой индекс
+                                        int newIndex = findCells[i].index;
+                                        for (int n = 0; n < findCells.Count; n++)
+                                        {
+                                            if (findCells[n].index == myIndex)
+                                            {
+                                                findCells[n].index = newIndex;
+                                            }
+                                        }
+                                        myIndex = newIndex;
+                                    }
+                                }
+                            }
+                        }
+
+                        // учитываем количество свободных мест в группах
+                        Dictionary<int, int> freePlaceInIndexGroup = new Dictionary<int, int>();
+                        foreach (var c in findCells)
+                        {
+                            pathMap[c.x, c.y].index = c.index;
+                            if (freePlaceInIndexGroup.ContainsKey(c.index))
+                            {
+                                freePlaceInIndexGroup[c.index]++;
+                            }
+                            else
+                            {
+                                freePlaceInIndexGroup[c.index] = 1;
+                            }
+                        }
+                        foreach (var id in borderMansId) // убираем тех кто стоит на границе
+                        {
+                            int x = entityMemories[id].myEntity.Position.X;
+                            int y = entityMemories[id].myEntity.Position.Y;
+                            foreach (var c in findCells)
+                            {
+                                if (c.x == x && c.y == y)
+                                {
+                                    freePlaceInIndexGroup[c.index]--;
+                                    break;
+                                }
+                            }
+                        }
+                        #endregion
+
+                        // начинаем искать свободных строителей
+                        for (int iter = 0; iter < findCells.Count; iter++)
+                        {
+                            int fx = findCells[iter].x;
+                            int fy = findCells[iter].y;
+                            int fw = findCells[iter].weight;
+                            int fi = findCells[iter].index;
+
+                            for (int jj = 0; jj < 4; jj++)
+                            {
+                                int nx = fx;
+                                int ny = fy;
+                                if (jj == 0) nx--;
+                                if (jj == 1) ny--;
+                                if (jj == 2) nx++;
+                                if (jj == 3) ny++;
+
+                                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
+                                {
+                                    if (pathMap[nx, ny].weight == 0)
+                                    {
+                                        bool canContinue = true;
+
+                                        var dCell = enemyDangerCells[nx][ny];
+                                        if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0) // проверка опасной зоны
+                                        {
+                                            canContinue = false;
+                                            pathMap[nx, ny].weight = WDanger;
+                                        }
+                                        else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                                        {
+                                            canContinue = false;
+                                            pathMap[nx, ny].weight = WDanger;
+                                        }
+                                        else if (nextPositionMyUnitsMap[nx][ny] > 0) // проверка пустой позиции на следующий ход
+                                        {
+                                            pathMap[nx, ny].weight = WNextPosition;
+                                        }
+
+                                        if (canContinue == true)
+                                        {
+                                            int id = cellWithIdAny[nx][ny];
+                                            if (id >= 0)// occupied cell
+                                            {
+                                                if (entityMemories.ContainsKey(id))
+                                                {
+                                                    if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+                                                    {
+                                                        // нашли строителя!!!
+                                                        // при нахождении человека проверяем надо ли искать дальше
+                                                        // при окончании места в группах обновляем
+
+                                                        //if (w == startWeight)//check my builder на соседней клетке с ресурсомs
+                                                        //{
+                                                        //    //canContinueField = false;
+                                                        //    //resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
+                                                        //}
+                                                        if (entityMemories[id].optimized == false)
+                                                        {
+                                                            canContinue = false;
+                                                            entityMemories[id].OrderGoToBuild(new Vec2Int(fx, fy), true, true, true);
+                                                            pathMap[nx, ny].weight = WDeniedBuilder;
+                                                            nextPositionMyUnitsMap[fx][fy] = id;
+                                                            freePlaceInIndexGroup[pathMap[fx, fy].index]--;
+                                                            // обновить минимальную дистанцию
+                                                            int curDistance = startWeight - fw;
+                                                            planHealth += (curDistance - prevDistContact) * builderCount;
+                                                            builderCount++;
+                                                            planDistance = curDistance + (maxHealth - planHealth) / builderCount;
+                                                            minWeight = startWeight - planDistance / 2;
+                                                            // чистка если закончились места
+                                                            if (freePlaceInIndexGroup[pathMap[fx, fy].index] == 0)
+                                                            {
+                                                                // обновить pathMap, убрать следы которые меньше startWeight, но больше 0
+                                                                foreach (var c in findCells)
+                                                                {
+                                                                    if (pathMap[c.x, c.y].weight > 0 && pathMap[c.x, c.y].weight < startWeight)
+                                                                    {
+                                                                        pathMap[c.x, c.y].weight = 0;
+                                                                        pathMap[c.x, c.y].index = 0;
+                                                                    }
+                                                                }
+                                                                // новый список findcells без указанной группы
+                                                                for (int i = 0; i < findCells.Count;)
+                                                                {
+                                                                    bool del = false;
+                                                                    if (findCells[i].weight != startWeight)
+                                                                        del = true;
+                                                                    else if (freePlaceInIndexGroup[findCells[i].index] == 0)
+                                                                        del = true;
+
+                                                                    if (del)
+                                                                        findCells.RemoveAt(i);
+                                                                    else
+                                                                        i++;
+                                                                }
+                                                                // итераторы в самое начало
+                                                                iter = 0;
+                                                            }
+                                                            break; // прекратить поиск из этой клетки
+                                                        }
+                                                        else
+                                                        {
+                                                            canContinue = false;
+                                                            pathMap[nx, ny].weight = WDeniedBuilder;
+                                                        }
+
+                                                    }
+                                                    else
+                                                    {
+                                                        if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+                                                        {
+                                                            canContinue = false;
+                                                            pathMap[nx, ny].weight = WBuilding;
+                                                        }
+                                                        else
+                                                        {
+                                                            canContinue = false;
+                                                            pathMap[nx, ny].weight = WWarrior;
+                                                        }
+                                                    }
+                                                }
+                                                else if (enemiesById.ContainsKey(id))// enemy 
+                                                {
+                                                    canContinue = false;
+                                                    pathMap[nx, ny].weight = WDanger;
+                                                }
+                                                else // it is resource
+                                                {
+                                                    canContinue = false;
+                                                    pathMap[nx, ny].weight = WResource;
+                                                }
+                                            }
+                                        }
+
+                                        if (canContinue == true) // empty, safe cell or through free unit
+                                        {
+                                            //add weight and findCell
+                                            pathMap[nx, ny].weight = fw - 1;
+                                            pathMap[nx, ny].index = fi;
+                                            if (fw > minWeight)
+                                                findCells.Add(new XYWeight(nx, ny, fw - 1, fi));
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // MOD можно не проверять на совпадения если осталась всего одна группа
+                                        if (pathMap[nx, ny].weight > 0) // это уже пройденная клетка, надо проверить, будем ли объединяться
+                                        {
+                                            if (pathMap[nx, ny].index == 0)
+                                            {
+                                                ;// такого не должно быть что вес больше нуля, а индекса группы нет!!!
+                                            }
+
+                                            if (pathMap[nx, ny].index != fi)
+                                            {// встретили клетку с другим индексом, значит надо объединить группы
+                                                int oldIndex = pathMap[nx, ny].index;
+                                                int newIndex = fi;
+
+                                                for (int x = 0; x < mapSize; x++)//обновляем карту
+                                                {
+                                                    for (int y = 0; y < mapSize; y++)
+                                                    {
+                                                        if (pathMap[x, y].index == oldIndex)
+                                                            pathMap[x, y].index = newIndex;
+                                                    }
+                                                }
+                                                foreach (var c in findCells)//обновляем клетки поиска
+                                                {
+                                                    if (c.index == oldIndex)
+                                                        c.index = newIndex;
+                                                }
+
+                                                freePlaceInIndexGroup[newIndex] += freePlaceInIndexGroup[oldIndex];
+                                                freePlaceInIndexGroup.Remove(oldIndex);
+                                            }
+                                        }
+                                    }
+
+                                    //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                                }
+                            }
+                            //findCells.RemoveAt(0);
+
+                        }
+
+
+                    }
+
+                    // удаляем намерение или переходим к следующему
+                    if (deleteIntention)
+                    {
+                        intentions.RemoveAt(ni);
+                    }
+                    else
+                    {
+                        ni++;
+                    }
+                }
+            }
+        }
+        void OptimizeOrderToBuildNew()
+        {
+            // проверяем по очереди приказы на строительство
+            // для каждого делаем:
+            for (int ni = 0; ni < intentions.Count;)
+            {
+                bool deleteIntention = false;
+                if (intentions[ni].intentionType == IntentionType.IntentionCreateHouseStart) {                   
+
+                    int sx = intentions[ni].targetPosition.X;
+                    int sy = intentions[ni].targetPosition.Y;
+                    int size = properties[intentions[ni].targetEntityType].Size;
+                    int maxHealth = properties[intentions[ni].targetEntityType].MaxHealth;
+
+                    for (int cx = sx; cx < sx + size; cx++) // проверка
+                    {
+                        for (int cy = sy; cy < sy + size; cy++)
+                        {
+                            if (cellWithIdAny[cx][cy] >= 0)// проверяем что никого нет внутри сейчас
+                            {
+                                deleteIntention = true;
+                                break;
+                            }
+                            if (nextPositionMyUnitsMap[cx][cy] > 0) // проверяем что никто не собирается идти внутрь стройки
+                            {
+                                deleteIntention = true;
+                                break;
+                            }
+
+                        }
+                        if (deleteIntention == true)// иначе отменяем намерение на строительство
+                            break;
+                    }
+
+                    if (deleteIntention == false) // помех нет, ищем строителей
+                    {
+                        #region стартовые значения
+                        CellWI[,] pathMap = new CellWI[mapSize, mapSize];
+                        for (int x = 0; x < mapSize; x++)
+                        {
+                            for (int y = 0; y < mapSize; y++)
+                            {
+                                pathMap[x, y] = new CellWI();
+                            }
+                        }
+
+                        //стартовое значение, которое будем уменьшать
+                        int startWeight = mapSize * mapSize;
+                        int minWeight = startWeight - maxHealth;
+                        int WInside = -1;
+                        int WBuilding = -2;
+                        int WEnemy = -3;
+                        int WResource = -4;
+                        int WDanger = -5;
+                        int WWarrior = -6;
+                        int WNextPosition = -7;
+                        int WDeniedBuilder = -8;
+                        #endregion
+
+                        #region определяем стартовые клетки
+                        List<int> borderMansId = new List<int>();
+                        //добавляем стартовые клетки поиска вокруг места строительства + юнитов на границе + отмечаем непроходимые клетки (здания, ресурсы, враги)
+                        List<XYWeight> findCells = new List<XYWeight>();
+                        for (int m = 0; m < size; m++)
+                        {
+                            for (int h = 0; h < 4; h++)
+                            {
+                                int fx = sx;
+                                int fy = sy;
+                                if (h == 0)
+                                {
+                                    fx = sx + m;
+                                    fy = sy + size;
+                                }
+                                else if (h == 1)
+                                {
+                                    fx = sx + m;
+                                    fy = sy - 1;
+                                }
+                                else if (h == 2)
+                                {
+                                    fx = sx - 1;
+                                    fy = sy + m;
+                                }
+                                else if (h == 3)
+                                {
+                                    fx = sx + size;
+                                    fy = sy + m;
+                                }
+                                if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize)
+                                {
+                                    int id = cellWithIdAny[fx][fy];
+                                    if (id >= 0)
+                                    {
+                                        if (entityMemories.ContainsKey(id))
+                                        {
+                                            if (properties[entityMemories[id].myEntity.EntityType].CanMove)// только юниты, здания здесь не нужны
+                                            {
+                                                //findCells.Add(new XYWeight(fx, fy, startWeight)); не ищем от тех что стоит на границе
+                                                pathMap[fx, fy].weight = startWeight;
+                                                borderMansId.Add(id); // учитываем тех кто стоит на границе места строительства в том числе Могут быть войны
+                                            }
+                                            else
+                                            {
+                                                pathMap[fx, fy].weight = WBuilding;
+                                            }
+                                        }
+                                        else if (enemiesById.ContainsKey(id))
+                                        {
+                                            pathMap[fx, fy].weight = WEnemy;
+                                        }
+                                        else
+                                        {
+                                            pathMap[fx, fy].weight = WResource;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        findCells.Add(new XYWeight(fx, fy, startWeight));
+                                        pathMap[fx, fy].weight = startWeight;
+                                    }
+                                }
+                            }
+                        }
+
+                        // обозначаем клетки внутри здания
+                        for (int cx = sx; cx < sx + size; cx++)
+                        {
+                            for (int cy = sy; cy < sy + size; cy++)
+                            {
+                                pathMap[cx, cy].weight = WInside;
+                            }
+                        }
+                        #endregion
+
+                        #region опредеялем количество соседов строителей и сколько нам осталось искать
+                        int builderCount = 0;
+                        foreach (var id in borderMansId)
+                        {
+                            if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+                            {
+                                if (entityMemories[id].optimized == false)
+                                {
+                                    builderCount++;
+
+                                    entityMemories[id].OrderBuild(
+                                        new Vec2Int(sx, sy),
+                                        EntityType.House,
+                                        new Vec2Int(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y),
+                                        false,
+                                        false,
+                                        true);
+                                }
+                            }
+                        }
+
+                        int planDistance = 0;
+                        int planHealth = 0;
+                        int prevDistContact = 0;
+                        if (builderCount > 0)
+                        {//ищем максимум на половину оставшегося времени строительства
+                            planDistance = (maxHealth - planHealth) / builderCount;
+                            minWeight = startWeight - planDistance / 2;
+                        }
+                        #endregion
+
+                        #region стартовые группы и место в них
+                        // объединяем стартовые ячейки в группы, у каждой группы соседей теперь должен быть одинаковый индекс (порядок номеров не важен, могут быть пропуски)
+                        int lastIndex = 1; // 0 используется у пустых групп
+                        for (int iter = 0; iter < findCells.Count; iter++)
+                        {
+                            int myIndex = findCells[iter].index;
+                            if (myIndex == 0)
+                            {
+                                myIndex = lastIndex;
+                                findCells[iter].index = myIndex;
+                                lastIndex++;
+                            }
+
+                            // ищем всех соседей и проверяем их индекс
+                            int mx = findCells[iter].x;
+                            int my = findCells[iter].y;
+                            for (int i = iter + 1; i < findCells.Count; i++)
+                            {
+                                int dist = Abs(mx - findCells[i].x) + Abs(my - findCells[i].y);
+
+                                if (dist == 1)// это мой сосед
+                                {
+                                    if (findCells[i].index == 0)
+                                    {
+                                        findCells[i].index = myIndex;
+                                    }
+                                    else
+                                    {
+                                        // это старший брат, надо взять его индекс себе и всем кому уже присвоили мой индекс
+                                        int newIndex = findCells[i].index;
+                                        for (int n = 0; n < findCells.Count; n++)
+                                        {
+                                            if (findCells[n].index == myIndex)
+                                            {
+                                                findCells[n].index = newIndex;
+                                            }
+                                        }
+                                        myIndex = newIndex;
+                                    }
+                                }
+                            }
+                        }
+
+                        // учитываем количество свободных мест в группах
+                        Dictionary<int, int> freePlaceInIndexGroup = new Dictionary<int, int>();
+                        foreach (var c in findCells)
+                        {
+                            pathMap[c.x, c.y].index = c.index;
+                            if (freePlaceInIndexGroup.ContainsKey(c.index))
+                            {
+                                freePlaceInIndexGroup[c.index]++;
+                            }
+                            else
+                            {
+                                freePlaceInIndexGroup[c.index] = 1;
+                            }
+                        }
+                        foreach (var id in borderMansId) // убираем тех кто стоит на границе
+                        {
+                            int x = entityMemories[id].myEntity.Position.X;
+                            int y = entityMemories[id].myEntity.Position.Y;
+                            foreach (var c in findCells)
+                            {
+                                if (c.x == x && c.y == y)
+                                {
+                                    freePlaceInIndexGroup[c.index]--;
+                                    break;
+                                }
+                            }
+                        }
+                        #endregion
+
+                        // начинаем искать свободных строителей
+                        for (int iter = 0; iter < findCells.Count; iter++)
+                        {
+                            int fx = findCells[iter].x;
+                            int fy = findCells[iter].y;
+                            int fw = findCells[iter].weight;
+                            int fi = findCells[iter].index;
+
+                            for (int jj = 0; jj < 4; jj++)
+                            {
+                                int nx = fx;
+                                int ny = fy;
+                                if (jj == 0) nx--;
+                                if (jj == 1) ny--;
+                                if (jj == 2) nx++;
+                                if (jj == 3) ny++;
+
+                                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
+                                {
+                                    if (pathMap[nx, ny].weight == 0)
+                                    {
+                                        bool canContinue = true;
+
+                                        var dCell = enemyDangerCells[nx][ny];
+                                        if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0) // проверка опасной зоны
+                                        {
+                                            canContinue = false;
+                                            pathMap[nx, ny].weight = WDanger;
+                                        }
+                                        else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                                        {
+                                            canContinue = false;
+                                            pathMap[nx, ny].weight = WDanger;
+                                        }
+                                        else if (nextPositionMyUnitsMap[nx][ny] > 0) // проверка пустой позиции на следующий ход
+                                        {
+                                            pathMap[nx, ny].weight = WNextPosition;
+                                        }
+
+                                        if (canContinue == true)
+                                        {
+                                            int id = cellWithIdAny[nx][ny];
+                                            if (id >= 0)// occupied cell
+                                            {
+                                                if (entityMemories.ContainsKey(id))
+                                                {
+                                                    if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+                                                    {
+                                                        // нашли строителя!!!
+                                                        // при нахождении человека проверяем надо ли искать дальше
+                                                        // при окончании места в группах обновляем
+
+                                                        //if (w == startWeight)//check my builder на соседней клетке с ресурсомs
+                                                        //{
+                                                        //    //canContinueField = false;
+                                                        //    //resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
+                                                        //}
+                                                        if (entityMemories[id].optimized == false)
+                                                        {
+                                                            canContinue = false;
+                                                            entityMemories[id].OrderGoToBuild(new Vec2Int(fx, fy), true, true, true);
+                                                            pathMap[nx, ny].weight = WDeniedBuilder;
+                                                            nextPositionMyUnitsMap[fx][fy] = id;
+                                                            freePlaceInIndexGroup[pathMap[fx, fy].index]--;
+                                                            // обновить минимальную дистанцию
+                                                            int curDistance = startWeight - fw;
+                                                            planHealth += (curDistance - prevDistContact) * builderCount;
+                                                            builderCount++;
+                                                            planDistance = curDistance + (maxHealth - planHealth) / builderCount;
+                                                            minWeight = startWeight - planDistance / 2;
+                                                            // чистка если закончились места
+                                                            if (freePlaceInIndexGroup[pathMap[fx, fy].index] == 0)
+                                                            {
+                                                                // обновить pathMap, убрать следы которые меньше startWeight, но больше 0
+                                                                foreach (var c in findCells)
+                                                                {
+                                                                    if (pathMap[c.x, c.y].weight > 0)
+                                                                    {
+                                                                        if (pathMap[c.x, c.y].weight < startWeight)
+                                                                            pathMap[c.x, c.y].weight = 0;
+                                                                        pathMap[c.x, c.y].index = 0;
+                                                                    }
+                                                                }
+                                                                // новый список findcells без указанной группы
+                                                                for (int i = 0; i < findCells.Count;)
+                                                                {
+                                                                    bool del = false;
+                                                                    if (findCells[i].weight != startWeight)
+                                                                        del = true;
+                                                                    else if (freePlaceInIndexGroup[findCells[i].index] == 0)
+                                                                        del = true;
+
+                                                                    if (del)
+                                                                        findCells.RemoveAt(i);
+                                                                    else
+                                                                        i++;
+                                                                }
+                                                                // итераторы в самое начало
+                                                                iter = 0;
+                                                                //обновляем количество стартовых мест
+                                                                freePlaceInIndexGroup.Clear();
+                                                                foreach (var c in findCells)
+                                                                {
+                                                                    pathMap[c.x, c.y].index = c.index;
+                                                                    if (freePlaceInIndexGroup.ContainsKey(c.index))
+                                                                    {
+                                                                        freePlaceInIndexGroup[c.index]++;
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        freePlaceInIndexGroup[c.index] = 1;
+                                                                    }
+                                                                }
+                                                            }
+                                                            break; // прекратить поиск из этой клетки
+                                                        } else
+                                                        {
+                                                            canContinue = false;
+                                                            pathMap[nx, ny].weight = WDeniedBuilder;
+                                                        }
+                                                        
+                                                    }
+                                                    else
+                                                    {
+                                                        if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+                                                        {
+                                                            canContinue = false;
+                                                            pathMap[nx, ny].weight = WBuilding;
+                                                        }
+                                                        else
+                                                        {
+                                                            canContinue = false;
+                                                            pathMap[nx, ny].weight = WWarrior;
+                                                        }
+                                                    }
+                                                }
+                                                else if (enemiesById.ContainsKey(id))// enemy 
+                                                {
+                                                    canContinue = false;
+                                                    pathMap[nx, ny].weight = WDanger;
+                                                }
+                                                else // it is resource
+                                                {
+                                                    canContinue = false;
+                                                    pathMap[nx, ny].weight = WResource;
+                                                }
+                                            }
+                                        }
+
+                                        if (canContinue == true) // empty, safe cell or through free unit
+                                        {
+                                            //add weight and findCell
+                                            pathMap[nx, ny].weight = fw - 1;
+                                            pathMap[nx, ny].index = fi;
+                                            if (fw > minWeight)
+                                                findCells.Add(new XYWeight(nx, ny, fw - 1, fi));
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // MOD можно не проверять на совпадения если осталась всего одна группа
+                                        if (pathMap[nx, ny].weight > 0) // это уже пройденная клетка, надо проверить, будем ли объединяться
+                                        {
+                                            if (pathMap[nx, ny].index == 0)
+                                            {
+                                                ;// такого не должно быть что вес больше нуля, а индекса группы нет!!!
+                                            }
+
+                                            if (pathMap[nx, ny].index != fi)
+                                            {// встретили клетку с другим индексом, значит надо объединить группы
+                                                int oldIndex = pathMap[nx, ny].index;
+                                                int newIndex = fi;
+
+                                                for (int x = 0; x < mapSize; x++)//обновляем карту
+                                                {
+                                                    for (int y = 0; y < mapSize; y++)
+                                                    {
+                                                        if (pathMap[x, y].index == oldIndex)
+                                                            pathMap[x, y].index = newIndex;
+                                                    }
+                                                }
+                                                foreach (var c in findCells)//обновляем клетки поиска
+                                                {
+                                                    if (c.index == oldIndex)
+                                                        c.index = newIndex;
+                                                }
+
+                                                if (oldIndex != 0)// стартовые клетки с соседями
+                                                    freePlaceInIndexGroup[newIndex] += freePlaceInIndexGroup[oldIndex];
+                                                freePlaceInIndexGroup.Remove(oldIndex);
+                                            }
+                                        }
+                                    }
+
+                                    //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                                }
+                            }
+                            //findCells.RemoveAt(0);
+
+                        }
+
+
+                    }
+
+                }
+                // удаляем намерение или переходим к следующему
+                if (deleteIntention)
+                {
+                    intentions.RemoveAt(ni);
+                }
+                else
+                {
+                    ni++;
+                }
+            }
+        }
         void ConvertOrdersToActions()
         {
             // zeroing
@@ -1716,7 +2660,7 @@ namespace Aicup2020
                     case EntityOrders.cancelAll:
                         actions.Add(em.Key, new EntityAction(null, null, null, null));
                         break;
-                    case EntityOrders.build:
+                    case EntityOrders.buildNow:
                         moveAction.BreakThrough = em.Value.moveBreakThrough;
                         moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
                         moveAction.Target = em.Value.movePos;
@@ -1726,14 +2670,15 @@ namespace Aicup2020
 
                         actions.Add(em.Key, new EntityAction(moveAction, buildAction, null, null));
                         break;
-                    case EntityOrders.repair:
+                    case EntityOrders.repairGo:
                         moveAction.BreakThrough = em.Value.moveBreakThrough;
                         moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
                         moveAction.Target = em.Value.movePos;
 
-                        repairAction.Target = em.Value.targetId;
+                        repairAction.Target = em.Value.targetId ?? 0;
                         actions.Add(em.Key, new EntityAction(moveAction, null, null, repairAction));
                         break;
+                    case EntityOrders.buildGo:
                     case EntityOrders.collect:
                     case EntityOrders.tryRetreat:
                     case EntityOrders.canRetreat:
@@ -1759,7 +2704,7 @@ namespace Aicup2020
 
                         break;
                     default:
-                        ; // тревога незнакомый приказ
+                        throw new System.Exception("неизвестный приказ"); // тревога незнакомый приказ
                         break;
                 }
             }            
@@ -1849,28 +2794,19 @@ namespace Aicup2020
 
             //actions.Add(id, new EntityAction(moveAction, null, null, null));
         }
-        void OrderStartCreateBuilding(int id, Vec2Int pos, EntityType type)
+        void OrderStartCreateBuilding(int id, Vec2Int posBuild, Vec2Int movePos, EntityType type)
         {
-            entityMemories[id].order = EntityOrders.build;
-            entityMemories[id].movePos = new Vec2Int(pos.X + properties[type].Size / 2, pos.Y + properties[type].Size);
+            entityMemories[id].order = EntityOrders.buildNow;
+            entityMemories[id].movePos = movePos;// new Vec2Int(posBuild.X + properties[type].Size / 2, posBuild.Y + properties[type].Size);
             entityMemories[id].moveBreakThrough = false;
             entityMemories[id].moveFindClosestPosition = true;
 
             entityMemories[id].targetEntityType = type;
-            entityMemories[id].targetPos = pos;
-
-            //MoveAction moveAction = new MoveAction();
-            //moveAction.BreakThrough = false;
-            //moveAction.FindClosestPosition = true;
-            //moveAction.Target = new Vec2Int( pos.X + properties[type].Size / 2, pos.Y + properties[type].Size);
-
-            //BuildAction buildAction = new BuildAction(type, pos);
-
-            //actions.Add(id, new EntityAction(moveAction, buildAction, null, null));            
+            entityMemories[id].targetPos = posBuild;     
         }
         void OrderRepairBuilding(int id, int targetId)
         {
-            entityMemories[id].order = EntityOrders.repair;
+            entityMemories[id].order = EntityOrders.repairGo;
             entityMemories[id].movePos = entityMemories[targetId].myEntity.Position;
             entityMemories[id].moveBreakThrough = false;
             entityMemories[id].moveFindClosestPosition = true;
@@ -2056,6 +2992,386 @@ namespace Aicup2020
             //actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
         }
 
+        int[,] FindPathMapForBuild(int sx, int sy, EntityType type)
+        {
+            int[,] pathMap = new int[mapSize, mapSize];
+            bool canBuildHere = true;
+
+            int size = properties[type].Size;
+            int buildPoints = properties[type].MaxHealth;
+
+            //стартовое значение, которое будем уменьшать
+            int startWeight = mapSize * mapSize;
+            int minWeight = startWeight - buildPoints;
+            int WInside = 2;
+            int WBuilding = -1;
+            int WEnemy = -2;
+            int WResource = -3;
+            int WDanger = -10;
+
+            List<int> borderMansId = new List<int>();
+            //добавляем стартовые клетки поиска вокруг места строительства + юнитов на границе + отмечаем непроходимые клетки (здания, ресурсы, враги)
+            List<XYWeight> findCells = new List<XYWeight>();
+            for (int m = 0; m < size; m++)
+            {
+                for (int h = 0; h < 4; h++)
+                {
+                    int fx = sx;
+                    int fy = sy;
+                    if (h == 0){
+                        fx = sx + m;
+                        fy = sy + size;
+                    } else if (h == 1)
+                    {
+                        fx = sx + m;
+                        fy = sy - 1;
+                    } else if (h == 2)
+                    {
+                        fx = sx - 1;
+                        fy = sy + m;
+                    } else if (h == 3)
+                    {
+                        fx = sx + size;
+                        fy = sy + m;
+                    }
+                    if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize) {
+                        int id = cellWithIdAny[fx][fy];
+                        if (id >= 0)
+                        {
+                            if (entityMemories.ContainsKey(id))
+                            {
+                                if (properties[entityMemories[id].myEntity.EntityType].CanMove)// только юниты, здания здесь не нужны
+                                { 
+                                    findCells.Add(new XYWeight(fx, fy, startWeight));
+                                    pathMap[fx, fy] = startWeight;
+                                    borderMansId.Add(id); // учитываем тех кто стоит на границе места строительства в том числе Могут быть войны
+                                } else
+                                {
+                                    pathMap[fx, fy] = WBuilding;
+                                }
+                            } else if (enemiesById.ContainsKey(id))
+                            {
+                                pathMap[fx, fy] = WEnemy;
+                            } else
+                            {
+                                pathMap[fx, fy] = WResource;
+                            }       
+                        } else
+                        {
+                            findCells.Add(new XYWeight(fx, fy, startWeight));
+                            pathMap[fx, fy] = startWeight;
+                        }
+                    }
+                }
+            }
+
+            // определяем сколько юнитов нам мешают строить здание 
+            // это могут быть только строители - нельзя начинать строить там где стоят войны, 
+            // но они могут быть на границе с местом строительства
+            List<int> insidersId = new List<int>();
+            for (int cx = sx; cx < sx + size; cx++)
+            {
+                for ( int cy = sy; cy < sy+size; cy++)
+                {
+                    pathMap[cx, cy] = WInside;
+                    if (cellWithIdAny[cx][cy] >= 0)
+                    { 
+                        // учитываем тех кто стоит внутри места строительства, 
+                        // !!!!!! считаем что войнов, зданий и врагов тут не может быть, по рпавилам выбора места строительства, только строители
+                        insidersId.Add(cellWithIdAny[cx][cy]);
+                    }
+                }
+            }
+
+            // объединяем стартовые ячейки в группы, у каждой группы соседей теперь должен быть одинаковый индекс (порядок номеров не важен, могут быть пропуски)
+            int lastIndex = 1; // 0 используется у пустых групп
+            for (int iter = 0; iter < findCells.Count; iter++)
+            {
+                int myIndex = findCells[iter].index;
+                if (myIndex == 0)
+                {
+                    myIndex = lastIndex;
+                    lastIndex++;
+                }
+
+                // ищем всех соседей и проверяем их индекс
+                int mx = findCells[iter].x;
+                int my = findCells[iter].y;
+                for (int i = iter + 1; i < findCells.Count; i++)
+                {
+                    int dist = Abs(mx - findCells[i].x) + Abs(my - findCells[i].y);
+                    
+                    if (dist == 1)// это мой сосед
+                    {
+                        if (findCells[i].index == 0)
+                        {
+                            findCells[i].index = myIndex;
+                        } else
+                        {
+                            // это старший брат, надо взять его индекс себе и всем кому уже присвоили мой индекс
+                            int newIndex = findCells[i].index;
+                            for (int n = 0; n < findCells.Count; n++)
+                            {
+                                if (findCells[n].index == myIndex)
+                                {
+                                    findCells[n].index = newIndex;
+                                }
+                            }
+                            myIndex = newIndex;
+                        }
+                    }
+                }
+            }         
+
+            // counter
+            int startCellCount = findCells.Count;
+            int startInsidersCount = insidersId.Count;
+            int startBorderMansCount = borderMansId.Count;
+            List<int> outsidersId = new List<int>();
+            if (startInsidersCount > 0) // надо выгонять внутренних парней
+            {
+                if (startInsidersCount + startBorderMansCount > startCellCount) // надо выталкивать людей наружу, им не хватает места внутри
+                {
+                    // значит здесь строить нельзя
+                    canBuildHere = false;
+                    #region закомментированный код
+                    //int diff = startInsidersCount + startBorderMansCount - startCellCount; //количество юнитов, которым не хватает места
+                    //bool stop = false;
+                    //int currentWeight = startWeight;
+                    //// проводим расширение зоны поиска НАРУЖУ, пока не найдем достаточное количество клеток или не упремся в то что все не поместятся
+                    //while(stop == false)
+                    //{
+                    //    for (int i = 0; i < findCells.Count; i++)
+                    //    {
+                    //        if (findCells[i].weight < currentWeight) // перешли к следующей группе удаленности от старта, надо провеирть хватает ли места
+                    //        {
+                    //            if (startInsidersCount + startBorderMansCount + outsidersId.Count >= i)
+                    //            { // у нас достаточно клеток, чтобы вместить в себя всех
+                    //                stop = true;
+                    //                break;
+                    //            } else
+                    //            { // у нас недостаточно клеток, значит проводим новую волну поиска
+                    //                currentWeight = findCells[i].weight;
+                    //            }
+                    //        } else // делаем поиск по соседям
+                    //        {
+                    //            int tx = findCells[i].x;
+                    //            int ty = findCells[i].y;
+                    //            int tw = findCells[i].weight;
+                    //            int ti = findCells[i].index;
+
+                    //            // проверяем есть ли в нас тут тот кого надо попросить подвинуться
+                    //            if (tw != startWeight) // не проверяемстартовые клетки, тамошние учтены в bordersMansId
+                    //            {
+                    //                int hereId = cellWithIdAny[tx][ty];
+                    //                if (hereId >= 0)
+                    //                {
+                    //                    if (entityMemories.ContainsKey(hereId))
+                    //                    {
+                    //                        if (properties[entityMemories[hereId].myEntity.EntityType].CanMove)
+                    //                        {
+                    //                            outsidersId.Add(hereId);
+                    //                        }
+                    //                    }
+                    //                }
+                    //            }
+
+                    //            // проверяем соседние клетки
+                    //            for (int jj = 0; jj < 4; jj++)
+                    //            {
+                    //                int nx = tx;
+                    //                int ny = ty;
+                    //                if (jj == 0) nx--;
+                    //                if (jj == 1) ny--;
+                    //                if (jj == 2) nx++;
+                    //                if (jj == 3) ny++;
+
+                    //                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                    //                {
+                    //                    if (pathMap[nx,ny] == 0) // поиск наружу, поэтому в WInside мы не смотрим
+                    //                    {
+                    //                        bool canContinue = true;
+
+                    //                        // проверка опасной зоны - не ищем в опасных клетках
+                    //                        var dCell = enemyDangerCells[nx][ny];
+                    //                        if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
+                    //                        {
+                    //                            canContinue = false;
+                    //                            pathMap[nx, ny] = WDanger;
+                    //                        }
+                    //                        else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                    //                        {
+                    //                            canContinue = false;
+                    //                            pathMap[nx, ny] = WDanger;
+                    //                        }
+
+                    //                        // проверка занятой клетки
+                    //                        if (canContinue == true)
+                    //                        {
+                    //                            int id = cellWithIdAny[nx][ny];
+                    //                            if (id >= 0)// occupied cell
+                    //                            {
+                    //                                if (entityMemories.ContainsKey(id))
+                    //                                {
+                    //                                    if (properties[ entityMemories[id].myEntity.EntityType].CanMove == true)// это юнит?
+                    //                                    {
+                    //                                        ; // все нормально клетку поиска добавят
+                    //                                    }
+                    //                                    else
+                    //                                    {//is my building                                                            
+                    //                                        canContinue = false;
+                    //                                        pathMap[nx, ny] = WBuilding;
+                    //                                    }
+                    //                                }
+                    //                                else if (enemiesById.ContainsKey(id)) // enemy 
+                    //                                {
+                    //                                    canContinue = false;
+                    //                                    pathMap[nx, ny] = WEnemy;
+                    //                                } else // resource
+                    //                                {
+                    //                                    canContinue = false;
+                    //                                    pathMap[nx, ny] = WResource;
+                    //                                }
+                    //                            }
+                    //                        }
+
+                    //                        if (canContinue == true) // empty, safe cell or through free unit
+                    //                        {
+                    //                            //add weight and findCell
+                    //                            if (tw > minWeight)
+                    //                            {
+                    //                                pathMap[nx, ny] = tw - 1;
+                    //                                findCells.Add(new XYWeight(nx, ny, tw - 1, ti));
+                    //                            }
+                    //                        }
+                    //                    }
+                    //                    //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                    //                }
+                    //            }
+                    //        }
+                    //    }
+                    //    if (stop == false)// мы проверили все клетки, последняя проверка и если клеток не хватает, то строить здесь нельзя.
+                    //    {
+
+                    //        needFindOutsiders = false;
+
+
+                    //        stop = true;
+                    //    }
+                    //}
+                    #endregion
+                }
+                else // места внутренним парням хватит
+                {
+
+
+                }
+            }
+
+            if (canBuildHere == true)
+            {
+                if (startInsidersCount + startBorderMansCount < startCellCount) // надо звать строителей снаружи на границу здания - если клеток не хватает, то нет смысла 
+                {
+                    // на каждом новом парне считаем стоит ли продолжать дальше или найдено достаточно людей
+
+                    // объединяем в группы стартовые ячейки
+
+                    // ищем путь до строителей - надеемся что строители существуют=) - строим путь по карте воспоминаний, а не видимости
+
+
+                }
+            }
+
+            
+
+
+            while (findCells.Count > 0)
+            {
+                int bx = findCells[0].x;
+                int by = findCells[0].y;
+                int w = findCells[0].weight;
+
+                for (int jj = 0; jj < 4; jj++)
+                {
+                    int nx = bx;
+                    int ny = by;
+                    if (jj == 0) nx--;
+                    if (jj == 1) ny--;
+                    if (jj == 2) nx++;
+                    if (jj == 3) ny++;
+
+                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                    {
+                        if (resourcePotentialField[nx][ny] == 0)
+                        {
+                            bool canContinueField = true;
+
+                            // проверка опасной зоны
+                            var dCell = enemyDangerCells[nx][ny];
+                            if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
+                            {
+                                canContinueField = false;
+                                resourcePotentialField[nx][ny] = RPFdangerCellWeight;
+                            }
+                            else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                            {
+                                canContinueField = false;
+                                resourcePotentialField[nx][ny] = RPFwarningCellWeight;
+                                //findCells.Add(new XYWeight(nx, ny, RPFwarningCellWeight));
+                            }
+
+                            // проверка занятой клетки
+                            if (canContinueField == true)
+                            {
+                                int id = cellWithIdAny[nx][ny];
+                                if (id >= 0)// occupied cell
+                                {
+                                    if (entityMemories.ContainsKey(id))
+                                    {
+                                        if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+                                        {
+                                            if (w == startWeight)//check my builder на соседней клетке с ресурсомs
+                                            {
+                                                canContinueField = false;
+                                                resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+                                            {
+                                                canContinueField = false;
+                                                resourcePotentialField[nx][ny] = RPFmyBuildingWeight;
+                                            }
+                                        }
+                                    }
+                                    else // enemy 
+                                    {
+                                        if (enemiesById.ContainsKey(id))
+                                        {
+                                            canContinueField = false;
+                                            resourcePotentialField[nx][ny] = RPFenemyEntityWeight;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (canContinueField == true) // empty, safe cell or through free unit
+                            {
+                                //add weight and findCell
+                                resourcePotentialField[nx][ny] = w - 1;
+                                if (w > minWeight)
+                                    findCells.Add(new XYWeight(nx, ny, w - 1));
+                            }
+                        }
+                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                    }
+                }
+                //findCells.RemoveAt(0);
+            }
+
+            return pathMap;
+        }
         bool[] FindAvailableTargetType(int sx, int sy, int size, int range)
         {
             bool[] availableType = new bool[entityTypesArray.Length];
@@ -2121,6 +3437,36 @@ namespace Aicup2020
             }
         }
 
+        int Abs(int p)
+        {
+            if (p >= 0)
+                return p;
+            else
+                return -p;
+
+        }
+        Vec2Int FindPositionToBuilding(EntityType type)
+        {
+            int buildingSize = properties[type].Size;
+
+            // check house preset
+            if (type == EntityType.House && preSetHousePlacingComplete == false)
+            {
+                foreach(var v in preSetHousePositions)
+                {
+                    if (buildBarrierMap[v.X, v.Y].CanBuildAfter(buildingSize))
+                    {
+                        return new Vec2Int(v.X, v.Y);
+                    }
+                }
+                preSetHousePlacingComplete = true;
+            }
+
+            // find optimal position
+            return FindPositionToBuildHouse();
+            //return new Vec2Int(-1, -1);
+        }
+
         Vec2Int FindPositionToBuildHouse()
         {
             int buildingSize = properties[EntityType.House].Size;
@@ -2180,7 +3526,7 @@ namespace Aicup2020
             return new Vec2Int(-1, -1);
         }
 
-        struct XYWeight
+        class XYWeight
         {
             public int x;
             public int y;
@@ -3195,21 +4541,22 @@ namespace Aicup2020
 
     }
 
-    enum EntityOrders { spawnUnit, build, repair, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll, none}
+    enum EntityOrders { spawnUnit, buildNow, buildGo, repairGo, repairNow, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll, none}
     class EntityMemory
     {
         public Group group { get; private set; }
         public int prevHealth;
         public Vec2Int prevPosition;
         public int myId;
-        public int targetId;
+        public int? targetId;
         public Vec2Int targetPos;
         public Vec2Int movePos;
         public bool moveBreakThrough;
         public bool moveFindClosestPosition;
-        public AutoAttack autoAttack;
+        public AutoAttack? autoAttack;
         public EntityType targetEntityType;
-        public EntityOrders order;
+        public EntityOrders order { get; set; }
+        public bool optimized;
 
         public Entity myEntity { get; private set; } 
 
@@ -3238,13 +4585,50 @@ namespace Aicup2020
             targetId = -1;
             targetPos = new Vec2Int(-1, -1);
             movePos = new Vec2Int(-1, -1);
+            order = EntityOrders.none;
         }
         public void Update(Entity entity)
         {
+            //order = EntityOrders.none;
+            optimized = false;
             checkedNow = true;
             myEntity = entity;
         }
 
+        public void OrderCanRetreat(Vec2Int moveP, bool breakThrough, bool findClosestPosition, bool opt)
+        {
+            order = EntityOrders.canRetreat;
+            optimized = opt;
+            movePos = moveP;
+            moveBreakThrough = breakThrough;
+            moveFindClosestPosition = findClosestPosition;
+        }        
+
+        public void OrderAttack(int? tarId, AutoAttack? autoAt, bool opt)
+        {
+            order = EntityOrders.attack;
+            targetId = tarId;
+            autoAttack = autoAt;
+            optimized = opt;
+        }
+        public void OrderBuild(Vec2Int targetP, EntityType type, Vec2Int moveP, bool breakThrough, bool findClosestPosition, bool opt)
+        {
+            order = EntityOrders.buildNow;
+            optimized = opt;
+            movePos = moveP;
+            moveBreakThrough = breakThrough;
+            moveFindClosestPosition = findClosestPosition;
+            targetPos = targetP;
+            targetEntityType = type;
+        }
+        public void OrderGoToBuild(Vec2Int moveP, bool breakThrough, bool findClosestPosition, bool opt)
+        {
+            order = EntityOrders.buildGo;
+            optimized = opt;
+            movePos = moveP;
+            moveBreakThrough = breakThrough;
+            moveFindClosestPosition = findClosestPosition;
+        }
         public void ResetTarget()
         {
             targetId = -1;
