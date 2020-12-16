@@ -39,7 +39,7 @@ namespace Aicup2020
         List<int> needRepairBuildingIdList = new List<int>();
         List<int> needRepairUnitsIdList = new List<int>();        
 
-        enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawRetreat, canDrawDebugUpdate, allOptionsCount }
+        enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat, canDrawDebugUpdate, allOptionsCount }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
 
         PlayerView _playerView;
@@ -375,6 +375,10 @@ namespace Aicup2020
             ConvertOrdersToActions(); // Приказы - Кто будет выполнять намерения? //приказы превращаются в конкретные action для entities        
 
             SaveEntitiesMemory(); 
+            if (debugOptions[(int)DebugOptions.canDrawGetAction])
+            {
+                _debugInterface.Send(new DebugCommand.Flush());
+            }
 
             return new Action(actions);
         }
@@ -384,7 +388,10 @@ namespace Aicup2020
             #region draw debug settings
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
-            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = true;
+            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
+            debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
+            debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = true;
+
 
             debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
             #endregion
@@ -451,6 +458,8 @@ namespace Aicup2020
                 buildEntityPriority.Add(ent, 0f);
                 basicEntityIdGroups.Add(ent, new Group());
             }
+
+
         }
         void CheckAliveAndDieEntities()
         {
@@ -1833,6 +1842,7 @@ namespace Aicup2020
             int sy = 0;
             int size = 1;
             int maxHealth = 1;
+            int currentHealth = 0;
 
             switch (intention.intentionType) // различия
             {
@@ -1848,6 +1858,7 @@ namespace Aicup2020
                     sy = entityMemories[intention.targetId].myEntity.Position.Y;
                     size = properties[entityMemories[intention.targetId].myEntity.EntityType].Size;
                     maxHealth = properties[entityMemories[intention.targetId].myEntity.EntityType].MaxHealth;
+                    currentHealth = entityMemories[intention.targetId].myEntity.Health;
                     break;
             }
 
@@ -1985,6 +1996,10 @@ namespace Aicup2020
                         if (entityMemories[id].optimized == false)
                         {
                             builderCount++;
+                            if (debugOptions[(int)DebugOptions.drawBuildAndRepairOrder])
+                            {
+                                DrawLineOnce(entityMemories[id].myEntity.Position.X + 0.5f, entityMemories[id].myEntity.Position.Y + 0.5f, sx + size / 2f, sy + size / 2f, colorGreen, colorGreen);
+                            }
                             switch (intention.intentionType) // == diference
                             {
                                 case IntentionType.IntentionCreateHouseStart:
@@ -2012,7 +2027,7 @@ namespace Aicup2020
                 }
 
                 int planDistance = 0;
-                int planHealth = 0;
+                int planHealth = currentHealth;
                 int prevDistContact = 0;
                 if (builderCount > 0)
                 {//ищем максимум на половину оставшегося времени строительства
@@ -2102,212 +2117,229 @@ namespace Aicup2020
                     int fw = findCells[iter].weight;
                     int fi = findCells[iter].index;
 
-                    for (int jj = 0; jj < 4; jj++)
+                    if (fw > minWeight)
                     {
-                        int nx = fx;
-                        int ny = fy;
-                        if (jj == 0) nx--;
-                        if (jj == 1) ny--;
-                        if (jj == 2) nx++;
-                        if (jj == 3) ny++;
 
-                        if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
+                        for (int jj = 0; jj < 4; jj++)
                         {
-                            if (pathMap[nx, ny].weight == 0)
+                            int nx = fx;
+                            int ny = fy;
+                            if (jj == 0) nx--;
+                            if (jj == 1) ny--;
+                            if (jj == 2) nx++;
+                            if (jj == 3) ny++;
+
+                            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
                             {
-                                bool canContinue = true;
+                                if (pathMap[nx, ny].weight == 0)
+                                {
+                                    bool canContinue = true;
 
-                                var dCell = enemyDangerCells[nx][ny];
-                                if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0) // проверка опасной зоны
-                                {
-                                    canContinue = false;
-                                    pathMap[nx, ny].weight = WDanger;
-                                }
-                                else if (dCell.meleesWarning + dCell.rangersWarning > 0)
-                                {
-                                    canContinue = false;
-                                    pathMap[nx, ny].weight = WDanger;
-                                }
-                                else if (nextPositionMyUnitsMap[nx][ny] > 0) // проверка пустой позиции на следующий ход
-                                {
-                                    pathMap[nx, ny].weight = WNextPosition;
-                                }
-
-                                if (canContinue == true)
-                                {
-                                    int id = cellWithIdAny[nx][ny];
-                                    if (id >= 0)// occupied cell
+                                    var dCell = enemyDangerCells[nx][ny];
+                                    if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0) // проверка опасной зоны
                                     {
-                                        if (entityMemories.ContainsKey(id))
+                                        canContinue = false;
+                                        pathMap[nx, ny].weight = WDanger;
+                                    }
+                                    else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                                    {
+                                        canContinue = false;
+                                        pathMap[nx, ny].weight = WDanger;
+                                    }
+                                    else if (nextPositionMyUnitsMap[nx][ny] > 0) // проверка пустой позиции на следующий ход
+                                    {
+                                        pathMap[nx, ny].weight = WNextPosition;
+                                    }
+
+                                    if (canContinue == true)
+                                    {
+                                        int id = cellWithIdAny[nx][ny];
+                                        if (id >= 0)// occupied cell
                                         {
-                                            if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+                                            if (entityMemories.ContainsKey(id))
                                             {
-                                                // нашли строителя!!!
-                                                // при нахождении человека проверяем надо ли искать дальше
-                                                // при окончании места в группах обновляем
-
-                                                //if (w == startWeight)//check my builder на соседней клетке с ресурсомs
-                                                //{
-                                                //    //canContinueField = false;
-                                                //    //resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
-                                                //}
-                                                if (entityMemories[id].optimized == false)
+                                                if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
                                                 {
-                                                    canContinue = false;
-                                                    switch (intention.intentionType)// == difference
-                                                    {
-                                                        case IntentionType.IntentionCreateHouseStart:
-                                                            entityMemories[id].OrderGoToBuild(new Vec2Int(fx, fy), true, true, true);
-                                                            break;
-                                                        case IntentionType.IntentionRepairNewBuilding:
-                                                        case IntentionType.IntentionRepairOldBuilding:
-                                                            entityMemories[id].OrderRepairGo(intention.targetId, new Vec2Int(fx, fy), true, true, true);
-                                                            break;
-                                                    }
-                                                    pathMap[nx, ny].weight = WDeniedBuilder;
-                                                    nextPositionMyUnitsMap[fx][fy] = id;
-                                                    freePlaceInIndexGroup[pathMap[fx, fy].index]--;
-                                                    // обновить минимальную дистанцию
-                                                    int curDistance = startWeight - fw;
-                                                    planHealth += (curDistance - prevDistContact) * builderCount;
-                                                    builderCount++;
-                                                    planDistance = curDistance + (maxHealth - planHealth) / builderCount;
-                                                    minWeight = startWeight - planDistance / 2;
-                                                    // чистка если закончились места
-                                                    if (freePlaceInIndexGroup[pathMap[fx, fy].index] == 0)
-                                                    {
-                                                        // обновить pathMap, убрать следы которые меньше startWeight, но больше 0
-                                                        foreach (var c in findCells)
-                                                        {
-                                                            if (pathMap[c.x, c.y].weight > 0)
-                                                            {
-                                                                if (pathMap[c.x, c.y].weight < startWeight)
-                                                                    pathMap[c.x, c.y].weight = 0;
-                                                                pathMap[c.x, c.y].index = 0;
-                                                            }
-                                                        }
-                                                        // новый список findcells без указанной группы
-                                                        for (int i = 0; i < findCells.Count;)
-                                                        {
-                                                            bool del = false;
-                                                            if (findCells[i].weight != startWeight)
-                                                                del = true;
-                                                            else if (freePlaceInIndexGroup[findCells[i].index] == 0)
-                                                                del = true;
+                                                    // нашли строителя!!!
+                                                    // при нахождении человека проверяем надо ли искать дальше
+                                                    // при окончании места в группах обновляем
 
-                                                            if (del)
-                                                                findCells.RemoveAt(i);
-                                                            else
-                                                                i++;
-                                                        }
-                                                        // итераторы в самое начало
-                                                        iter = 0;
-                                                        //обновляем количество стартовых мест
-                                                        freePlaceInIndexGroup.Clear();
-                                                        foreach (var c in findCells)
+                                                    //if (w == startWeight)//check my builder на соседней клетке с ресурсомs
+                                                    //{
+                                                    //    //canContinueField = false;
+                                                    //    //resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
+                                                    //}
+                                                    if (entityMemories[id].optimized == false)
+                                                    {
+                                                        canContinue = false;
+                                                        if (debugOptions[(int)DebugOptions.drawBuildAndRepairOrder])
                                                         {
-                                                            pathMap[c.x, c.y].index = c.index;
-                                                            if (freePlaceInIndexGroup.ContainsKey(c.index))
+                                                            DrawLineOnce(nx + 0.5f, ny + 0.5f, sx + size / 2f, sy + size / 2f, colorGreen, colorGreen);
+                                                        }
+                                                        if (debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
+                                                        {
+                                                            DrawLineOnce(nx + 0.5f, ny + 0.5f, fx+0.5f, fy +0.5f, colorMagenta, colorMagenta);
+                                                        }
+                                                        switch (intention.intentionType)// == difference
+                                                        {
+                                                            case IntentionType.IntentionCreateHouseStart:
+                                                                entityMemories[id].OrderGoToBuild(new Vec2Int(fx, fy), true, true, true);
+                                                                break;
+                                                            case IntentionType.IntentionRepairNewBuilding:
+                                                            case IntentionType.IntentionRepairOldBuilding:
+                                                                entityMemories[id].OrderRepairGo(intention.targetId, new Vec2Int(fx, fy), true, true, true);
+                                                                break;
+                                                        }
+                                                        pathMap[nx, ny].weight = WDeniedBuilder;
+                                                        nextPositionMyUnitsMap[fx][fy] = id;
+                                                        freePlaceInIndexGroup[pathMap[fx, fy].index]--;
+                                                        // обновить минимальную дистанцию
+                                                        int curDistance = startWeight - fw;
+                                                        planHealth += (curDistance - prevDistContact) * builderCount;
+                                                        builderCount++;
+                                                        prevDistContact = curDistance;
+                                                        planDistance = curDistance + (maxHealth - planHealth) / builderCount;
+                                                        minWeight = startWeight - planDistance / 2;
+                                                        // чистка если закончились места
+                                                        if (freePlaceInIndexGroup[pathMap[fx, fy].index] == 0)
+                                                        {
+                                                            // обновить pathMap, убрать следы которые меньше startWeight, но больше 0
+                                                            foreach (var c in findCells)
                                                             {
-                                                                freePlaceInIndexGroup[c.index]++;
+                                                                if (pathMap[c.x, c.y].weight > 0)
+                                                                {
+                                                                    if (pathMap[c.x, c.y].weight < startWeight)
+                                                                        pathMap[c.x, c.y].weight = 0;
+                                                                    pathMap[c.x, c.y].index = 0;
+                                                                }
                                                             }
-                                                            else
+                                                            // новый список findcells без указанной группы
+                                                            for (int i = 0; i < findCells.Count;)
                                                             {
-                                                                freePlaceInIndexGroup[c.index] = 1;
+                                                                bool del = false;
+                                                                if (findCells[i].weight != startWeight)
+                                                                    del = true;
+                                                                else if (freePlaceInIndexGroup[findCells[i].index] == 0)
+                                                                    del = true;
+
+                                                                if (del)
+                                                                    findCells.RemoveAt(i);
+                                                                else
+                                                                    i++;
+                                                            }
+                                                            // итераторы в самое начало
+                                                            iter = 0;
+                                                            //обновляем количество стартовых мест
+                                                            freePlaceInIndexGroup.Clear();
+                                                            foreach (var c in findCells)
+                                                            {
+                                                                pathMap[c.x, c.y].index = c.index;
+                                                                if (freePlaceInIndexGroup.ContainsKey(c.index))
+                                                                {
+                                                                    freePlaceInIndexGroup[c.index]++;
+                                                                }
+                                                                else
+                                                                {
+                                                                    freePlaceInIndexGroup[c.index] = 1;
+                                                                }
                                                             }
                                                         }
+                                                        break; // прекратить поиск из этой клетки
                                                     }
-                                                    break; // прекратить поиск из этой клетки
+                                                    else
+                                                    {
+                                                        canContinue = false;
+                                                        pathMap[nx, ny].weight = WDeniedBuilder;
+                                                    }
+
                                                 }
                                                 else
                                                 {
-                                                    canContinue = false;
-                                                    pathMap[nx, ny].weight = WDeniedBuilder;
+                                                    if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+                                                    {
+                                                        canContinue = false;
+                                                        pathMap[nx, ny].weight = WBuilding;
+                                                    }
+                                                    else
+                                                    {
+                                                        canContinue = false;
+                                                        pathMap[nx, ny].weight = WWarrior;
+                                                    }
                                                 }
-
                                             }
-                                            else
+                                            else if (enemiesById.ContainsKey(id))// enemy 
                                             {
-                                                if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
-                                                {
-                                                    canContinue = false;
-                                                    pathMap[nx, ny].weight = WBuilding;
-                                                }
-                                                else
-                                                {
-                                                    canContinue = false;
-                                                    pathMap[nx, ny].weight = WWarrior;
-                                                }
+                                                canContinue = false;
+                                                pathMap[nx, ny].weight = WDanger;
                                             }
-                                        }
-                                        else if (enemiesById.ContainsKey(id))// enemy 
-                                        {
-                                            canContinue = false;
-                                            pathMap[nx, ny].weight = WDanger;
-                                        }
-                                        else // it is resource
-                                        {
-                                            canContinue = false;
-                                            pathMap[nx, ny].weight = WResource;
+                                            else // it is resource
+                                            {
+                                                canContinue = false;
+                                                pathMap[nx, ny].weight = WResource;
+                                            }
                                         }
                                     }
-                                }
 
-                                if (canContinue == true) // empty, safe cell or through free unit
-                                {
-                                    //add weight and findCell
-                                    pathMap[nx, ny].weight = fw - 1;
-                                    pathMap[nx, ny].index = fi;
-                                    if (fw > minWeight)
-                                        findCells.Add(new XYWeight(nx, ny, fw - 1, fi));
-                                }
-                            }
-                            else
-                            {
-                                // MOD можно не проверять на совпадения если осталась всего одна группа
-                                if (pathMap[nx, ny].weight > 0 && pathMap[nx, ny].weight < startWeight) // это уже пройденная клетка, надо проверить, будем ли объединяться
-                                {
-                                    if (pathMap[nx, ny].index == 0)
+                                    if (canContinue == true) // empty, safe cell or through free unit
                                     {
-                                        ;// такого не должно быть что вес больше нуля, а индекса группы нет!!!
-                                    }
-
-                                    if (pathMap[nx, ny].index != fi)
-                                    {// встретили клетку с другим индексом, значит надо объединить группы
-                                        int oldIndex = pathMap[nx, ny].index;
-                                        int newIndex = fi;
-
-                                        if (freePlaceInIndexGroup.ContainsKey(oldIndex) == false || freePlaceInIndexGroup.ContainsKey(newIndex) == false)
+                                        //add weight and findCell
+                                        pathMap[nx, ny].weight = fw - 1;
+                                        pathMap[nx, ny].index = fi;
+                                        if (fw > minWeight)
                                         {
-                                            ;
-                                        }
+                                            findCells.Add(new XYWeight(nx, ny, fw - 1, fi));
 
-                                        for (int x = 0; x < mapSize; x++)//обновляем карту
-                                        {
-                                            for (int y = 0; y < mapSize; y++)
+                                            if (debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
                                             {
-                                                if (pathMap[x, y].index == oldIndex)
-                                                    pathMap[x, y].index = newIndex;
+                                                DrawLineOnce(nx + 0.5f, ny + 0.5f, fx + 0.5f, fy + 0.5f, colorMagenta, colorMagenta);
                                             }
                                         }
-                                        foreach (var c in findCells)//обновляем клетки поиска
-                                        {
-                                            if (c.index == oldIndex)
-                                                c.index = newIndex;
-                                        }
-
-                                        
-                                        freePlaceInIndexGroup[newIndex] += freePlaceInIndexGroup[oldIndex];
-                                        freePlaceInIndexGroup.Remove(oldIndex);
                                     }
                                 }
-                            }
+                                else
+                                {
+                                    // MOD можно не проверять на совпадения если осталась всего одна группа
+                                    if (pathMap[nx, ny].weight > 0 && pathMap[nx, ny].weight < startWeight) // это уже пройденная клетка, надо проверить, будем ли объединяться
+                                    {
+                                        if (pathMap[nx, ny].index == 0)
+                                        {
+                                            ;// такого не должно быть что вес больше нуля, а индекса группы нет!!!
+                                        }
 
-                            //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
-                        }
+                                        if (pathMap[nx, ny].index != fi)
+                                        {// встретили клетку с другим индексом, значит надо объединить группы
+                                            int oldIndex = pathMap[nx, ny].index;
+                                            int newIndex = fi;
+
+                                            if (freePlaceInIndexGroup.ContainsKey(oldIndex) == false || freePlaceInIndexGroup.ContainsKey(newIndex) == false)
+                                            {
+                                                ;
+                                            }
+
+                                            for (int x = 0; x < mapSize; x++)//обновляем карту
+                                            {
+                                                for (int y = 0; y < mapSize; y++)
+                                                {
+                                                    if (pathMap[x, y].index == oldIndex)
+                                                        pathMap[x, y].index = newIndex;
+                                                }
+                                            }
+                                            foreach (var c in findCells)//обновляем клетки поиска
+                                            {
+                                                if (c.index == oldIndex)
+                                                    c.index = newIndex;
+                                            }
+
+
+                                            freePlaceInIndexGroup[newIndex] += freePlaceInIndexGroup[oldIndex];
+                                            freePlaceInIndexGroup.Remove(oldIndex);
+                                        }
+                                    }
+                                }
+                                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                            }
+                        }                        
                     }
-                    //findCells.RemoveAt(0);
-
                 }
             }
             return deleteIntention;
@@ -4001,6 +4033,19 @@ namespace Aicup2020
 
             //theoreticaly same population using
             //unitCount = currentMyEntityCount[EntityType.BuilderUnit] + currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit];
+        }
+
+        public void DrawLineOnce(float x1, float y1, float x2, float y2, Color color1, Color color2)
+        {
+            if (debugOptions[(int)DebugOptions.canDrawGetAction])
+            {                
+                ColoredVertex[] vertices = new ColoredVertex[] {
+                    new ColoredVertex(new Vec2Float(x1,y1), new Vec2Float(), color1),
+                    new ColoredVertex(new Vec2Float(x2,y2), new Vec2Float(), color2),
+                };
+                DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                _debugInterface.Send(new DebugCommand.Add(lines));
+            }
         }
 
         Color colorWhite = new Color(1, 1, 1, 1);
