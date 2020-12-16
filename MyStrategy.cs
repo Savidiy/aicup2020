@@ -221,6 +221,7 @@ namespace Aicup2020
         int[] howMuchResourcesCollectCPALastNTurns = new int[howManyTurnsHistory];
         int[] howMuchLiveBuildersLast10Turns = new int[howManyTurnsHistory];
         int howMuchResourcesCollectAll = 0;
+        bool iHaveActiveRangedBase = false;
         
         int myResources;
         int myScore;
@@ -250,7 +251,7 @@ namespace Aicup2020
         
         enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, 
             IntentionCreateRanger, IntentionStopCreatingRanger,
-            IntentionCreateHouseStart,  
+            IntentionCreateHouse,  IntentionCreateRangedBase,
             IntentionRepairNewBuilding, IntentionRepairOldBuilding,
             IntentionExtractResources, IntentionFindResources, IntentionRetreatBuilders, IntentionMyBuiAttackEnemyBui,
             IntentionTurretAttacks,
@@ -351,6 +352,15 @@ namespace Aicup2020
             CheckDeadResourceOnCurrentVisibleMap();
             GenerateResourcePotentialField();
             GenerateBuildBarrierMap();
+            iHaveActiveRangedBase = false;
+            foreach (var id in basicEntityIdGroups[EntityType.RangedBase].members)
+            {
+                if (entityMemories[id].myEntity.Active == true)
+                {
+                    iHaveActiveRangedBase = true;
+                }
+            }
+
             #endregion
 
             debugLines.Clear();
@@ -524,7 +534,7 @@ namespace Aicup2020
                         {
                             for (int i = 0; i < intentions.Count; i++)
                             {
-                                if (intentions[i].intentionType == IntentionType.IntentionCreateHouseStart)
+                                if (intentions[i].intentionType == IntentionType.IntentionCreateHouse)
                                 {
                                     if (intentions[i].targetPosition.X == em.myEntity.Position.X && intentions[i].targetPosition.Y == em.myEntity.Position.Y)
                                     {
@@ -853,17 +863,54 @@ namespace Aicup2020
             prevDesires = desires;
             desires = new List<DesireType>();
 
-            #region Хочу строить дома
-            int[] popMax = new int[] {  15, 30, 55, 70, 100, 1000 };
-            int[] popRange = new int[] { 0, 4, 8, 10, 15, 20 };
-            for(int i = 0; i < popMax.Length; i++)
+            #region Хочу строить базу лучников
+            bool needMakeRangedBase = false;
+            if (basicEntityIdGroups[EntityType.RangedBase].members.Count == 0)
             {
-                if (populationMax <= popMax[i])
+                if (_playerView.CurrentTick > 200)
                 {
-                    if (populationUsing + popRange[i] >= populationMax)
+                    for (int x = 0; x < mapSize; x++)
                     {
-                        desires.Add(DesireType.WantCreateHouses);
-                        break;
+                        for (int y = 0; y < mapSize; y++)
+                        {
+                            if (buildBarrierMap[x, y].CanBuildNow(5))
+                            {
+                                desires.Add(DesireType.WantCreateRangerBase);
+                                needMakeRangedBase = true;
+                                break;
+                            }
+                        }
+                        if (needMakeRangedBase == true)
+                            break;
+                    }
+
+                }
+            } else
+            {
+                if (entityMemories[basicEntityIdGroups[EntityType.RangedBase].members[0]].myEntity.Active == false)
+                {
+                    needMakeRangedBase = true;
+                }
+
+            }
+            
+            #endregion
+
+
+            #region Хочу строить дома
+            if (needMakeRangedBase == false)
+            {
+                int[] popMax = new int[] { 15, 30, 55, 70, 100, 1000 };
+                int[] popRange = new int[] { 0, 4, 8, 10, 15, 20 };
+                for (int i = 0; i < popMax.Length; i++)
+                {
+                    if (populationMax <= popMax[i])
+                    {
+                        if (populationUsing + popRange[i] >= populationMax)
+                        {
+                            desires.Add(DesireType.WantCreateHouses);
+                            break;
+                        }
                     }
                 }
             }
@@ -882,38 +929,49 @@ namespace Aicup2020
             }
 
             bool needCreateWarriors = false;
-            if (countEnemiesOnMyTerritory > 0)
+            if (iHaveActiveRangedBase == true)
             {
-                /// тесты показали эффективность этого расчета над
-                /// + populationMax / 3
-                /// + populationMax / 4
-                /// + populationMax / 5
-                /// соответствует версии basic_retreat1 до исправления ошибки подсчета populationMax
-                /// см. 10.12_13:51 и 10.12_14:00 и 10.12_14:19
-                int potencyPopul = 0;
-                foreach (var e in properties)
+                if (countEnemiesOnMyTerritory > 0)
                 {
-                    potencyPopul += currentMyEntityCount[e.Key] * e.Value.PopulationProvide;
-                }
+                    /// тесты показали эффективность этого расчета над
+                    /// + populationMax / 3
+                    /// + populationMax / 4
+                    /// + populationMax / 5
+                    /// соответствует версии basic_retreat1 до исправления ошибки подсчета populationMax
+                    /// см. 10.12_13:51 и 10.12_14:00 и 10.12_14:19
+                    int potencyPopul = 0;
+                    foreach (var e in properties)
+                    {
+                        potencyPopul += currentMyEntityCount[e.Key] * e.Value.PopulationProvide;
+                    }
 
-                if (currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit] <= countEnemiesOnMyTerritory + potencyPopul / 5)
-                {
-                    needCreateWarriors = true;
-                    desires.Add(DesireType.WantCreateRangers);
-                }
-            } 
-            if (needCreateWarriors == false)
-            {
-                if (currentMyEntityCount[EntityType.BuilderUnit] < 30)
-                {
-                    desires.Add(DesireType.WantCreateBuilders);
-                } else
-                {
-                    if (currentMyEntityCount[EntityType.BuilderUnit] < currentMyEntityCount[EntityType.RangedUnit] * 2)
-                        desires.Add(DesireType.WantCreateBuilders);
-                    else 
+                    if (currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit] <= countEnemiesOnMyTerritory + potencyPopul / 5)
+                    {
+                        needCreateWarriors = true;
                         desires.Add(DesireType.WantCreateRangers);
+                    }
                 }
+                if (needCreateWarriors == false)
+                {
+                    if (currentMyEntityCount[EntityType.BuilderUnit] < 30)
+                    {
+                        desires.Add(DesireType.WantCreateBuilders);
+                    } else if (currentMyEntityCount[EntityType.BuilderUnit] > 70)
+                    {
+                        desires.Add(DesireType.WantCreateRangers);
+                    }
+                    else
+                    {
+                        if (currentMyEntityCount[EntityType.BuilderUnit] < currentMyEntityCount[EntityType.RangedUnit] * 2)
+                            desires.Add(DesireType.WantCreateBuilders);
+                        else
+                            desires.Add(DesireType.WantCreateRangers);
+                    }
+                }
+            } else // нет базы лучников
+            {
+                if (populationUsing < populationMax)
+                    desires.Add(DesireType.WantCreateBuilders);
             }
             #endregion
 
@@ -1000,12 +1058,12 @@ namespace Aicup2020
                                 int count = 0;
                                 foreach(var ni in prevIntentions)
                                 {
-                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart) 
+                                    if (ni.intentionType == IntentionType.IntentionCreateHouse) 
                                         count++;
                                 }
                                 foreach (var ni in intentions)
                                 {
-                                    if (ni.intentionType == IntentionType.IntentionCreateHouseStart)
+                                    if (ni.intentionType == IntentionType.IntentionCreateHouse)
                                         count++;
                                 }
                                 if ((populationMax <= 30 && count == 0) || (populationMax <= 60 && count <= 2) || (count <= 4))
@@ -1016,6 +1074,20 @@ namespace Aicup2020
                         }
                         break;
                     #endregion
+                    case DesireType.WantCreateRangerBase:
+                        #region хочу строить базу
+                        //i have builders
+                        if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
+                        {
+                            //i have resources
+                            int newCost = properties[EntityType.RangedBase].InitialCost;
+                            if (myResources >= newCost)
+                            {
+                                 plans.Add(PlanType.PlanCreateRangerBase);                                
+                            }
+                        }
+                        break;
+                        #endregion
                     case DesireType.WantRepairBuildings:
                         #region хочу ремонтировать здания
                         {
@@ -1109,10 +1181,23 @@ namespace Aicup2020
                         break;
                     case PlanType.PlanCreateHouses:
                         // выбираем где будем строить
-                        Vec2Int pos = FindPositionToBuilding(EntityType.House);
-                        if (pos.X >= 0) {
-                            Intention intention = new Intention(IntentionType.IntentionCreateHouseStart, pos, EntityType.House);
-                            intentions.Add(intention);                            
+                        {
+                            Vec2Int pos = FindPositionForHouse();
+                            if (pos.X >= 0)
+                            {
+                                Intention intention = new Intention(IntentionType.IntentionCreateHouse, pos, EntityType.House);
+                                intentions.Add(intention);
+                            }
+                        }
+                        break;
+                    case PlanType.PlanCreateRangerBase:
+                        {
+                            Vec2Int pos = FindPositionForRangedBase();
+                            if (pos.X >= 0)
+                            {
+                                Intention intention = new Intention(IntentionType.IntentionCreateRangedBase, pos, EntityType.RangedBase);
+                                intentions.Add(intention);
+                            }
                         }
                         break;
                     case PlanType.PlanRepairNewBuildings:
@@ -1234,7 +1319,7 @@ namespace Aicup2020
                         }
                         break;
                     #endregion
-                    case IntentionType.IntentionCreateHouseStart:
+                    case IntentionType.IntentionCreateHouse:
                         #region Создаем намерение на ремонт построенного или отменяем строительство
                         //if (prevIntentions[i].targetId >= 0)
                         //{
@@ -1330,7 +1415,8 @@ namespace Aicup2020
                             }
                         }
                         break;
-                    case IntentionType.IntentionCreateHouseStart:
+                    case IntentionType.IntentionCreateRangedBase:
+                    case IntentionType.IntentionCreateHouse:
                         break;
                     case IntentionType.IntentionRepairOldBuilding:
                     case IntentionType.IntentionRepairNewBuilding:
@@ -1800,7 +1886,8 @@ namespace Aicup2020
             for (int ni = 0; ni < intentions.Count;)
             {
                 bool deleteIntention = false;
-                if (intentions[ni].intentionType == IntentionType.IntentionCreateHouseStart) {
+                if (intentions[ni].intentionType == IntentionType.IntentionCreateHouse
+                    || intentions[ni].intentionType == IntentionType.IntentionCreateRangedBase) {
                     deleteIntention = FindBuildersToBuildOrRepair(intentions[ni]);
                 }
                 // удаляем намерение или переходим к следующему
@@ -1847,7 +1934,8 @@ namespace Aicup2020
 
             switch (intention.intentionType) // различия
             {
-                case IntentionType.IntentionCreateHouseStart:
+                case IntentionType.IntentionCreateRangedBase:
+                case IntentionType.IntentionCreateHouse:
                     sx = intention.targetPosition.X;
                     sy = intention.targetPosition.Y;
                     size = properties[intention.targetEntityType].Size;
@@ -1861,9 +1949,10 @@ namespace Aicup2020
                     maxHealth = properties[entityMemories[intention.targetId].myEntity.EntityType].MaxHealth;
                     currentHealth = entityMemories[intention.targetId].myEntity.Health;
                     break;
+                default: throw new System.Exception("Неизвестное намерение");
             }
 
-            if (intention.intentionType == IntentionType.IntentionCreateHouseStart) // == различие - проверяем начинку только для стройки нового здания
+            if (intention.intentionType == IntentionType.IntentionCreateHouse) // == различие - проверяем начинку только для стройки нового здания
             {
                 for (int cx = sx; cx < sx + size; cx++) // проверка
                 {
@@ -2003,10 +2092,11 @@ namespace Aicup2020
                             }
                             switch (intention.intentionType) // == diference
                             {
-                                case IntentionType.IntentionCreateHouseStart:
+                                case IntentionType.IntentionCreateRangedBase:
+                                case IntentionType.IntentionCreateHouse:
                                     entityMemories[id].OrderBuild(
                                         new Vec2Int(sx, sy),
-                                        EntityType.House,
+                                        intention.targetEntityType,
                                         new Vec2Int(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y),
                                         false,
                                         false,
@@ -2022,6 +2112,7 @@ namespace Aicup2020
                                         true
                                         );
                                     break;
+                                default: throw new System.Exception("Неизвестное намерение");
                             }
                         }
                     }
@@ -2183,13 +2274,15 @@ namespace Aicup2020
                                                         }
                                                         switch (intention.intentionType)// == difference
                                                         {
-                                                            case IntentionType.IntentionCreateHouseStart:
+                                                            case IntentionType.IntentionCreateRangedBase:
+                                                            case IntentionType.IntentionCreateHouse:
                                                                 entityMemories[id].OrderGoToBuild(new Vec2Int(fx, fy), true, true, true);
                                                                 break;
                                                             case IntentionType.IntentionRepairNewBuilding:
                                                             case IntentionType.IntentionRepairOldBuilding:
                                                                 entityMemories[id].OrderRepairGo(intention.targetId, new Vec2Int(fx, fy), true, true, true);
                                                                 break;
+                                                            default: throw new System.Exception("Неизвестное намерение");
                                                         }
                                                         pathMap[nx, ny].weight = WDeniedBuilder;
                                                         nextPositionMyUnitsMap[fx][fy] = id;
@@ -3161,12 +3254,12 @@ namespace Aicup2020
                 return -p;
 
         }
-        Vec2Int FindPositionToBuilding(EntityType type)
+        Vec2Int FindPositionForHouse()
         {
-            int buildingSize = properties[type].Size;
+            int buildingSize = properties[EntityType.House].Size;
 
             // check house preset
-            if (type == EntityType.House && preSetHousePlacingComplete == false)
+            if (preSetHousePlacingComplete == false)
             {
                 foreach(var v in preSetHousePositions)
                 {
@@ -3179,13 +3272,7 @@ namespace Aicup2020
             }
 
             // find optimal position
-            return FindPositionToBuildHouse();
-            //return new Vec2Int(-1, -1);
-        }
 
-        Vec2Int FindPositionToBuildHouse()
-        {
-            int buildingSize = properties[EntityType.House].Size;
             foreach (var id in basicEntityIdGroups[EntityType.BuilderUnit].members)
             {
                 Vec2Int pos = entityMemories[id].myEntity.Position;
@@ -3239,6 +3326,30 @@ namespace Aicup2020
                     //break;
                 }
             }
+            return new Vec2Int(-1, -1);
+        }
+
+        Vec2Int FindPositionForRangedBase()
+        {
+            int buildingSize = properties[EntityType.RangedBase].Size;
+
+            int y = 0;
+            for (int x = 12; x < mapSize;)
+            {
+                if (buildBarrierMap[x, y].CanBuildNow(buildingSize))
+                {
+                    return new Vec2Int(x, y);
+                }
+
+                x--;
+                y++;
+                if (x < 0)
+                {
+                    x = y;
+                    y = 0;
+                }
+            }
+
             return new Vec2Int(-1, -1);
         }
 
@@ -3775,7 +3886,13 @@ namespace Aicup2020
                 return _playerView.Entities[enemyIndex].Position;
             }else
             {
-                return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
+                if (_playerView.CurrentTick < 500)
+                    return new Vec2Int(73, 7);
+                else if (_playerView.CurrentTick < 750)
+                    return new Vec2Int(73, 73);
+                else return new Vec2Int(7, 73);
+
+                    //return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
             }
         }
         bool IsFreeCellsRange(int x1, int y1, int x2, int y2, bool onlyBuildings = false, bool ignoreBorder = false)
