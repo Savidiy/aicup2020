@@ -494,22 +494,11 @@ namespace Aicup2020
             {
                 //use only my entities
                 if (e.PlayerId == myId)
-                {
-                    if (e.Active == false)
-                    {
-                        needRepairBuildingIdList.Add(e.Id);
-                    }
+                {                    
                     if (entityMemories.ContainsKey(e.Id))
                     {
                         //update
-                        entityMemories[e.Id].Update(e);
-                        if (e.Health < properties[e.EntityType].MaxHealth)
-                        {
-                            if (properties[e.EntityType].CanMove)
-                                needRepairUnitsIdList.Add(e.Id);
-                            else
-                                needRepairBuildingIdList.Add(e.Id);
-                        }
+                        entityMemories[e.Id].Update(e);                        
                         //once and current visible map update
                         AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
                         AddEntityViewToCurrentVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
@@ -541,6 +530,14 @@ namespace Aicup2020
                                 }
                             }
                         }
+                    }
+                    // добаввляем раненых в списки лечения
+                    if (e.Health < properties[e.EntityType].MaxHealth)
+                    {
+                        if (properties[e.EntityType].CanMove)
+                            needRepairUnitsIdList.Add(e.Id);
+                        else
+                            needRepairBuildingIdList.Add(e.Id);
                     }
                 }
                 else if (e.PlayerId == null)// it s resource
@@ -2338,7 +2335,11 @@ namespace Aicup2020
                                 }
                                 //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
                             }
-                        }                        
+                        }
+                        if (debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
+                        {
+                            _debugInterface.Send(new DebugCommand.Flush());
+                        }
                     }
                 }
             }
