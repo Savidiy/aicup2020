@@ -319,15 +319,6 @@ namespace Aicup2020
         {
             _playerView = playerView;
             _debugInterface = debugInterface;
-            if (debugInterface == null)
-            {
-                debugOptions[(int)DebugOptions.canDrawGetAction] = false;
-                debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false; // отображение отладочной информации на стадии debugUpdate
-            } else
-            {
-                _debugInterface.Send(new DebugCommand.Clear());
-                _debugInterface.Send(new DebugCommand.SetAutoFlush(false));
-            }
                 
             #region first initialization arrays and lists (once)
             if (needPrepare == true)
@@ -339,7 +330,9 @@ namespace Aicup2020
                 needPrepare = false;
                 fogOfWar = _playerView.FogOfWar;
                 Prepare();
+
             }
+
             #endregion
 
             #region calc statistics and informations
@@ -392,8 +385,19 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = true;
 
-
             debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
+
+
+            if (_debugInterface == null)
+            {
+                debugOptions[(int)DebugOptions.canDrawGetAction] = false;
+                debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false; // отображение отладочной информации на стадии debugUpdate
+            }
+            else
+            {
+                _debugInterface.Send(new DebugCommand.Clear());
+                _debugInterface.Send(new DebugCommand.SetAutoFlush(false));
+            }
             #endregion
 
             #region init arrays
@@ -2336,7 +2340,7 @@ namespace Aicup2020
                                 //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
                             }
                         }
-                        if (debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
+                        if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
                         {
                             _debugInterface.Send(new DebugCommand.Flush());
                         }
