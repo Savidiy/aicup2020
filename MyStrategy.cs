@@ -2402,19 +2402,20 @@ namespace Aicup2020
                                 freePlaceInIndexGroup[c.index] = 1;
                             }
                         }
-                        foreach (var id in borderMansId) // убираем тех кто стоит на границе
-                        {
-                            int x = entityMemories[id].myEntity.Position.X;
-                            int y = entityMemories[id].myEntity.Position.Y;
-                            foreach (var c in findCells)
-                            {
-                                if (c.x == x && c.y == y)
-                                {
-                                    freePlaceInIndexGroup[c.index]--;
-                                    break;
-                                }
-                            }
-                        }
+                        // не проверяется, так как для Бордеров не сохздаютяс клетки поиска
+                        //foreach (var id in borderMansId) // убираем тех кто стоит на границе
+                        //{
+                        //    int x = entityMemories[id].myEntity.Position.X;
+                        //    int y = entityMemories[id].myEntity.Position.Y;
+                        //    foreach (var c in findCells)
+                        //    {
+                        //        if (c.x == x && c.y == y)
+                        //        {
+                        //            freePlaceInIndexGroup[c.index]--;
+                        //            break;
+                        //        }
+                        //    }
+                        //}
                         #endregion
 
                         // начинаем искать свободных строителей
