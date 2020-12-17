@@ -1758,7 +1758,8 @@ namespace Aicup2020
                     case IntentionType.IntentionRetreatBuilders:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            OrderRetreatBuilderFromEnemy(id);
+                            entityMemories[id].OrderTryRetreat(); 
+                            //OrderRetreatBuilderFromEnemy(id);
                         }
                         break;
                     case IntentionType.IntentionMyBuiAttackEnemyBui:
