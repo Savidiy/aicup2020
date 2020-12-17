@@ -39,7 +39,8 @@ namespace Aicup2020
         List<int> needRepairBuildingIdList = new List<int>();
         List<int> needRepairUnitsIdList = new List<int>();        
 
-        enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat, canDrawDebugUpdate, allOptionsCount }
+        enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat, drawPotencAttack,
+            canDrawDebugUpdate, allOptionsCount }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
 
         PlayerView _playerView;
@@ -203,6 +204,113 @@ namespace Aicup2020
         }
         EnemyDangerCell[][] enemyDangerCells;
 
+        class PotencAttackCell
+        {
+            public int rangersAim;
+            public int rangersWarning;
+            public int meleesAim;
+            public int meleesWarning;
+            public int turretsAim;
+            public bool drawn;
+            public PotencAttackCell()
+            {
+                Reset();
+            }
+            public void Reset()
+            {
+                rangersAim = rangersWarning = meleesAim = meleesWarning = turretsAim = 0;
+                drawn = false;
+            }
+            public bool TryDraw()
+            {
+                if (drawn == true)
+                {
+                    drawn = false;
+                    return true;
+                }
+                return false;
+            }
+        }
+        class PotencAttackMap
+        {
+            PotencAttackCell[,] _potencAttackMap;
+            int _mapSize;
+
+            public PotencAttackMap(int mapS)
+            {
+                _mapSize = mapS;
+                _potencAttackMap = new PotencAttackCell[_mapSize, _mapSize];
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _potencAttackMap[x, y] = new PotencAttackCell();
+                    }
+                }
+            }
+
+            public PotencAttackCell this[int x, int y]
+            {
+                get {
+                    if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                        return _potencAttackMap[x, y];
+                    else
+                        return null;
+                }
+            }
+            public void Reset()
+            {
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _potencAttackMap[x, y].Reset();
+                    }
+                }
+            }
+            public void AddCell(int x, int y, EntityType entityType, bool aim = true)
+            {
+                if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                {
+                    switch (entityType)
+                    {
+                        //case EntityType.BuilderUnit:
+                        //    if (aim)
+                        //        _potencAttackMap[x, y].buildersAim++;
+                        //    else
+                        //        enemyDangerCells[x][y].buildersWarning++;
+                        //    break;
+                        case EntityType.MeleeUnit:
+                            if (aim)
+                                _potencAttackMap[x, y].meleesAim++;
+                            else
+                                _potencAttackMap[x, y].meleesWarning++;
+                            break;
+                        case EntityType.RangedUnit:
+                            if (aim)
+                                _potencAttackMap[x, y].rangersAim++;
+                            else
+                                _potencAttackMap[x, y].rangersWarning++;
+                            break;
+                        case EntityType.Turret:
+                            if (aim)
+                                _potencAttackMap[x, y].turretsAim++;
+                            break;
+                    }
+                }
+            }
+            public bool TryDraw(int x, int y)
+            {
+                if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                {
+                    return _potencAttackMap[x, y].TryDraw();
+                }
+                return false;
+            }
+        }
+        PotencAttackMap potencAttackMap;
+        
+
         int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
         float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
 
@@ -352,6 +460,8 @@ namespace Aicup2020
             CheckDeadResourceOnCurrentVisibleMap();
             GenerateResourcePotentialField();
             GenerateBuildBarrierMap();
+            GeneratePotencAttackMap();
+
             iHaveActiveRangedBase = false;
             foreach (var id in basicEntityIdGroups[EntityType.RangedBase].members)
             {
@@ -380,6 +490,9 @@ namespace Aicup2020
             SaveEntitiesMemory(); 
             if (debugOptions[(int)DebugOptions.canDrawGetAction])
             {
+                if (debugOptions[(int)DebugOptions.drawPotencAttack] == true)
+                    DrawPotencMap(3);
+
                 _debugInterface.Send(new DebugCommand.Flush());
             }
 
@@ -392,8 +505,9 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
             debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
-            debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
-            debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = true;
+            debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = false;
+            debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
+            debugOptions[(int)DebugOptions.drawPotencAttack] = true;
 
             debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
 
@@ -420,7 +534,6 @@ namespace Aicup2020
             resourcePotentialField = new int[mapSize][];
             nextPositionMyUnitsMap = new int[mapSize][];
 
-            
             for (var i = 0; i < mapSize; i++)
             {
                 cellWithIdAny[i] = new int[mapSize];
@@ -434,6 +547,7 @@ namespace Aicup2020
                 // auto zeroing all when created
             }
 
+            potencAttackMap = new PotencAttackMap(mapSize);
             buildBarrierMap = new BuildMapCell[mapSize, mapSize];
             for (int x = 0; x < mapSize; x++)
             {
@@ -854,6 +968,205 @@ namespace Aicup2020
                         //}
                         #endregion
                  _debugInterface.Send(new DebugCommand.Flush());
+            }
+        }
+        void GeneratePotencAttackMap()
+        {
+            potencAttackMap.Reset();
+
+            foreach(var p in enemiesById)
+            {
+                EntityType entityType = p.Value.EntityType;
+                if (entityType == EntityType.MeleeUnit || entityType == EntityType.RangedUnit)
+                {
+                    for (int rludc = 0; rludc < 5; rludc++)
+                    {
+                        int attackRange = properties[entityType].Attack.Value.AttackRange;
+                        int size = properties[entityType].Size;
+                        int sx = p.Value.Position.X;
+                        int sy = p.Value.Position.Y;
+                        if (rludc == 0) sx++;
+                        else if (rludc == 1) sx--;
+                        else if (rludc == 2) sy++;
+                        else if (rludc == 3) sy--;
+                        // rludc == 4 - is center cell. sc, sy, not changed
+
+                        if (sx >= 0 && sx < mapSize && sy >= 0 && sy < mapSize)
+                        {
+                            if (cellWithIdOnlyBuilding[sx][sy] < 0) // нельзя ходить в здания и ресурсы
+                            {
+                                int sxRight = sx + size - 1;
+                                int syUp = sy + size - 1;
+                                for (int si = 0; si < size; si++)
+                                {
+                                    //my base
+                                    for (int siy = 0; siy < size; siy++)
+                                    {
+                                        // сам себе не угрожает
+                                        //AddEnemyDangerValueToCellSafe(sx + si, sy + siy, entityType, true);
+                                    }
+
+                                    //straight
+                                    for (int di = 1; di <= attackRange; di++)
+                                    {
+                                        //potencAttackMap.AddCell(sx - di, sy + si, entityType);
+                                        potencAttackMap.AddCell(sx - di, sy + si, entityType);// left
+                                        potencAttackMap.AddCell(sx + si, sy - di, entityType);// down
+                                        potencAttackMap.AddCell(sxRight + di, sy + si, entityType);// right
+                                        potencAttackMap.AddCell(sx + si, syUp + di, entityType);// up
+                                    }
+                                }
+                                //diagonal quarter
+                                for (int aa = 1; aa <= attackRange - 1; aa++)
+                                {
+                                    for (int bb = 1; bb <= attackRange - aa; bb++)
+                                    {
+                                        potencAttackMap.AddCell(sx - aa, sy - bb, entityType);//left-down
+                                        potencAttackMap.AddCell(sx - aa, syUp + bb, entityType);//left-up
+                                        potencAttackMap.AddCell(sxRight + aa, syUp + bb, entityType);//right-up
+                                        potencAttackMap.AddCell(sxRight + aa, sy - bb, entityType);//right-down
+                                    }
+                                }
+
+                                //warning diagonal
+                                for (int cc = 0; cc <= attackRange; cc++)
+                                {
+                                    potencAttackMap.AddCell(sx - attackRange - 1 + cc, sy - cc, entityType, false);//left-down
+                                    potencAttackMap.AddCell(sx - cc, syUp + attackRange + 1 - cc, entityType, false);//left-up
+                                    potencAttackMap.AddCell(sxRight + attackRange + 1 - cc, syUp + cc, entityType, false);//right-up
+                                    potencAttackMap.AddCell(sxRight + cc, sy - attackRange - 1 + cc, entityType, false);//right-down
+                                }
+                            }
+                        }
+                    }
+                } 
+                else if (entityType == EntityType.Turret)
+                {
+                    int attackRange = properties[entityType].Attack.Value.AttackRange;
+                    int size = properties[entityType].Size;
+                    int sx = p.Value.Position.X;
+                    int sy = p.Value.Position.Y;
+                    int sxRight = sx + size - 1;
+                    int syUp = sy + size - 1;
+                    for (int si = 0; si < size; si++)
+                    {
+                        //my base
+                        for (int siy = 0; siy < size; siy++)
+                        {
+                            // сам себе не угрожает
+                            //AddEnemyDangerValueToCellSafe(sx + si, sy + siy, entityType, true);
+                        }
+
+                        //straight
+                        for (int di = 1; di <= attackRange; di++)
+                        {                            
+                            potencAttackMap.AddCell(sx - di, sy + si, entityType);// left
+                            potencAttackMap.AddCell(sx + si, sy - di, entityType);// down
+                            potencAttackMap.AddCell(sxRight + di, sy + si, entityType);// right
+                            potencAttackMap.AddCell(sx + si, syUp + di, entityType);// up
+                        }
+                    }
+                    //diagonal quarter
+                    for (int aa = 1; aa <= attackRange - 1; aa++)
+                    {
+                        for (int bb = 1; bb <= attackRange - aa; bb++)
+                        {
+                            potencAttackMap.AddCell(sx - aa, sy - bb, entityType);//left-down
+                            potencAttackMap.AddCell(sx - aa, syUp + bb, entityType);//left-up
+                            potencAttackMap.AddCell(sxRight + aa, syUp + bb, entityType);//right-up
+                            potencAttackMap.AddCell(sxRight + aa, sy - bb, entityType);//right-down
+                        }
+                    }
+
+                    //warning diagonal
+                    for (int cc = 0; cc <= attackRange; cc++)
+                    {
+                        potencAttackMap.AddCell(sx - attackRange - 1 + cc, sy - cc, entityType, false);//left-down
+                        potencAttackMap.AddCell(sx - cc, syUp + attackRange + 1 - cc, entityType, false);//left-up
+                        potencAttackMap.AddCell(sxRight + attackRange + 1 - cc, syUp + cc, entityType, false);//right-up
+                        potencAttackMap.AddCell(sxRight + cc, sy - attackRange - 1 + cc, entityType, false);//right-down
+                    }
+                    
+                    potencAttackMap.AddCell(sx - attackRange - 1, syUp, entityType, false);//left
+                    potencAttackMap.AddCell(sxRight, syUp + attackRange + 1, entityType, false);//up
+                    potencAttackMap.AddCell(sxRight + attackRange + 1, sy, entityType, false);//right
+                    potencAttackMap.AddCell(sx, sy - attackRange - 1, entityType, false);//down                    
+                }
+            }
+        }
+        void DrawPotencMap(int dist)
+        {
+            foreach (var p in entityMemories)
+            {
+                EntityType entityType = p.Value.myEntity.EntityType;
+                if (properties[entityType].CanMove == true)
+                {
+                    int sx = p.Value.myEntity.Position.X;
+                    int sy = p.Value.myEntity.Position.Y;
+                    int flag = 0;   //  /2  \3
+                    int dx = 1;     //  \1  /0
+                    int dy = 0; 
+                    for (int step = 1; step <= dist;)
+                    {
+                        //рисуем
+                        int nx = sx + dx;
+                        int ny = sy + dy;
+                        if (potencAttackMap.TryDraw(nx, ny))
+                        {
+                            PotencAttackCell cell = potencAttackMap[nx, ny];
+                            int sumAim = cell.meleesAim + cell.rangersAim + cell.turretsAim;
+                            int sumWarning = cell.meleesWarning + cell.rangersWarning;
+                            int textSize = 16;
+                            if (sumAim > 0 && sumWarning > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx + 0.45f, ny + 0.2f), new Vec2Float(0, 0), colorRed);
+                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, sumAim.ToString(), 1f, textSize)));
+                                position = new ColoredVertex(new Vec2Float(nx + 0.55f, ny + 0.2f), new Vec2Float(0, 0), colorBlack);
+                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, sumWarning.ToString(), 0, textSize)));
+                            }
+                            else if (sumAim > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx + 0.5f, ny + 0.2f), new Vec2Float(0, 0), colorRed);
+                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, sumAim.ToString(), 0.5f, textSize)));
+                            } else if (sumWarning > 0)
+                            {
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx + 0.5f, ny + 0.2f), new Vec2Float(0, 0), colorBlack);
+                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, sumWarning.ToString(), 0.5f, textSize)));
+                            }
+                        }
+
+                        //двигаем цель
+                        if (flag == 0)
+                        {
+                            dx--;
+                            dy--;
+                            if (dx == 0) flag = 1;
+                        }
+                        else if (flag == 1)
+                        {
+                            dx--;
+                            dy++;
+                            if (dy == 0) flag = 2;
+                        }
+                        else if (flag == 2)
+                        {
+                            dx++;
+                            dy++;
+                            if (dx == 0) flag = 3;
+                        }
+                        else if (flag == 3)
+                        {
+                            dx++;
+                            dy--;
+                            if (dy == 0)
+                            {
+                                flag = 0;
+                                dx++;
+                                step++;
+                            }
+                        }
+                    }
+                }
             }
         }
 
