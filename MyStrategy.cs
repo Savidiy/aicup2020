@@ -1189,7 +1189,19 @@ namespace Aicup2020
             bool needMakeRangedBase = false;
             if (basicEntityIdGroups[EntityType.RangedBase].members.Count == 0)
             {
-                if (_playerView.CurrentTick > 200)
+                int maxEnemyResources = 0;
+                foreach(var pl in _playerView.Players)
+                {
+                    if (pl.Id != myId)
+                    {
+                        if (pl.Resource > maxEnemyResources)
+                        {
+                            maxEnemyResources = pl.Resource;
+                        }
+                    }
+                }
+
+                if (_playerView.CurrentTick > 200 || maxEnemyResources > 300)
                 {
                     for (int x = 0; x < mapSize; x++)
                     {
