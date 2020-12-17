@@ -39,7 +39,8 @@ namespace Aicup2020
         List<int> needRepairBuildingIdList = new List<int>();
         List<int> needRepairUnitsIdList = new List<int>();        
 
-        enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat, drawPotencAttack,
+        enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat, 
+            drawPotencAttack, drawOptAttack,
             canDrawDebugUpdate, allOptionsCount }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
 
@@ -508,6 +509,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = false;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
             debugOptions[(int)DebugOptions.drawPotencAttack] = false;
+            debugOptions[(int)DebugOptions.drawOptAttack] = true;
 
             debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
 
@@ -1782,9 +1784,552 @@ namespace Aicup2020
 
             
         }
+
+        class Target
+        {
+            public int _id;
+            public EntityType _entityType;
+            public int _health;
+            public int _x;
+            public int _y;
+            public int _dist;
+            public Target(int id, EntityType type, int health, int x, int y, int dist)
+            {
+                _id = id;
+                _entityType = type;
+                _health = health;
+                _x = x;
+                _y = y;
+                _dist = dist;
+            }
+        }
+        class EnemyToOpt
+        {
+            public List<Target> _targetsMyUnits;
+            public Target _me;
+            public EnemyToOpt(int id, EntityType type, int health, int x, int y)
+            {
+                _me = new Target(id, type, health, x, y, 0);
+                _targetsMyUnits = new List<Target>();
+            }
+            public void Add(int id, EntityType type, int health, int x, int y, int dist)
+            {
+                _targetsMyUnits.Add(new Target(id, type, health, x, y, dist));
+            }
+            public void Add(Target targetMyUnit)
+            {
+                _targetsMyUnits.Add(targetMyUnit);
+            }
+            public int Count
+            {
+                get { return _targetsMyUnits.Count; }
+            }
+            public Target this[int i]
+            {
+                get { return _targetsMyUnits[i]; }
+                set { _targetsMyUnits[i] = value; }
+            }
+        }
         void OptimizeOrderToAttackRM()
         {
+            int damageR = properties[EntityType.RangedUnit].Attack.Value.Damage;
+            int damageM = properties[EntityType.MeleeUnit].Attack.Value.Damage;
             // рассматриваем тех кто уже воюет
+            // распределяем цели
+            Dictionary<int, List<EnemyToOpt>> myRangers = new Dictionary<int, List<EnemyToOpt>>();
+            //List<int> enemyRangersId = new List<int>();
+            //List<int> enemyMeleesId = new List<int>();
+            Dictionary<int, EnemyToOpt> enemyRangers = new Dictionary<int, EnemyToOpt>();
+            Dictionary<int, EnemyToOpt> enemyMelees = new Dictionary<int, EnemyToOpt>();
+
+            foreach (var en in entityMemories)
+            {
+                if (en.Value.myEntity.EntityType == EntityType.RangedUnit)
+                {
+                    myRangers.Add(en.Key, new List<EnemyToOpt>());
+                }
+            }
+            foreach(var en in enemiesById)
+            {
+                if (en.Value.EntityType == EntityType.RangedUnit)
+                {
+                   // enemyRangersId.Add(en.Key);
+                    enemyRangers.Add(en.Key, new EnemyToOpt(en.Key, en.Value.EntityType, en.Value.Health, en.Value.Position.X, en.Value.Position.Y));
+                } else if (en.Value.EntityType == EntityType.MeleeUnit)
+                {
+                    //enemyMeleesId.Add(en.Key);
+                    enemyMelees.Add(en.Key, new EnemyToOpt(en.Key, en.Value.EntityType, en.Value.Health, en.Value.Position.X, en.Value.Position.Y));
+                }
+            }
+
+            // собираем пары всех кто на дистанции до 5 включительно
+            foreach (var my in myRangers)
+            {
+                int x1 = entityMemories[my.Key].myEntity.Position.X;
+                int y1 = entityMemories[my.Key].myEntity.Position.Y;
+
+                foreach (var en in enemyRangers)
+                {
+                    int x2 = enemiesById[en.Key].Position.X;
+                    int y2 = enemiesById[en.Key].Position.Y;
+                    int dist = Abs(x1 - x2) + Abs(y1 - y2);
+                    if (dist <= 5)
+                    {                        
+                        my.Value.Add(en.Value);
+                        en.Value._me._dist = dist;
+                        en.Value.Add(new Target(my.Key, EntityType.RangedUnit, entityMemories[my.Key].myEntity.Health, x1, y1, dist));
+                    }
+                }
+
+                foreach (var en in enemyMelees)
+                {
+                    int x2 = enemiesById[en.Key].Position.X;
+                    int y2 = enemiesById[en.Key].Position.Y;
+                    int dist = Abs(x1 - x2) + Abs(y1 - y2);
+                    if (dist <= 5)
+                    {
+                        my.Value.Add(en.Value);
+                        en.Value._me._dist = dist;
+                        en.Value.Add(new Target(my.Key, EntityType.RangedUnit, entityMemories[my.Key].myEntity.Health, x1, y1, dist));
+                    }
+                }
+            }
+
+            #region чистим списки кто остался с пустыми парами
+            List<int> deleteKeys = new List<int>();
+            foreach(var i in myRangers)
+            {
+                if (i.Value.Count == 0)
+                    deleteKeys.Add(i.Key);
+            }
+            foreach(var i in deleteKeys)
+            {
+                myRangers.Remove(i);
+            }
+            deleteKeys.Clear();
+            foreach (var i in enemyMelees)
+            {
+                if (i.Value.Count == 0)
+                    deleteKeys.Add(i.Key);
+            }
+            foreach (var i in deleteKeys)
+            {
+                enemyMelees.Remove(i);
+            }
+            deleteKeys.Clear();
+            foreach (var i in enemyRangers)
+            {
+                if (i.Value.Count == 0)
+                    deleteKeys.Add(i.Key);
+            }
+            foreach (var i in deleteKeys)
+            {
+                enemyRangers.Remove(i);
+            }
+            #endregion
+
+            #region определяем действия тех, кто может стрелять только в одного c равной (стрелок в стрелка) или сильной позиции (стрелок в мечника с дистанции > 2)
+            //bool wasRemoved;
+            bool wasKilled;
+            do
+            {
+                //wasRemoved = false;
+                wasKilled = false;
+                deleteKeys.Clear();
+                foreach (var i in myRangers)
+                {
+                    if (i.Value.Count == 1)
+                    {
+                        if (i.Value[0]._me._entityType == EntityType.RangedUnit
+                            || (i.Value[0]._me._entityType == EntityType.MeleeUnit && i.Value[0]._targetsMyUnits[i.Key]._dist > 2))
+                        {
+                            if (i.Value[0]._me._health > 0)
+                            {
+                                // remove my ranger, he do that he can
+                                deleteKeys.Add(i.Key);
+                                // create order
+                                entityMemories[i.Key].OrderAttack(i.Value[0]._me._id, null, true);
+                                // draw attack line
+                                if (debugOptions[(int)DebugOptions.drawOptAttack])
+                                {
+                                    DrawLineOnce(
+                                        entityMemories[i.Key].myEntity.Position.X + 0.3f,
+                                        entityMemories[i.Key].myEntity.Position.Y + 0.5f,
+                                        i.Value[0]._me._x + 0.3f,
+                                        i.Value[0]._me._y + 0.5f,
+                                        colorBlack,
+                                        colorBlack);
+                                }
+                                // damage health
+                                if (enemyMelees.ContainsKey(i.Value[0]._me._id))
+                                {
+                                    enemyMelees[i.Value[0]._me._id]._me._health -= damageR;
+                                    if (enemyMelees[i.Value[0]._me._id]._me._health <= 0)
+                                        wasKilled = true;
+                                }
+                                else
+                                if (enemyRangers.ContainsKey(i.Value[0]._me._id))
+                                {
+                                    enemyRangers[i.Value[0]._me._id]._me._health -= damageR;
+                                    if (enemyRangers[i.Value[0]._me._id]._me._health <= 0)
+                                        wasKilled = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                //if (deleteKeys.Count > 0)
+                //    wasRemoved = true;
+                foreach (var i in deleteKeys) // убираем таких парней
+                {
+                    myRangers.Remove(i);
+                }
+                //теперь вычеркиваем убитых и еще раз проверяем на наличие одной цели
+                if (wasKilled)
+                {
+                    deleteKeys.Clear();
+                    foreach (var i in enemyMelees)
+                    {
+                        if (i.Value._me._health <= 0)
+                        {
+                            deleteKeys.Add(i.Key);
+                            foreach (var k in i.Value._targetsMyUnits)
+                            {
+                                if (myRangers.ContainsKey(k._id))
+                                {
+                                    if (myRangers[k._id].Contains(i.Value))
+                                        myRangers[k._id].Remove(i.Value);
+                                }
+                            }
+                        }
+                    }
+                    foreach (var id in deleteKeys)
+                    {
+                        enemyMelees.Remove(id);
+                    }
+                    deleteKeys.Clear();
+                    foreach (var i in enemyRangers)
+                    {
+                        if (i.Value._me._health <= 0)
+                        {
+                            deleteKeys.Add(i.Key);
+                            foreach (var k in i.Value._targetsMyUnits)
+                            {
+                                if (myRangers.ContainsKey(k._id))
+                                {
+                                    if (myRangers[k._id].Contains(i.Value))
+                                        myRangers[k._id].Remove(i.Value);
+                                }
+                            }
+                        }
+                    }
+                    foreach (var id in deleteKeys)
+                    {
+                        enemyRangers.Remove(id);
+                    }
+                }
+            } while (wasKilled == true);
+            #endregion
+
+            #region максимизируем количество убийств
+
+            //собираем первую группу
+            if (myRangers.Count > 0)
+            {
+                List<int> attackers = new List<int>();
+                List<int> targets = new List<int>();
+                var num = myRangers.GetEnumerator();
+                num.MoveNext();
+                attackers.Add(num.Current.Key);
+                bool wasAdded;
+                int a = 0;
+                int t = 0;
+                do
+                {
+                    wasAdded = false;
+                    for (; a < attackers.Count; a++)
+                    {
+                        foreach (var en in myRangers[attackers[a]])
+                        {
+                            if (targets.Contains(en._me._id) == false)
+                            {
+                                targets.Add(en._me._id);
+                                wasAdded = true;
+                            }
+                        }
+                    }
+                    for (; t < targets.Count; t++)
+                    {
+                        if (enemyMelees.ContainsKey(targets[t]))
+                        {
+                            foreach (var me in enemyMelees[targets[t]]._targetsMyUnits)
+                            {
+                                if (attackers.Contains(me._id) == false)
+                                {
+                                    attackers.Add(me._id);
+                                    wasAdded = true;
+                                }
+                            }
+                        } else if (enemyRangers.ContainsKey(targets[t]))
+                        {
+                            foreach (var me in enemyRangers[targets[t]]._targetsMyUnits)
+                            {
+                                if (attackers.Contains(me._id) == false)
+                                {
+                                    attackers.Add(me._id);
+                                    wasAdded = true;
+                                }
+                            }
+                        }
+                    }
+                } while (wasAdded == true);
+                // получили группу
+                int sizeA = attackers.Count;
+                int sizeT = targets.Count;
+                bool[,] arrayPair = new bool[sizeA, sizeT];
+                for (int att = 0; att < sizeA; att++)
+                {
+                    for (int tar = 0; tar < sizeT; tar++)
+                    {
+                        arrayPair[att, tar] = false;
+                    }
+                }
+                for(int i = 0; i < attackers.Count; i++)
+                {
+                    foreach(var en in myRangers[attackers[i]])
+                    {
+                        arrayPair[i, targets.IndexOf(en._me._id)] = true;
+                    }
+                }
+                int[] targetsHealth = new int[sizeT];
+                for (int i = 0; i < sizeT; i++)
+                {
+                    if (enemyMelees.ContainsKey(targets[i]))
+                    {
+                        targetsHealth[i] = System.Convert.ToInt32(System.Math.Ceiling(((float)enemyMelees[targets[i]]._me._health) / ((float)damageR)));
+                    } else if (enemyRangers.ContainsKey(targets[i]))
+                    {
+                        targetsHealth[i] = System.Convert.ToInt32(System.Math.Ceiling(((float)enemyRangers[targets[i]]._me._health) / ((float)damageR)));
+                    }
+                }
+
+                // вариант 1 рукопашник на близкой дистанции
+
+                if (targets.Count == 1)
+                {
+                    if (enemyMelees.ContainsKey(targets[0]))
+                    {
+                        if (attackers.Count * damageR >= enemyMelees[targets[0]]._me._health)
+                        {
+                            // fire all
+                            foreach (var id in attackers)
+                            {
+                                entityMemories[id].OrderAttack(enemyMelees[targets[0]]._me._id, null, true);
+                                enemyMelees[targets[0]]._me._health -= damageR;
+                            }
+                        }
+                        else
+                        {                            
+                            foreach (var id in attackers)
+                            {                                
+                                if (myRangers[id][targets[0]]._targetsMyUnits[id]._dist <= 2)// retreat nearest
+                                {
+                                    entityMemories[id].OrderTryRetreat();
+                                }
+                                else // fire another
+                                {
+                                    entityMemories[id].OrderAttack(enemyMelees[targets[0]]._me._id, null, true);
+                                    enemyMelees[targets[0]]._me._health -= damageR;
+                                }
+                            }
+                            // remove attackers
+                            foreach(var id in attackers)
+                            {
+                                myRangers.Remove(id);
+                            }
+
+                        }
+                    }
+                }
+                else
+                {
+
+                    // вариант 2 врагов больше
+
+                    List<int[]> attackVariants = new List<int[]>();
+
+                    CalcMaxKillFromArray(sizeA, sizeT, arrayPair, targetsHealth);
+
+                    //отдаем приказы по любому варианту
+                    if (attackVariants.Count > 0)
+                    {
+                        int index = 0; // выбираем первый варинат
+                        // исполняем вариант
+                        for (int kk = 0; kk < sizeA; kk++)
+                        {
+                            int enemyId = targets[attackVariants[index][kk]];
+                            entityMemories[attackers[kk]].OrderAttack(enemyId, null, true);
+                            if (enemyMelees.ContainsKey(enemyId))
+                            {
+                                enemyMelees[enemyId]._me._health -= damageR;
+
+                            }
+                            else if (enemyRangers.ContainsKey(enemyId))
+                            {
+                                enemyRangers[enemyId]._me._health -= damageR;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // очищаем список, так как ничего не придумалось
+                        ;
+                    }
+                    // очищаем список атаковавших
+                    foreach (var id in attackers)
+                    {
+                        myRangers.Remove(id);
+                    }
+                    // очищаем список врагов
+                    deleteKeys.Clear();
+                    foreach (var i in enemyMelees)
+                    {
+                        if (i.Value._me._health <= 0)
+                        {
+                            deleteKeys.Add(i.Key);
+                            foreach (var k in i.Value._targetsMyUnits)
+                            {
+                                if (myRangers.ContainsKey(k._id))
+                                {
+                                    if (myRangers[k._id].Contains(i.Value))
+                                        myRangers[k._id].Remove(i.Value);
+                                }
+                            }
+                        }
+                    }
+                    foreach (var id in deleteKeys)
+                    {
+                        enemyMelees.Remove(id);
+                    }
+                    deleteKeys.Clear();
+                    foreach (var i in enemyRangers)
+                    {
+                        if (i.Value._me._health <= 0)
+                        {
+                            deleteKeys.Add(i.Key);
+                            foreach (var k in i.Value._targetsMyUnits)
+                            {
+                                if (myRangers.ContainsKey(k._id))
+                                {
+                                    if (myRangers[k._id].Contains(i.Value))
+                                        myRangers[k._id].Remove(i.Value);
+                                }
+                            }
+                        }
+                    }
+                    foreach (var id in deleteKeys)
+                    {
+                        enemyRangers.Remove(id);
+                    }
+                }
+                
+            }
+
+            
+
+            #endregion
+
+            #region определяем движение остальных стрелков
+
+            #endregion
+
+        }
+        /// <summary>
+        /// Определяет самые эффективные способы распределения целей, чтобы поразить максимум целей
+        /// </summary>
+        /// <param name="sizeA">количество стрелков</param>
+        /// <param name="sizeT">количество целей</param>
+        /// <param name="arrayPair">таблица [стрелки, цели], истина если стрелок может попасть в цель под этим номером</param>
+        /// <param name="targetsHealth">Жизни у целей, 1 выстрел 1 жизнь</param>
+        /// <returns>возвращает лист с массивом int[sizeA] где стрелкам по порядку укзаны цели, присутствуют только варианыт с максимальным убийством целей</returns>
+        List<int[]> CalcMaxKillFromArray(int sizeA, int sizeT, bool[,] arrayPair, int[] targetsHealth)
+        {
+            List<int[]> variants = new List<int[]>(sizeT);
+            int count = 0;
+            // собираем все варианты
+            for (int a = 0; a < sizeA; a++)
+            {
+                count = variants.Count;
+                for (int t = 0; t < sizeT; t++)
+                {
+                    if (arrayPair[a,t] == true)
+                    {
+                        if (a == 0)
+                        {
+                            int[] v = new int[sizeA]; // создаем первые варианты
+                            v[a] = t;
+                            variants.Add(v);
+                        } else
+                        {
+                            for (int i = 0; i < count; i++)//перебераем все варианты для а стрелков
+                            {
+                                int[] v = new int[sizeA]; // копируем вариант
+                                variants[i].CopyTo(v, 0);
+
+                                int sum = 0;// не учитываем текущий выбор
+                                for (int k = 0; k < a; k++)
+                                {
+                                    if (v[k] == t)
+                                        sum++;
+                                }
+                                if (sum < targetsHealth[t])
+                                {
+                                    v[a] = t; // учитываем наш выбор
+                                    variants.Add(v); // добавляем вариант
+                                }
+                            }
+                        }
+                    }
+                }
+                variants.RemoveRange(0, count); // убираем варианты с меньшим количеством стрелков
+            }
+            // считаем количество убйиств для каждого варианта
+            List<int> killsArray = new List<int>(); // параллельный массив, который содержит количество убийств в варианте
+            for (int i = 0; i < variants.Count; i++)
+            {
+                int[] damage = new int[sizeT];
+                foreach(var t in variants[i])
+                {
+                    damage[t]++;
+                }
+                int kills = 0;
+                for (int t = 0; t <sizeT; t++)
+                {
+                    if (targetsHealth[t] == damage[t])
+                        kills++;
+                }
+                killsArray.Add(kills);
+            }
+            // выбираем лучшие варианты
+            int max = 0;
+            foreach(var n in killsArray)
+            {
+                if (n > max)
+                    max = n;
+            }
+            for (int i = 0; i < variants.Count;)
+            {
+                if (killsArray[i] < max)
+                {
+                    variants.RemoveAt(i);
+                    killsArray.RemoveAt(i);
+                } else
+                {
+                    i++;
+                }
+            }
+
+            return variants;
         }
         void OptimizeOrderToRetreat()
         {
@@ -2808,6 +3353,8 @@ namespace Aicup2020
                         moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
                         moveAction.Target = em.Value.movePos;
 
+                        if (em.Value.targetId == null)
+                            throw new System.Exception("Пытаюсь чинить не получив Id!");
                         repairAction.Target = em.Value.targetId ?? 0;
                         actions.Add(em.Key, new EntityAction(moveAction, null, null, repairAction));
                         break;
@@ -2822,6 +3369,7 @@ namespace Aicup2020
                         actions.Add(em.Key, new EntityAction(moveAction, null, null, null));
                         break;
                     case EntityOrders.attack:
+                        attackAction.Target = em.Value.targetId;
                         attackAction.AutoAttack = em.Value.autoAttack;
                         actions.Add(em.Key, new EntityAction(null, null, attackAction, null));
                         break;
@@ -4752,7 +5300,7 @@ namespace Aicup2020
             moveFindClosestPosition = false;
             moveBreakThrough = false;
             autoAttack = new AutoAttack();
-            targetId = -1;
+            targetId = null;
             targetPos = new Vec2Int(-1, -1);
             movePos = new Vec2Int(-1, -1);
             order = EntityOrders.none;
@@ -4764,7 +5312,11 @@ namespace Aicup2020
             checkedNow = true;
             myEntity = entity;
         }
-
+        public void OrderTryRetreat()
+        {
+            order = EntityOrders.tryRetreat;
+            optimized = false;
+        }
         public void OrderCanRetreat(Vec2Int moveP, bool breakThrough, bool findClosestPosition, bool opt)
         {
             order = EntityOrders.canRetreat;
@@ -4810,7 +5362,7 @@ namespace Aicup2020
         }
         public void ResetTarget()
         {
-            targetId = -1;
+            targetId = null;
             targetPos = new Vec2Int(-1, -1);
             movePos = new Vec2Int(-1, -1);
             moveBreakThrough = false;
