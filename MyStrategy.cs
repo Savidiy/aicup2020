@@ -2602,34 +2602,34 @@ namespace Aicup2020
 
             //actions.Add(id, new EntityAction(moveAction, null, null, null));
         }
-        void OrderStartCreateBuilding(int id, Vec2Int posBuild, Vec2Int movePos, EntityType type)
-        {
-            entityMemories[id].order = EntityOrders.buildNow;
-            entityMemories[id].movePos = movePos;// new Vec2Int(posBuild.X + properties[type].Size / 2, posBuild.Y + properties[type].Size);
-            entityMemories[id].moveBreakThrough = false;
-            entityMemories[id].moveFindClosestPosition = true;
+        //void OrderStartCreateBuilding(int id, Vec2Int posBuild, Vec2Int movePos, EntityType type)
+        //{
+        //    entityMemories[id].order = EntityOrders.buildNow;
+        //    entityMemories[id].movePos = movePos;// new Vec2Int(posBuild.X + properties[type].Size / 2, posBuild.Y + properties[type].Size);
+        //    entityMemories[id].moveBreakThrough = false;
+        //    entityMemories[id].moveFindClosestPosition = true;
 
-            entityMemories[id].targetEntityType = type;
-            entityMemories[id].targetPos = posBuild;     
-        }
-        void OrderRepairBuilding(int id, int targetId)
-        {
+        //    entityMemories[id].targetEntityType = type;
+        //    entityMemories[id].targetPos = posBuild;     
+        //}
+        //void OrderRepairBuilding(int id, int targetId)
+        //{
             
-            entityMemories[id].order = EntityOrders.repairGo;
-            entityMemories[id].movePos = entityMemories[targetId].myEntity.Position;
-            entityMemories[id].moveBreakThrough = false;
-            entityMemories[id].moveFindClosestPosition = true;
-            entityMemories[id].targetId = targetId;
+        //    entityMemories[id].order = EntityOrders.repairGo;
+        //    entityMemories[id].movePos = entityMemories[targetId].myEntity.Position;
+        //    entityMemories[id].moveBreakThrough = false;
+        //    entityMemories[id].moveFindClosestPosition = true;
+        //    entityMemories[id].targetId = targetId;
 
-            ////repair
-            //MoveAction moveAction = new MoveAction();
-            //moveAction.BreakThrough = false;
-            //moveAction.FindClosestPosition = true;
-            //moveAction.Target = entityMemories[targetId].myEntity.Position;
+        //    ////repair
+        //    //MoveAction moveAction = new MoveAction();
+        //    //moveAction.BreakThrough = false;
+        //    //moveAction.FindClosestPosition = true;
+        //    //moveAction.Target = entityMemories[targetId].myEntity.Position;
 
-            //RepairAction repairAction = new RepairAction(targetId);
-            //actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
-        }
+        //    //RepairAction repairAction = new RepairAction(targetId);
+        //    //actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
+        //}
         void OrderRetreatBuilderFromEnemy(int id)
         {
             int ex = entityMemories[id].myEntity.Position.X;
@@ -2801,386 +2801,386 @@ namespace Aicup2020
             //actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
         }
 
-        int[,] FindPathMapForBuild(int sx, int sy, EntityType type)
-        {
-            int[,] pathMap = new int[mapSize, mapSize];
-            bool canBuildHere = true;
+        //int[,] FindPathMapForBuild(int sx, int sy, EntityType type)
+        //{
+        //    int[,] pathMap = new int[mapSize, mapSize];
+        //    bool canBuildHere = true;
 
-            int size = properties[type].Size;
-            int buildPoints = properties[type].MaxHealth;
+        //    int size = properties[type].Size;
+        //    int buildPoints = properties[type].MaxHealth;
 
-            //стартовое значение, которое будем уменьшать
-            int startWeight = mapSize * mapSize;
-            int minWeight = startWeight - buildPoints;
-            int WInside = 2;
-            int WBuilding = -1;
-            int WEnemy = -2;
-            int WResource = -3;
-            int WDanger = -10;
+        //    //стартовое значение, которое будем уменьшать
+        //    int startWeight = mapSize * mapSize;
+        //    int minWeight = startWeight - buildPoints;
+        //    int WInside = 2;
+        //    int WBuilding = -1;
+        //    int WEnemy = -2;
+        //    int WResource = -3;
+        //    int WDanger = -10;
 
-            List<int> borderMansId = new List<int>();
-            //добавляем стартовые клетки поиска вокруг места строительства + юнитов на границе + отмечаем непроходимые клетки (здания, ресурсы, враги)
-            List<XYWeight> findCells = new List<XYWeight>();
-            for (int m = 0; m < size; m++)
-            {
-                for (int h = 0; h < 4; h++)
-                {
-                    int fx = sx;
-                    int fy = sy;
-                    if (h == 0){
-                        fx = sx + m;
-                        fy = sy + size;
-                    } else if (h == 1)
-                    {
-                        fx = sx + m;
-                        fy = sy - 1;
-                    } else if (h == 2)
-                    {
-                        fx = sx - 1;
-                        fy = sy + m;
-                    } else if (h == 3)
-                    {
-                        fx = sx + size;
-                        fy = sy + m;
-                    }
-                    if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize) {
-                        int id = cellWithIdAny[fx][fy];
-                        if (id >= 0)
-                        {
-                            if (entityMemories.ContainsKey(id))
-                            {
-                                if (properties[entityMemories[id].myEntity.EntityType].CanMove)// только юниты, здания здесь не нужны
-                                { 
-                                    findCells.Add(new XYWeight(fx, fy, startWeight));
-                                    pathMap[fx, fy] = startWeight;
-                                    borderMansId.Add(id); // учитываем тех кто стоит на границе места строительства в том числе Могут быть войны
-                                } else
-                                {
-                                    pathMap[fx, fy] = WBuilding;
-                                }
-                            } else if (enemiesById.ContainsKey(id))
-                            {
-                                pathMap[fx, fy] = WEnemy;
-                            } else
-                            {
-                                pathMap[fx, fy] = WResource;
-                            }       
-                        } else
-                        {
-                            findCells.Add(new XYWeight(fx, fy, startWeight));
-                            pathMap[fx, fy] = startWeight;
-                        }
-                    }
-                }
-            }
+        //    List<int> borderMansId = new List<int>();
+        //    //добавляем стартовые клетки поиска вокруг места строительства + юнитов на границе + отмечаем непроходимые клетки (здания, ресурсы, враги)
+        //    List<XYWeight> findCells = new List<XYWeight>();
+        //    for (int m = 0; m < size; m++)
+        //    {
+        //        for (int h = 0; h < 4; h++)
+        //        {
+        //            int fx = sx;
+        //            int fy = sy;
+        //            if (h == 0){
+        //                fx = sx + m;
+        //                fy = sy + size;
+        //            } else if (h == 1)
+        //            {
+        //                fx = sx + m;
+        //                fy = sy - 1;
+        //            } else if (h == 2)
+        //            {
+        //                fx = sx - 1;
+        //                fy = sy + m;
+        //            } else if (h == 3)
+        //            {
+        //                fx = sx + size;
+        //                fy = sy + m;
+        //            }
+        //            if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize) {
+        //                int id = cellWithIdAny[fx][fy];
+        //                if (id >= 0)
+        //                {
+        //                    if (entityMemories.ContainsKey(id))
+        //                    {
+        //                        if (properties[entityMemories[id].myEntity.EntityType].CanMove)// только юниты, здания здесь не нужны
+        //                        { 
+        //                            findCells.Add(new XYWeight(fx, fy, startWeight));
+        //                            pathMap[fx, fy] = startWeight;
+        //                            borderMansId.Add(id); // учитываем тех кто стоит на границе места строительства в том числе Могут быть войны
+        //                        } else
+        //                        {
+        //                            pathMap[fx, fy] = WBuilding;
+        //                        }
+        //                    } else if (enemiesById.ContainsKey(id))
+        //                    {
+        //                        pathMap[fx, fy] = WEnemy;
+        //                    } else
+        //                    {
+        //                        pathMap[fx, fy] = WResource;
+        //                    }       
+        //                } else
+        //                {
+        //                    findCells.Add(new XYWeight(fx, fy, startWeight));
+        //                    pathMap[fx, fy] = startWeight;
+        //                }
+        //            }
+        //        }
+        //    }
 
-            // определяем сколько юнитов нам мешают строить здание 
-            // это могут быть только строители - нельзя начинать строить там где стоят войны, 
-            // но они могут быть на границе с местом строительства
-            List<int> insidersId = new List<int>();
-            for (int cx = sx; cx < sx + size; cx++)
-            {
-                for ( int cy = sy; cy < sy+size; cy++)
-                {
-                    pathMap[cx, cy] = WInside;
-                    if (cellWithIdAny[cx][cy] >= 0)
-                    { 
-                        // учитываем тех кто стоит внутри места строительства, 
-                        // !!!!!! считаем что войнов, зданий и врагов тут не может быть, по рпавилам выбора места строительства, только строители
-                        insidersId.Add(cellWithIdAny[cx][cy]);
-                    }
-                }
-            }
+        //    // определяем сколько юнитов нам мешают строить здание 
+        //    // это могут быть только строители - нельзя начинать строить там где стоят войны, 
+        //    // но они могут быть на границе с местом строительства
+        //    List<int> insidersId = new List<int>();
+        //    for (int cx = sx; cx < sx + size; cx++)
+        //    {
+        //        for ( int cy = sy; cy < sy+size; cy++)
+        //        {
+        //            pathMap[cx, cy] = WInside;
+        //            if (cellWithIdAny[cx][cy] >= 0)
+        //            { 
+        //                // учитываем тех кто стоит внутри места строительства, 
+        //                // !!!!!! считаем что войнов, зданий и врагов тут не может быть, по рпавилам выбора места строительства, только строители
+        //                insidersId.Add(cellWithIdAny[cx][cy]);
+        //            }
+        //        }
+        //    }
 
-            // объединяем стартовые ячейки в группы, у каждой группы соседей теперь должен быть одинаковый индекс (порядок номеров не важен, могут быть пропуски)
-            int lastIndex = 1; // 0 используется у пустых групп
-            for (int iter = 0; iter < findCells.Count; iter++)
-            {
-                int myIndex = findCells[iter].index;
-                if (myIndex == 0)
-                {
-                    myIndex = lastIndex;
-                    lastIndex++;
-                }
+        //    // объединяем стартовые ячейки в группы, у каждой группы соседей теперь должен быть одинаковый индекс (порядок номеров не важен, могут быть пропуски)
+        //    int lastIndex = 1; // 0 используется у пустых групп
+        //    for (int iter = 0; iter < findCells.Count; iter++)
+        //    {
+        //        int myIndex = findCells[iter].index;
+        //        if (myIndex == 0)
+        //        {
+        //            myIndex = lastIndex;
+        //            lastIndex++;
+        //        }
 
-                // ищем всех соседей и проверяем их индекс
-                int mx = findCells[iter].x;
-                int my = findCells[iter].y;
-                for (int i = iter + 1; i < findCells.Count; i++)
-                {
-                    int dist = Abs(mx - findCells[i].x) + Abs(my - findCells[i].y);
+        //        // ищем всех соседей и проверяем их индекс
+        //        int mx = findCells[iter].x;
+        //        int my = findCells[iter].y;
+        //        for (int i = iter + 1; i < findCells.Count; i++)
+        //        {
+        //            int dist = Abs(mx - findCells[i].x) + Abs(my - findCells[i].y);
                     
-                    if (dist == 1)// это мой сосед
-                    {
-                        if (findCells[i].index == 0)
-                        {
-                            findCells[i].index = myIndex;
-                        } else
-                        {
-                            // это старший брат, надо взять его индекс себе и всем кому уже присвоили мой индекс
-                            int newIndex = findCells[i].index;
-                            for (int n = 0; n < findCells.Count; n++)
-                            {
-                                if (findCells[n].index == myIndex)
-                                {
-                                    findCells[n].index = newIndex;
-                                }
-                            }
-                            myIndex = newIndex;
-                        }
-                    }
-                }
-            }         
+        //            if (dist == 1)// это мой сосед
+        //            {
+        //                if (findCells[i].index == 0)
+        //                {
+        //                    findCells[i].index = myIndex;
+        //                } else
+        //                {
+        //                    // это старший брат, надо взять его индекс себе и всем кому уже присвоили мой индекс
+        //                    int newIndex = findCells[i].index;
+        //                    for (int n = 0; n < findCells.Count; n++)
+        //                    {
+        //                        if (findCells[n].index == myIndex)
+        //                        {
+        //                            findCells[n].index = newIndex;
+        //                        }
+        //                    }
+        //                    myIndex = newIndex;
+        //                }
+        //            }
+        //        }
+        //    }         
 
-            // counter
-            int startCellCount = findCells.Count;
-            int startInsidersCount = insidersId.Count;
-            int startBorderMansCount = borderMansId.Count;
-            List<int> outsidersId = new List<int>();
-            if (startInsidersCount > 0) // надо выгонять внутренних парней
-            {
-                if (startInsidersCount + startBorderMansCount > startCellCount) // надо выталкивать людей наружу, им не хватает места внутри
-                {
-                    // значит здесь строить нельзя
-                    canBuildHere = false;
-                    #region закомментированный код
-                    //int diff = startInsidersCount + startBorderMansCount - startCellCount; //количество юнитов, которым не хватает места
-                    //bool stop = false;
-                    //int currentWeight = startWeight;
-                    //// проводим расширение зоны поиска НАРУЖУ, пока не найдем достаточное количество клеток или не упремся в то что все не поместятся
-                    //while(stop == false)
-                    //{
-                    //    for (int i = 0; i < findCells.Count; i++)
-                    //    {
-                    //        if (findCells[i].weight < currentWeight) // перешли к следующей группе удаленности от старта, надо провеирть хватает ли места
-                    //        {
-                    //            if (startInsidersCount + startBorderMansCount + outsidersId.Count >= i)
-                    //            { // у нас достаточно клеток, чтобы вместить в себя всех
-                    //                stop = true;
-                    //                break;
-                    //            } else
-                    //            { // у нас недостаточно клеток, значит проводим новую волну поиска
-                    //                currentWeight = findCells[i].weight;
-                    //            }
-                    //        } else // делаем поиск по соседям
-                    //        {
-                    //            int tx = findCells[i].x;
-                    //            int ty = findCells[i].y;
-                    //            int tw = findCells[i].weight;
-                    //            int ti = findCells[i].index;
+        //    // counter
+        //    int startCellCount = findCells.Count;
+        //    int startInsidersCount = insidersId.Count;
+        //    int startBorderMansCount = borderMansId.Count;
+        //    List<int> outsidersId = new List<int>();
+        //    if (startInsidersCount > 0) // надо выгонять внутренних парней
+        //    {
+        //        if (startInsidersCount + startBorderMansCount > startCellCount) // надо выталкивать людей наружу, им не хватает места внутри
+        //        {
+        //            // значит здесь строить нельзя
+        //            canBuildHere = false;
+        //            #region закомментированный код
+        //            //int diff = startInsidersCount + startBorderMansCount - startCellCount; //количество юнитов, которым не хватает места
+        //            //bool stop = false;
+        //            //int currentWeight = startWeight;
+        //            //// проводим расширение зоны поиска НАРУЖУ, пока не найдем достаточное количество клеток или не упремся в то что все не поместятся
+        //            //while(stop == false)
+        //            //{
+        //            //    for (int i = 0; i < findCells.Count; i++)
+        //            //    {
+        //            //        if (findCells[i].weight < currentWeight) // перешли к следующей группе удаленности от старта, надо провеирть хватает ли места
+        //            //        {
+        //            //            if (startInsidersCount + startBorderMansCount + outsidersId.Count >= i)
+        //            //            { // у нас достаточно клеток, чтобы вместить в себя всех
+        //            //                stop = true;
+        //            //                break;
+        //            //            } else
+        //            //            { // у нас недостаточно клеток, значит проводим новую волну поиска
+        //            //                currentWeight = findCells[i].weight;
+        //            //            }
+        //            //        } else // делаем поиск по соседям
+        //            //        {
+        //            //            int tx = findCells[i].x;
+        //            //            int ty = findCells[i].y;
+        //            //            int tw = findCells[i].weight;
+        //            //            int ti = findCells[i].index;
 
-                    //            // проверяем есть ли в нас тут тот кого надо попросить подвинуться
-                    //            if (tw != startWeight) // не проверяемстартовые клетки, тамошние учтены в bordersMansId
-                    //            {
-                    //                int hereId = cellWithIdAny[tx][ty];
-                    //                if (hereId >= 0)
-                    //                {
-                    //                    if (entityMemories.ContainsKey(hereId))
-                    //                    {
-                    //                        if (properties[entityMemories[hereId].myEntity.EntityType].CanMove)
-                    //                        {
-                    //                            outsidersId.Add(hereId);
-                    //                        }
-                    //                    }
-                    //                }
-                    //            }
+        //            //            // проверяем есть ли в нас тут тот кого надо попросить подвинуться
+        //            //            if (tw != startWeight) // не проверяемстартовые клетки, тамошние учтены в bordersMansId
+        //            //            {
+        //            //                int hereId = cellWithIdAny[tx][ty];
+        //            //                if (hereId >= 0)
+        //            //                {
+        //            //                    if (entityMemories.ContainsKey(hereId))
+        //            //                    {
+        //            //                        if (properties[entityMemories[hereId].myEntity.EntityType].CanMove)
+        //            //                        {
+        //            //                            outsidersId.Add(hereId);
+        //            //                        }
+        //            //                    }
+        //            //                }
+        //            //            }
 
-                    //            // проверяем соседние клетки
-                    //            for (int jj = 0; jj < 4; jj++)
-                    //            {
-                    //                int nx = tx;
-                    //                int ny = ty;
-                    //                if (jj == 0) nx--;
-                    //                if (jj == 1) ny--;
-                    //                if (jj == 2) nx++;
-                    //                if (jj == 3) ny++;
+        //            //            // проверяем соседние клетки
+        //            //            for (int jj = 0; jj < 4; jj++)
+        //            //            {
+        //            //                int nx = tx;
+        //            //                int ny = ty;
+        //            //                if (jj == 0) nx--;
+        //            //                if (jj == 1) ny--;
+        //            //                if (jj == 2) nx++;
+        //            //                if (jj == 3) ny++;
 
-                    //                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
-                    //                {
-                    //                    if (pathMap[nx,ny] == 0) // поиск наружу, поэтому в WInside мы не смотрим
-                    //                    {
-                    //                        bool canContinue = true;
+        //            //                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+        //            //                {
+        //            //                    if (pathMap[nx,ny] == 0) // поиск наружу, поэтому в WInside мы не смотрим
+        //            //                    {
+        //            //                        bool canContinue = true;
 
-                    //                        // проверка опасной зоны - не ищем в опасных клетках
-                    //                        var dCell = enemyDangerCells[nx][ny];
-                    //                        if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
-                    //                        {
-                    //                            canContinue = false;
-                    //                            pathMap[nx, ny] = WDanger;
-                    //                        }
-                    //                        else if (dCell.meleesWarning + dCell.rangersWarning > 0)
-                    //                        {
-                    //                            canContinue = false;
-                    //                            pathMap[nx, ny] = WDanger;
-                    //                        }
+        //            //                        // проверка опасной зоны - не ищем в опасных клетках
+        //            //                        var dCell = enemyDangerCells[nx][ny];
+        //            //                        if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
+        //            //                        {
+        //            //                            canContinue = false;
+        //            //                            pathMap[nx, ny] = WDanger;
+        //            //                        }
+        //            //                        else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+        //            //                        {
+        //            //                            canContinue = false;
+        //            //                            pathMap[nx, ny] = WDanger;
+        //            //                        }
 
-                    //                        // проверка занятой клетки
-                    //                        if (canContinue == true)
-                    //                        {
-                    //                            int id = cellWithIdAny[nx][ny];
-                    //                            if (id >= 0)// occupied cell
-                    //                            {
-                    //                                if (entityMemories.ContainsKey(id))
-                    //                                {
-                    //                                    if (properties[ entityMemories[id].myEntity.EntityType].CanMove == true)// это юнит?
-                    //                                    {
-                    //                                        ; // все нормально клетку поиска добавят
-                    //                                    }
-                    //                                    else
-                    //                                    {//is my building                                                            
-                    //                                        canContinue = false;
-                    //                                        pathMap[nx, ny] = WBuilding;
-                    //                                    }
-                    //                                }
-                    //                                else if (enemiesById.ContainsKey(id)) // enemy 
-                    //                                {
-                    //                                    canContinue = false;
-                    //                                    pathMap[nx, ny] = WEnemy;
-                    //                                } else // resource
-                    //                                {
-                    //                                    canContinue = false;
-                    //                                    pathMap[nx, ny] = WResource;
-                    //                                }
-                    //                            }
-                    //                        }
+        //            //                        // проверка занятой клетки
+        //            //                        if (canContinue == true)
+        //            //                        {
+        //            //                            int id = cellWithIdAny[nx][ny];
+        //            //                            if (id >= 0)// occupied cell
+        //            //                            {
+        //            //                                if (entityMemories.ContainsKey(id))
+        //            //                                {
+        //            //                                    if (properties[ entityMemories[id].myEntity.EntityType].CanMove == true)// это юнит?
+        //            //                                    {
+        //            //                                        ; // все нормально клетку поиска добавят
+        //            //                                    }
+        //            //                                    else
+        //            //                                    {//is my building                                                            
+        //            //                                        canContinue = false;
+        //            //                                        pathMap[nx, ny] = WBuilding;
+        //            //                                    }
+        //            //                                }
+        //            //                                else if (enemiesById.ContainsKey(id)) // enemy 
+        //            //                                {
+        //            //                                    canContinue = false;
+        //            //                                    pathMap[nx, ny] = WEnemy;
+        //            //                                } else // resource
+        //            //                                {
+        //            //                                    canContinue = false;
+        //            //                                    pathMap[nx, ny] = WResource;
+        //            //                                }
+        //            //                            }
+        //            //                        }
 
-                    //                        if (canContinue == true) // empty, safe cell or through free unit
-                    //                        {
-                    //                            //add weight and findCell
-                    //                            if (tw > minWeight)
-                    //                            {
-                    //                                pathMap[nx, ny] = tw - 1;
-                    //                                findCells.Add(new XYWeight(nx, ny, tw - 1, ti));
-                    //                            }
-                    //                        }
-                    //                    }
-                    //                    //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
-                    //                }
-                    //            }
-                    //        }
-                    //    }
-                    //    if (stop == false)// мы проверили все клетки, последняя проверка и если клеток не хватает, то строить здесь нельзя.
-                    //    {
+        //            //                        if (canContinue == true) // empty, safe cell or through free unit
+        //            //                        {
+        //            //                            //add weight and findCell
+        //            //                            if (tw > minWeight)
+        //            //                            {
+        //            //                                pathMap[nx, ny] = tw - 1;
+        //            //                                findCells.Add(new XYWeight(nx, ny, tw - 1, ti));
+        //            //                            }
+        //            //                        }
+        //            //                    }
+        //            //                    //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+        //            //                }
+        //            //            }
+        //            //        }
+        //            //    }
+        //            //    if (stop == false)// мы проверили все клетки, последняя проверка и если клеток не хватает, то строить здесь нельзя.
+        //            //    {
 
-                    //        needFindOutsiders = false;
-
-
-                    //        stop = true;
-                    //    }
-                    //}
-                    #endregion
-                }
-                else // места внутренним парням хватит
-                {
+        //            //        needFindOutsiders = false;
 
 
-                }
-            }
-
-            if (canBuildHere == true)
-            {
-                if (startInsidersCount + startBorderMansCount < startCellCount) // надо звать строителей снаружи на границу здания - если клеток не хватает, то нет смысла 
-                {
-                    // на каждом новом парне считаем стоит ли продолжать дальше или найдено достаточно людей
-
-                    // объединяем в группы стартовые ячейки
-
-                    // ищем путь до строителей - надеемся что строители существуют=) - строим путь по карте воспоминаний, а не видимости
+        //            //        stop = true;
+        //            //    }
+        //            //}
+        //            #endregion
+        //        }
+        //        else // места внутренним парням хватит
+        //        {
 
 
-                }
-            }
+        //        }
+        //    }
+
+        //    if (canBuildHere == true)
+        //    {
+        //        if (startInsidersCount + startBorderMansCount < startCellCount) // надо звать строителей снаружи на границу здания - если клеток не хватает, то нет смысла 
+        //        {
+        //            // на каждом новом парне считаем стоит ли продолжать дальше или найдено достаточно людей
+
+        //            // объединяем в группы стартовые ячейки
+
+        //            // ищем путь до строителей - надеемся что строители существуют=) - строим путь по карте воспоминаний, а не видимости
+
+
+        //        }
+        //    }
 
             
 
 
-            while (findCells.Count > 0)
-            {
-                int bx = findCells[0].x;
-                int by = findCells[0].y;
-                int w = findCells[0].weight;
+        //    while (findCells.Count > 0)
+        //    {
+        //        int bx = findCells[0].x;
+        //        int by = findCells[0].y;
+        //        int w = findCells[0].weight;
 
-                for (int jj = 0; jj < 4; jj++)
-                {
-                    int nx = bx;
-                    int ny = by;
-                    if (jj == 0) nx--;
-                    if (jj == 1) ny--;
-                    if (jj == 2) nx++;
-                    if (jj == 3) ny++;
+        //        for (int jj = 0; jj < 4; jj++)
+        //        {
+        //            int nx = bx;
+        //            int ny = by;
+        //            if (jj == 0) nx--;
+        //            if (jj == 1) ny--;
+        //            if (jj == 2) nx++;
+        //            if (jj == 3) ny++;
 
-                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
-                    {
-                        if (resourcePotentialField[nx][ny] == 0)
-                        {
-                            bool canContinueField = true;
+        //            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+        //            {
+        //                if (resourcePotentialField[nx][ny] == 0)
+        //                {
+        //                    bool canContinueField = true;
 
-                            // проверка опасной зоны
-                            var dCell = enemyDangerCells[nx][ny];
-                            if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
-                            {
-                                canContinueField = false;
-                                resourcePotentialField[nx][ny] = RPFdangerCellWeight;
-                            }
-                            else if (dCell.meleesWarning + dCell.rangersWarning > 0)
-                            {
-                                canContinueField = false;
-                                resourcePotentialField[nx][ny] = RPFwarningCellWeight;
-                                //findCells.Add(new XYWeight(nx, ny, RPFwarningCellWeight));
-                            }
+        //                    // проверка опасной зоны
+        //                    var dCell = enemyDangerCells[nx][ny];
+        //                    if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
+        //                    {
+        //                        canContinueField = false;
+        //                        resourcePotentialField[nx][ny] = RPFdangerCellWeight;
+        //                    }
+        //                    else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+        //                    {
+        //                        canContinueField = false;
+        //                        resourcePotentialField[nx][ny] = RPFwarningCellWeight;
+        //                        //findCells.Add(new XYWeight(nx, ny, RPFwarningCellWeight));
+        //                    }
 
-                            // проверка занятой клетки
-                            if (canContinueField == true)
-                            {
-                                int id = cellWithIdAny[nx][ny];
-                                if (id >= 0)// occupied cell
-                                {
-                                    if (entityMemories.ContainsKey(id))
-                                    {
-                                        if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
-                                        {
-                                            if (w == startWeight)//check my builder на соседней клетке с ресурсомs
-                                            {
-                                                canContinueField = false;
-                                                resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
-                                            {
-                                                canContinueField = false;
-                                                resourcePotentialField[nx][ny] = RPFmyBuildingWeight;
-                                            }
-                                        }
-                                    }
-                                    else // enemy 
-                                    {
-                                        if (enemiesById.ContainsKey(id))
-                                        {
-                                            canContinueField = false;
-                                            resourcePotentialField[nx][ny] = RPFenemyEntityWeight;
-                                        }
-                                    }
-                                }
-                            }
+        //                    // проверка занятой клетки
+        //                    if (canContinueField == true)
+        //                    {
+        //                        int id = cellWithIdAny[nx][ny];
+        //                        if (id >= 0)// occupied cell
+        //                        {
+        //                            if (entityMemories.ContainsKey(id))
+        //                            {
+        //                                if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+        //                                {
+        //                                    if (w == startWeight)//check my builder на соседней клетке с ресурсомs
+        //                                    {
+        //                                        canContinueField = false;
+        //                                        resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
+        //                                    }
+        //                                }
+        //                                else
+        //                                {
+        //                                    if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+        //                                    {
+        //                                        canContinueField = false;
+        //                                        resourcePotentialField[nx][ny] = RPFmyBuildingWeight;
+        //                                    }
+        //                                }
+        //                            }
+        //                            else // enemy 
+        //                            {
+        //                                if (enemiesById.ContainsKey(id))
+        //                                {
+        //                                    canContinueField = false;
+        //                                    resourcePotentialField[nx][ny] = RPFenemyEntityWeight;
+        //                                }
+        //                            }
+        //                        }
+        //                    }
 
-                            if (canContinueField == true) // empty, safe cell or through free unit
-                            {
-                                //add weight and findCell
-                                resourcePotentialField[nx][ny] = w - 1;
-                                if (w > minWeight)
-                                    findCells.Add(new XYWeight(nx, ny, w - 1));
-                            }
-                        }
-                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
-                    }
-                }
-                //findCells.RemoveAt(0);
-            }
+        //                    if (canContinueField == true) // empty, safe cell or through free unit
+        //                    {
+        //                        //add weight and findCell
+        //                        resourcePotentialField[nx][ny] = w - 1;
+        //                        if (w > minWeight)
+        //                            findCells.Add(new XYWeight(nx, ny, w - 1));
+        //                    }
+        //                }
+        //                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+        //            }
+        //        }
+        //        //findCells.RemoveAt(0);
+        //    }
 
-            return pathMap;
-        }
+        //    return pathMap;
+        //}
         bool[] FindAvailableTargetType(int sx, int sy, int size, int range)
         {
             bool[] availableType = new bool[entityTypesArray.Length];
@@ -3374,100 +3374,100 @@ namespace Aicup2020
                 index = _index;
             }
         }
-        List<int> FindFreeNearestBuilders(Vec2Int target, int size, int builderCount, int maxDistance)
-        {
-            List<int> list = new List<int>();
+        //List<int> FindFreeNearestBuilders(Vec2Int target, int size, int builderCount, int maxDistance)
+        //{
+        //    List<int> list = new List<int>();
 
-            if (builderCount > basicEntityIdGroups[EntityType.BuilderUnit].members.Count)
-            {
-                builderCount = basicEntityIdGroups[EntityType.BuilderUnit].members.Count;
-            }
+        //    if (builderCount > basicEntityIdGroups[EntityType.BuilderUnit].members.Count)
+        //    {
+        //        builderCount = basicEntityIdGroups[EntityType.BuilderUnit].members.Count;
+        //    }
 
-            if (builderCount == 0) 
-                return list;
+        //    if (builderCount == 0) 
+        //        return list;
 
-            int[][] map = new int[mapSize][];
-            for (int i = 0; i < mapSize; i++)
-            {
-                map[i] = new int[mapSize];
-            }
+        //    int[][] map = new int[mapSize][];
+        //    for (int i = 0; i < mapSize; i++)
+        //    {
+        //        map[i] = new int[mapSize];
+        //    }
 
-            int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
-            int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
+        //    int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
+        //    int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
 
-            //заполняем максимальными значениями на клетках текущей позиции
-            for (int x = target.X; x < size + target.X; x++)
-            {
-                for (int y = target.Y; y < size + target.Y; y++)
-                {
-                    if (x >= 0 && y >= 0 && x < mapSize && y < mapSize) {
-                        map[x][y] = startIndex;
-                    }
-                }
-            }
-            //добавляем стартовые клетки поиска
-            List<XYWeight> findCells = new List<XYWeight>();
-            for (int x = target.X; x < size + target.X; x++)
-            {
-                findCells.Add(new XYWeight(x, target.Y, startIndex));
-                if (size > 1)
-                    findCells.Add(new XYWeight(x, target.Y + size - 1, startIndex));
-            }
-            for (int y = target.Y + 1; y < size + target.Y - 1; y++)
-            {
-                findCells.Add(new XYWeight(target.X, y, startIndex));
-                findCells.Add(new XYWeight(target.X + size - 1, y, startIndex));
-            }
+        //    //заполняем максимальными значениями на клетках текущей позиции
+        //    for (int x = target.X; x < size + target.X; x++)
+        //    {
+        //        for (int y = target.Y; y < size + target.Y; y++)
+        //        {
+        //            if (x >= 0 && y >= 0 && x < mapSize && y < mapSize) {
+        //                map[x][y] = startIndex;
+        //            }
+        //        }
+        //    }
+        //    //добавляем стартовые клетки поиска
+        //    List<XYWeight> findCells = new List<XYWeight>();
+        //    for (int x = target.X; x < size + target.X; x++)
+        //    {
+        //        findCells.Add(new XYWeight(x, target.Y, startIndex));
+        //        if (size > 1)
+        //            findCells.Add(new XYWeight(x, target.Y + size - 1, startIndex));
+        //    }
+        //    for (int y = target.Y + 1; y < size + target.Y - 1; y++)
+        //    {
+        //        findCells.Add(new XYWeight(target.X, y, startIndex));
+        //        findCells.Add(new XYWeight(target.X + size - 1, y, startIndex));
+        //    }
 
-            while (findCells.Count > 0)
-            {
-                int x = findCells[0].x;
-                int y = findCells[0].y;
-                int w = findCells[0].weight;
+        //    while (findCells.Count > 0)
+        //    {
+        //        int x = findCells[0].x;
+        //        int y = findCells[0].y;
+        //        int w = findCells[0].weight;
 
-                for (int jj = 0; jj < 4; jj++)
-                {
-                    int nx = x;
-                    int ny = y;
-                    if (jj == 0) nx--;
-                    if (jj == 1) ny--;
-                    if (jj == 2) nx++;
-                    if (jj == 3) ny++;
+        //        for (int jj = 0; jj < 4; jj++)
+        //        {
+        //            int nx = x;
+        //            int ny = y;
+        //            if (jj == 0) nx--;
+        //            if (jj == 1) ny--;
+        //            if (jj == 2) nx++;
+        //            if (jj == 3) ny++;
 
-                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
-                    {
-                        if (map[nx][ny] == 0)
-                        {
-                            map[nx][ny] = w - 1;
-                            int id = cellWithIdAny[nx][ny];
-                            if (id >= 0)
-                            {
-                                //check builder
-                                if (basicEntityIdGroups[EntityType.BuilderUnit].members.Contains(id))
-                                {
-                                    list.Add(id);
-                                    if (list.Count >= builderCount)
-                                        break;
-                                }
-                            }
-                            else
-                            {
-                                //add findCell
-                                if (w > minIndex)
-                                    findCells.Add(new XYWeight(nx, ny, w - 1));
-                            }
-                        }
-                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+        //            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+        //            {
+        //                if (map[nx][ny] == 0)
+        //                {
+        //                    map[nx][ny] = w - 1;
+        //                    int id = cellWithIdAny[nx][ny];
+        //                    if (id >= 0)
+        //                    {
+        //                        //check builder
+        //                        if (basicEntityIdGroups[EntityType.BuilderUnit].members.Contains(id))
+        //                        {
+        //                            list.Add(id);
+        //                            if (list.Count >= builderCount)
+        //                                break;
+        //                        }
+        //                    }
+        //                    else
+        //                    {
+        //                        //add findCell
+        //                        if (w > minIndex)
+        //                            findCells.Add(new XYWeight(nx, ny, w - 1));
+        //                    }
+        //                }
+        //                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
 
-                    }
-                }
-                findCells.RemoveAt(0);
+        //            }
+        //        }
+        //        findCells.RemoveAt(0);
 
-                if (list.Count >= builderCount)
-                    break;
-            }
-            return list;
-        }
+        //        if (list.Count >= builderCount)
+        //            break;
+        //    }
+        //    return list;
+        //}
 
         void AddEnemyDangerCells(int sx, int sy, EntityType entityType)
         {
