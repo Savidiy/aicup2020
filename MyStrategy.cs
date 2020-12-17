@@ -223,9 +223,9 @@ namespace Aicup2020
             }
             public bool TryDraw()
             {
-                if (drawn == true)
+                if (drawn == false)
                 {
-                    drawn = false;
+                    drawn = true;
                     return true;
                 }
                 return false;
@@ -507,7 +507,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = false;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
-            debugOptions[(int)DebugOptions.drawPotencAttack] = true;
+            debugOptions[(int)DebugOptions.drawPotencAttack] = false;
 
             debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
 
@@ -1103,10 +1103,10 @@ namespace Aicup2020
                 {
                     int sx = p.Value.myEntity.Position.X;
                     int sy = p.Value.myEntity.Position.Y;
-                    int flag = 0;   //  /2  \3
-                    int dx = 1;     //  \1  /0
+                    int flag = 3;   //  /2  \3
+                    int dx = 0;     //  \1  /0
                     int dy = 0; 
-                    for (int step = 1; step <= dist;)
+                    for (int step = 0; step <= dist;)
                     {
                         //рисуем
                         int nx = sx + dx;
@@ -1163,7 +1163,14 @@ namespace Aicup2020
                                 flag = 0;
                                 dx++;
                                 step++;
+                            } else if (dy < 0)// first shift from 0,0
+                            {
+                                dx = 1;
+                                dy = 0;
+                                flag = 0;
+                                step++;
                             }
+
                         }
                     }
                 }
@@ -1765,7 +1772,7 @@ namespace Aicup2020
         }
         void OptimizeOrders()
         {
-            // OptimizeOrderToAttackRM(); // оптимизируем приказы на атаку воинов
+            OptimizeOrderToAttackRM(); // оптимизируем приказы на атаку воинов
             // OptimizeOrderToHealWarriors(); // оптимизируем приказы на лечение воинов
             OptimizeOrderToRetreat(); // оптимизируем отступление
 
@@ -1774,6 +1781,10 @@ namespace Aicup2020
             OptimizeOrderToRepairOld(); // ремонтируем старые здания
 
             
+        }
+        void OptimizeOrderToAttackRM()
+        {
+            // рассматриваем тех кто уже воюет
         }
         void OptimizeOrderToRetreat()
         {
