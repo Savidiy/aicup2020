@@ -2366,6 +2366,7 @@ namespace Aicup2020
             // all retreats - ищем всех отступающих и строим глобальный граф отступления. Путь ищется до
             int startWeight = mapSize * mapSize;
             int CWfree = 1;
+            int CWoptimizedUnit = -1;
             int CWdanger = -10;
             int CWenemy = -5;
             int CWmyBuilding = -2;
@@ -2493,8 +2494,14 @@ namespace Aicup2020
                                                         }
                                                         else // it is a unit!
                                                         {
-                                                            map[nx][ny] = w - 1;
-                                                            findCells.Add(new XYWeight(nx, ny, w - 1));
+                                                            if (entityMemories[id].optimized == false)
+                                                            {
+                                                                map[nx][ny] = w - 1;
+                                                                findCells.Add(new XYWeight(nx, ny, w - 1));
+                                                            } else
+                                                            {
+                                                                map[nx][ny] = CWoptimizedUnit;
+                                                            }
                                                         }
 
                                                     }
