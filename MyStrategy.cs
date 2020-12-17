@@ -207,11 +207,10 @@ namespace Aicup2020
 
         class PotencAttackCell
         {
-            public int rangersAim;
-            public int rangersWarning;
-            public int meleesAim;
-            public int meleesWarning;
-            public int turretsAim;
+            public int dist5low;
+            public int dist6;
+            public int dist7;
+            public int dist8;
             public bool drawn;
             public PotencAttackCell()
             {
@@ -219,7 +218,7 @@ namespace Aicup2020
             }
             public void Reset()
             {
-                rangersAim = rangersWarning = meleesAim = meleesWarning = turretsAim = 0;
+                dist5low = dist6 = dist7 = dist8 = 0;
                 drawn = false;
             }
             public bool TryDraw()
@@ -269,34 +268,32 @@ namespace Aicup2020
                     }
                 }
             }
-            public void AddCell(int x, int y, EntityType entityType, bool aim = true)
+            public void AddCell(int x, int y, int d5, int d6, int d7, int d8)
             {
                 if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
                 {
-                    switch (entityType)
+                    _potencAttackMap[x, y].dist5low += d5;
+                    _potencAttackMap[x, y].dist6 += d6; 
+                    _potencAttackMap[x, y].dist7 += d7;
+                    _potencAttackMap[x, y].dist8 += d8;
+                }
+            }
+            public void AddCell(int x, int y, int dist, bool increment)
+            {
+                if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                {
+                    if (increment)
                     {
-                        //case EntityType.BuilderUnit:
-                        //    if (aim)
-                        //        _potencAttackMap[x, y].buildersAim++;
-                        //    else
-                        //        enemyDangerCells[x][y].buildersWarning++;
-                        //    break;
-                        case EntityType.MeleeUnit:
-                            if (aim)
-                                _potencAttackMap[x, y].meleesAim++;
-                            else
-                                _potencAttackMap[x, y].meleesWarning++;
-                            break;
-                        case EntityType.RangedUnit:
-                            if (aim)
-                                _potencAttackMap[x, y].rangersAim++;
-                            else
-                                _potencAttackMap[x, y].rangersWarning++;
-                            break;
-                        case EntityType.Turret:
-                            if (aim)
-                                _potencAttackMap[x, y].turretsAim++;
-                            break;
+                        if (dist <= 5) _potencAttackMap[x, y].dist5low++;
+                        else if (dist == 6) _potencAttackMap[x, y].dist6++;
+                        else if (dist == 7) _potencAttackMap[x, y].dist7++;
+                        else if (dist == 8) _potencAttackMap[x, y].dist8++;
+                    } else
+                    {
+                        if (dist <= 5) _potencAttackMap[x, y].dist5low--;
+                        else if (dist == 6) _potencAttackMap[x, y].dist6--;
+                        else if (dist == 7) _potencAttackMap[x, y].dist7--;
+                        else if (dist == 8) _potencAttackMap[x, y].dist8--;
                     }
                 }
             }
@@ -508,7 +505,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = false;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
-            debugOptions[(int)DebugOptions.drawPotencAttack] = false;
+            debugOptions[(int)DebugOptions.drawPotencAttack] = true;
             debugOptions[(int)DebugOptions.drawOptAttack] = true;
 
             debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
@@ -976,126 +973,123 @@ namespace Aicup2020
         {
             potencAttackMap.Reset();
 
-            foreach(var p in enemiesById)
+            // составляем список лучников
+            List<int> rangersId = new List<int>();
+            foreach (var e in entityMemories)
             {
-                EntityType entityType = p.Value.EntityType;
-                if (entityType == EntityType.MeleeUnit || entityType == EntityType.RangedUnit)
+                if (e.Value.myEntity.EntityType == EntityType.RangedUnit)
                 {
-                    for (int rludc = 0; rludc < 5; rludc++)
-                    {
-                        int attackRange = properties[entityType].Attack.Value.AttackRange;
-                        int size = properties[entityType].Size;
-                        int sx = p.Value.Position.X;
-                        int sy = p.Value.Position.Y;
-                        if (rludc == 0) sx++;
-                        else if (rludc == 1) sx--;
-                        else if (rludc == 2) sy++;
-                        else if (rludc == 3) sy--;
-                        // rludc == 4 - is center cell. sc, sy, not changed
-
-                        if (sx >= 0 && sx < mapSize && sy >= 0 && sy < mapSize)
-                        {
-                            if (cellWithIdOnlyBuilding[sx][sy] < 0) // нельзя ходить в здания и ресурсы
-                            {
-                                int sxRight = sx + size - 1;
-                                int syUp = sy + size - 1;
-                                for (int si = 0; si < size; si++)
-                                {
-                                    //my base
-                                    for (int siy = 0; siy < size; siy++)
-                                    {
-                                        // сам себе не угрожает
-                                        //AddEnemyDangerValueToCellSafe(sx + si, sy + siy, entityType, true);
-                                    }
-
-                                    //straight
-                                    for (int di = 1; di <= attackRange; di++)
-                                    {
-                                        //potencAttackMap.AddCell(sx - di, sy + si, entityType);
-                                        potencAttackMap.AddCell(sx - di, sy + si, entityType);// left
-                                        potencAttackMap.AddCell(sx + si, sy - di, entityType);// down
-                                        potencAttackMap.AddCell(sxRight + di, sy + si, entityType);// right
-                                        potencAttackMap.AddCell(sx + si, syUp + di, entityType);// up
-                                    }
-                                }
-                                //diagonal quarter
-                                for (int aa = 1; aa <= attackRange - 1; aa++)
-                                {
-                                    for (int bb = 1; bb <= attackRange - aa; bb++)
-                                    {
-                                        potencAttackMap.AddCell(sx - aa, sy - bb, entityType);//left-down
-                                        potencAttackMap.AddCell(sx - aa, syUp + bb, entityType);//left-up
-                                        potencAttackMap.AddCell(sxRight + aa, syUp + bb, entityType);//right-up
-                                        potencAttackMap.AddCell(sxRight + aa, sy - bb, entityType);//right-down
-                                    }
-                                }
-
-                                //warning diagonal
-                                for (int cc = 0; cc <= attackRange; cc++)
-                                {
-                                    potencAttackMap.AddCell(sx - attackRange - 1 + cc, sy - cc, entityType, false);//left-down
-                                    potencAttackMap.AddCell(sx - cc, syUp + attackRange + 1 - cc, entityType, false);//left-up
-                                    potencAttackMap.AddCell(sxRight + attackRange + 1 - cc, syUp + cc, entityType, false);//right-up
-                                    potencAttackMap.AddCell(sxRight + cc, sy - attackRange - 1 + cc, entityType, false);//right-down
-                                }
-                            }
-                        }
-                    }
-                } 
-                else if (entityType == EntityType.Turret)
-                {
-                    int attackRange = properties[entityType].Attack.Value.AttackRange;
-                    int size = properties[entityType].Size;
-                    int sx = p.Value.Position.X;
-                    int sy = p.Value.Position.Y;
-                    int sxRight = sx + size - 1;
-                    int syUp = sy + size - 1;
-                    for (int si = 0; si < size; si++)
-                    {
-                        //my base
-                        for (int siy = 0; siy < size; siy++)
-                        {
-                            // сам себе не угрожает
-                            //AddEnemyDangerValueToCellSafe(sx + si, sy + siy, entityType, true);
-                        }
-
-                        //straight
-                        for (int di = 1; di <= attackRange; di++)
-                        {                            
-                            potencAttackMap.AddCell(sx - di, sy + si, entityType);// left
-                            potencAttackMap.AddCell(sx + si, sy - di, entityType);// down
-                            potencAttackMap.AddCell(sxRight + di, sy + si, entityType);// right
-                            potencAttackMap.AddCell(sx + si, syUp + di, entityType);// up
-                        }
-                    }
-                    //diagonal quarter
-                    for (int aa = 1; aa <= attackRange - 1; aa++)
-                    {
-                        for (int bb = 1; bb <= attackRange - aa; bb++)
-                        {
-                            potencAttackMap.AddCell(sx - aa, sy - bb, entityType);//left-down
-                            potencAttackMap.AddCell(sx - aa, syUp + bb, entityType);//left-up
-                            potencAttackMap.AddCell(sxRight + aa, syUp + bb, entityType);//right-up
-                            potencAttackMap.AddCell(sxRight + aa, sy - bb, entityType);//right-down
-                        }
-                    }
-
-                    //warning diagonal
-                    for (int cc = 0; cc <= attackRange; cc++)
-                    {
-                        potencAttackMap.AddCell(sx - attackRange - 1 + cc, sy - cc, entityType, false);//left-down
-                        potencAttackMap.AddCell(sx - cc, syUp + attackRange + 1 - cc, entityType, false);//left-up
-                        potencAttackMap.AddCell(sxRight + attackRange + 1 - cc, syUp + cc, entityType, false);//right-up
-                        potencAttackMap.AddCell(sxRight + cc, sy - attackRange - 1 + cc, entityType, false);//right-down
-                    }
-                    
-                    potencAttackMap.AddCell(sx - attackRange - 1, syUp, entityType, false);//left
-                    potencAttackMap.AddCell(sxRight, syUp + attackRange + 1, entityType, false);//up
-                    potencAttackMap.AddCell(sxRight + attackRange + 1, sy, entityType, false);//right
-                    potencAttackMap.AddCell(sx, sy - attackRange - 1, entityType, false);//down                    
+                    rangersId.Add(e.Key);
                 }
             }
+
+            Dictionary<int, PotencAttackCell> enemyRangersDistByID = new Dictionary<int, PotencAttackCell>();
+            Dictionary<int, PotencAttackCell> enemyTurretDistByID = new Dictionary<int, PotencAttackCell>();
+
+            // составляем список врагов
+            foreach (var p in enemiesById)
+            {
+                EntityType entityType = p.Value.EntityType;
+                if (entityType == EntityType.RangedUnit)
+                {
+                    enemyRangersDistByID.Add(p.Key, new PotencAttackCell());
+                } else if (entityType == EntityType.Turret)
+                {
+                    enemyTurretDistByID.Add(p.Key, new PotencAttackCell());
+                }
+            }
+            // считаем для каждого врага на каком к нему расстоянии находятся лучники
+            foreach (var enemy in enemyRangersDistByID)
+            {
+                int x1 = enemiesById[enemy.Key].Position.X;
+                int y1 = enemiesById[enemy.Key].Position.Y;
+                foreach (var myRangerId in rangersId)
+                {
+                    int x2 = entityMemories[myRangerId].myEntity.Position.X; 
+                    int y2 = entityMemories[myRangerId].myEntity.Position.Y;
+                    int dist = Abs(x1 - x2) + Abs(y1 - y2);
+                    if (dist <= 5) enemy.Value.dist5low++;
+                    else if (dist == 6) enemy.Value.dist6++;
+                    else if (dist == 7) enemy.Value.dist7++;
+                    else if (dist == 8) enemy.Value.dist8++;
+                }
+            }
+            foreach (var enemy in enemyTurretDistByID)
+            {
+                int x1 = enemiesById[enemy.Key].Position.X;
+                int y1 = enemiesById[enemy.Key].Position.Y;
+                foreach (var myRangerId in rangersId)
+                {
+                    int x2 = entityMemories[myRangerId].myEntity.Position.X;
+                    int y2 = entityMemories[myRangerId].myEntity.Position.Y;
+                    int dist = Abs(x1 - x2) + Abs(y1 - y2);
+                    if (dist <= 5) enemy.Value.dist5low++;
+                    else if (dist == 6) enemy.Value.dist6++;
+                    else if (dist == 7) enemy.Value.dist7++;
+                    else if (dist == 8) enemy.Value.dist8++;
+                }
+            }
+
+            /// теперь каждый противник разбрасывает маяки вокруг себя
+            /// если вокруг турели на дистанции 5 есть лучники, то маяки на 5
+            /// если на дист 6 больше 4 лучников, то маяки на 5, иначи маяяки на 6
+            foreach (var enemy in enemyTurretDistByID)
+            {
+                int attackRange = 6;
+                if (enemy.Value.dist5low > 0) attackRange = 5;
+                else if (enemy.Value.dist6 > 4) attackRange = 5;
+
+                int sx = enemiesById[enemy.Key].Position.X;
+                int sy = enemiesById[enemy.Key].Position.Y;
+                int size = properties[EntityType.Turret].Size;
+                int sxRight = sx + size - 1;
+                int syUp = sy + size - 1;
+                for (int k = attackRange; k >= 5; k--)
+                {
+                    for (int cc = 0; cc <= attackRange; cc++)
+                    {
+                        potencAttackMap.AddCell(sx - attackRange + cc, sy - cc, attackRange, k == attackRange);//left-down
+                        potencAttackMap.AddCell(sx - cc, syUp + attackRange - cc, attackRange, k == attackRange);//left-up
+                        potencAttackMap.AddCell(sxRight + attackRange - cc, syUp + cc, attackRange, k == attackRange);//right-up
+                        potencAttackMap.AddCell(sxRight + cc, sy - attackRange  + cc, attackRange, k == attackRange);//right-down
+                    }
+                    potencAttackMap.AddCell(sx - attackRange, syUp, attackRange, k == attackRange);//left
+                    potencAttackMap.AddCell(sxRight, syUp + attackRange, attackRange, k == attackRange);//up
+                    potencAttackMap.AddCell(sxRight + attackRange, sy, attackRange, k == attackRange);//right
+                    potencAttackMap.AddCell(sx, sy - attackRange, attackRange, k == attackRange);//down 
+                }
+            }
+            /// если вокруг лучника есть мои на 5, то маяк на 5
+            /// если есть 2+ на 6, то маяк на 5
+            /// если есть 2+ на 7, то маяк на 6
+            /// иначе маяк на 7
+            foreach (var enemy in enemyRangersDistByID)
+            {
+                int attackRange = 7;
+                if (enemy.Value.dist5low > 0) attackRange = 5;
+                else if (enemy.Value.dist6 > 1) attackRange = 5;
+                else if (enemy.Value.dist7 > 1) attackRange = 6;
+
+                int sx = enemiesById[enemy.Key].Position.X;
+                int sy = enemiesById[enemy.Key].Position.Y;
+                int size = properties[EntityType.RangedUnit].Size;
+                int sxRight = sx + size - 1;
+                int syUp = sy + size - 1;
+                for (int k = attackRange; k >= 5; k--)
+                {
+                    for (int cc = 0; cc < k; cc++)
+                    {
+                        potencAttackMap.AddCell(sx - k + cc, sy - cc, k, k == attackRange);//left-down
+                        potencAttackMap.AddCell(sx - cc, syUp + k - cc, k, k == attackRange);//left-up
+                        potencAttackMap.AddCell(sxRight + k - cc, syUp + cc, k, k == attackRange);//right-up
+                        potencAttackMap.AddCell(sxRight + cc, sy - k + cc, k, k == attackRange);//right-down
+                    }
+                }
+
+            }
+
         }
+
         void DrawPotencMap(int dist)
         {
             foreach (var p in entityMemories)
@@ -1116,24 +1110,26 @@ namespace Aicup2020
                         if (potencAttackMap.TryDraw(nx, ny))
                         {
                             PotencAttackCell cell = potencAttackMap[nx, ny];
-                            int sumAim = cell.meleesAim + cell.rangersAim + cell.turretsAim;
-                            int sumWarning = cell.meleesWarning + cell.rangersWarning;
+                            int d5 = cell.dist5low;
+                            int d6 = cell.dist6;
+                            int d7 = cell.dist7;
+                            int d8 = cell.dist8;
+                            int sum = d5 + d6 + d7 + d8;
                             int textSize = 16;
-                            if (sumAim > 0 && sumWarning > 0)
+                            if (d5 != 0)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx + 0.45f, ny + 0.2f), new Vec2Float(0, 0), colorRed);
-                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, sumAim.ToString(), 1f, textSize)));
-                                position = new ColoredVertex(new Vec2Float(nx + 0.55f, ny + 0.2f), new Vec2Float(0, 0), colorBlack);
-                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, sumWarning.ToString(), 0, textSize)));
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx, ny + 0.5f), new Vec2Float(0, 0),  colorRed);
+                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d5.ToString(), 0, textSize)));
                             }
-                            else if (sumAim > 0)
+                            if (d6 != 0)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx + 0.5f, ny + 0.2f), new Vec2Float(0, 0), colorRed);
-                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, sumAim.ToString(), 0.5f, textSize)));
-                            } else if (sumWarning > 0)
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx + 1f, ny + 0.5f), new Vec2Float(0, 0), colorMagenta);
+                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d6.ToString(), 1f, textSize)));
+                            }
+                            if (d7 != 0)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx + 0.5f, ny + 0.2f), new Vec2Float(0, 0), colorBlack);
-                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, sumWarning.ToString(), 0.5f, textSize)));
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx, ny + 0.05f), new Vec2Float(0, 0), colorGreen);
+                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d7.ToString(), 0f, textSize)));
                             }
                         }
 
