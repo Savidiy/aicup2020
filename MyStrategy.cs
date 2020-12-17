@@ -1805,29 +1805,29 @@ namespace Aicup2020
         }
         class EnemyToOpt
         {
-            public List<Target> _targetsMyUnits;
+            public Dictionary<int, Target> _targetsMyUnitsById;
             public Target _me;
             public EnemyToOpt(int id, EntityType type, int health, int x, int y)
             {
                 _me = new Target(id, type, health, x, y, 0);
-                _targetsMyUnits = new List<Target>();
+                _targetsMyUnitsById = new Dictionary<int, Target>();
             }
             public void Add(int id, EntityType type, int health, int x, int y, int dist)
             {
-                _targetsMyUnits.Add(new Target(id, type, health, x, y, dist));
+                _targetsMyUnitsById.Add(id, new Target(id, type, health, x, y, dist));
             }
             public void Add(Target targetMyUnit)
             {
-                _targetsMyUnits.Add(targetMyUnit);
+                _targetsMyUnitsById.Add(targetMyUnit._id, targetMyUnit);
             }
             public int Count
             {
-                get { return _targetsMyUnits.Count; }
+                get { return _targetsMyUnitsById.Count; }
             }
             public Target this[int i]
             {
-                get { return _targetsMyUnits[i]; }
-                set { _targetsMyUnits[i] = value; }
+                get { return _targetsMyUnitsById[i]; }
+                set { _targetsMyUnitsById[i] = value; }
             }
         }
         void OptimizeOrderToAttackRM()
@@ -1941,7 +1941,7 @@ namespace Aicup2020
                     if (i.Value.Count == 1)
                     {
                         if (i.Value[0]._me._entityType == EntityType.RangedUnit
-                            || (i.Value[0]._me._entityType == EntityType.MeleeUnit && i.Value[0]._targetsMyUnits[i.Key]._dist > 2))
+                            || (i.Value[0]._me._entityType == EntityType.MeleeUnit && i.Value[0]._targetsMyUnitsById[i.Key]._dist > 2))
                         {
                             if (i.Value[0]._me._health > 0)
                             {
@@ -1993,12 +1993,12 @@ namespace Aicup2020
                         if (i.Value._me._health <= 0)
                         {
                             deleteKeys.Add(i.Key);
-                            foreach (var k in i.Value._targetsMyUnits)
+                            foreach (var k in i.Value._targetsMyUnitsById)
                             {
-                                if (myRangers.ContainsKey(k._id))
+                                if (myRangers.ContainsKey(k.Key))
                                 {
-                                    if (myRangers[k._id].Contains(i.Value))
-                                        myRangers[k._id].Remove(i.Value);
+                                    if (myRangers[k.Key].Contains(i.Value))
+                                        myRangers[k.Key].Remove(i.Value);
                                 }
                             }
                         }
@@ -2013,12 +2013,12 @@ namespace Aicup2020
                         if (i.Value._me._health <= 0)
                         {
                             deleteKeys.Add(i.Key);
-                            foreach (var k in i.Value._targetsMyUnits)
+                            foreach (var k in i.Value._targetsMyUnitsById)
                             {
-                                if (myRangers.ContainsKey(k._id))
+                                if (myRangers.ContainsKey(k.Key))
                                 {
-                                    if (myRangers[k._id].Contains(i.Value))
-                                        myRangers[k._id].Remove(i.Value);
+                                    if (myRangers[k.Key].Contains(i.Value))
+                                        myRangers[k.Key].Remove(i.Value);
                                 }
                             }
                         }
@@ -2062,21 +2062,21 @@ namespace Aicup2020
                     {
                         if (enemyMelees.ContainsKey(targets[t]))
                         {
-                            foreach (var me in enemyMelees[targets[t]]._targetsMyUnits)
-                            {
-                                if (attackers.Contains(me._id) == false)
+                            foreach (var me in enemyMelees[targets[t]]._targetsMyUnitsById)
+                            {                                
+                                if (myRangers.ContainsKey(me.Key) == true && attackers.Contains(me.Key) == false)
                                 {
-                                    attackers.Add(me._id);
+                                    attackers.Add(me.Key);
                                     wasAdded = true;
                                 }
                             }
                         } else if (enemyRangers.ContainsKey(targets[t]))
                         {
-                            foreach (var me in enemyRangers[targets[t]]._targetsMyUnits)
+                            foreach (var me in enemyRangers[targets[t]]._targetsMyUnitsById)
                             {
-                                if (attackers.Contains(me._id) == false)
+                                if (myRangers.ContainsKey(me.Key) && attackers.Contains(me.Key) == false)
                                 {
-                                    attackers.Add(me._id);
+                                    attackers.Add(me.Key);
                                     wasAdded = true;
                                 }
                             }
@@ -2125,6 +2125,16 @@ namespace Aicup2020
                             foreach (var id in attackers)
                             {
                                 entityMemories[id].OrderAttack(enemyMelees[targets[0]]._me._id, null, true);
+                                if (debugOptions[(int)DebugOptions.drawOptAttack])
+                                {
+                                    DrawLineOnce(
+                                        entityMemories[id].myEntity.Position.X + 0.3f,
+                                        entityMemories[id].myEntity.Position.Y + 0.5f,
+                                        enemyMelees[targets[0]]._me._x + 0.3f,
+                                        enemyMelees[targets[0]]._me._y + 0.5f,
+                                        colorMagenta,
+                                        colorMagenta);
+                                }
                                 enemyMelees[targets[0]]._me._health -= damageR;
                             }
                         }
@@ -2132,7 +2142,7 @@ namespace Aicup2020
                         {                            
                             foreach (var id in attackers)
                             {                                
-                                if (myRangers[id][targets[0]]._targetsMyUnits[id]._dist <= 2)// retreat nearest
+                                if (myRangers[id][0]._targetsMyUnitsById[id]._dist <= 2)// retreat nearest
                                 {
                                     entityMemories[id].OrderTryRetreat();
                                 }
@@ -2140,6 +2150,16 @@ namespace Aicup2020
                                 {
                                     entityMemories[id].OrderAttack(enemyMelees[targets[0]]._me._id, null, true);
                                     enemyMelees[targets[0]]._me._health -= damageR;
+                                    if (debugOptions[(int)DebugOptions.drawOptAttack])
+                                    {
+                                        DrawLineOnce(
+                                            entityMemories[id].myEntity.Position.X + 0.3f,
+                                            entityMemories[id].myEntity.Position.Y + 0.5f,
+                                            enemyMelees[targets[0]]._me._x + 0.3f,
+                                            enemyMelees[targets[0]]._me._y + 0.5f,
+                                            colorMagenta,
+                                            colorMagenta);
+                                    }
                                 }
                             }
                             // remove attackers
@@ -2156,9 +2176,9 @@ namespace Aicup2020
 
                     // вариант 2 врагов больше
 
-                    List<int[]> attackVariants = new List<int[]>();
+                    List<int[]> attackVariants;// = new List<int[]>();
 
-                    CalcMaxKillFromArray(sizeA, sizeT, arrayPair, targetsHealth);
+                    attackVariants = CalcMaxKillFromArray(sizeA, sizeT, arrayPair, targetsHealth);
 
                     //отдаем приказы по любому варианту
                     if (attackVariants.Count > 0)
@@ -2169,6 +2189,16 @@ namespace Aicup2020
                         {
                             int enemyId = targets[attackVariants[index][kk]];
                             entityMemories[attackers[kk]].OrderAttack(enemyId, null, true);
+                            if (debugOptions[(int)DebugOptions.drawOptAttack])
+                            {
+                                DrawLineOnce(
+                                    entityMemories[attackers[kk]].myEntity.Position.X + 0.3f,
+                                    entityMemories[attackers[kk]].myEntity.Position.Y + 0.5f,
+                                    enemiesById[enemyId].Position.X + 0.3f,
+                                    enemiesById[enemyId].Position.Y + 0.5f,
+                                    colorMagenta,
+                                    colorMagenta);
+                            }
                             if (enemyMelees.ContainsKey(enemyId))
                             {
                                 enemyMelees[enemyId]._me._health -= damageR;
@@ -2197,12 +2227,12 @@ namespace Aicup2020
                         if (i.Value._me._health <= 0)
                         {
                             deleteKeys.Add(i.Key);
-                            foreach (var k in i.Value._targetsMyUnits)
+                            foreach (var k in i.Value._targetsMyUnitsById)
                             {
-                                if (myRangers.ContainsKey(k._id))
+                                if (myRangers.ContainsKey(k.Key))
                                 {
-                                    if (myRangers[k._id].Contains(i.Value))
-                                        myRangers[k._id].Remove(i.Value);
+                                    if (myRangers[k.Key].Contains(i.Value))
+                                        myRangers[k.Key].Remove(i.Value);
                                 }
                             }
                         }
@@ -2217,12 +2247,12 @@ namespace Aicup2020
                         if (i.Value._me._health <= 0)
                         {
                             deleteKeys.Add(i.Key);
-                            foreach (var k in i.Value._targetsMyUnits)
+                            foreach (var k in i.Value._targetsMyUnitsById)
                             {
-                                if (myRangers.ContainsKey(k._id))
+                                if (myRangers.ContainsKey(k.Key))
                                 {
-                                    if (myRangers[k._id].Contains(i.Value))
-                                        myRangers[k._id].Remove(i.Value);
+                                    if (myRangers[k.Key].Contains(i.Value))
+                                        myRangers[k.Key].Remove(i.Value);
                                 }
                             }
                         }
