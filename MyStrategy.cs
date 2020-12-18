@@ -576,8 +576,8 @@ namespace Aicup2020
             #region draw debug settings
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
-            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = true;
-            debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = false;
+            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
+            debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
             debugOptions[(int)DebugOptions.drawPotencAttack] = false;
             debugOptions[(int)DebugOptions.drawOptAttack] = true;
@@ -4444,75 +4444,209 @@ namespace Aicup2020
         {
             int buildingSize = properties[EntityType.House].Size;
 
-            // check house preset
-            if (preSetHousePlacingComplete == false)
+            int[,] pathMap = new int[mapSize, mapSize];
+            //стартовое значение, которое будем уменьшать
+            int startWeight = 6;
+            int minWeight = 0;
+            int WBusy = -1;
+            //int WBuilding = -2;
+            int WEnemy = -3;
+            int WResource = -4;
+            int WDanger = -5;
+            //int WWarrior = -6;
+
+
+            #region определяем стартовые клетки
+            //добавляем стартовые клетки поиска
+            List<XYWeight> findCells = new List<XYWeight>();
+            foreach(var en in entityMemories)
             {
-                foreach(var v in preSetHousePositions)
+                if (en.Value.myEntity.EntityType == EntityType.BuilderUnit)
                 {
-                    if (buildBarrierMap[v.X, v.Y].CanBuildNow(buildingSize))
-                    {
-                        return new Vec2Int(v.X, v.Y);
-                    }
+                    findCells.Add(new XYWeight(en.Value.myEntity.Position.X, en.Value.myEntity.Position.Y, startWeight));
                 }
-                preSetHousePlacingComplete = true;
             }
+            #endregion
 
-            // find optimal position
-
-            foreach (var id in basicEntityIdGroups[EntityType.BuilderUnit].members)
+            #region генерируем карту близости к строителям
+            while (findCells.Count > 0)
             {
-                Vec2Int pos = entityMemories[id].myEntity.Position;
-                bool posFinded = false;
+                int bx = findCells[0].x;
+                int by = findCells[0].y;
+                int w = findCells[0].weight;
+                if (w > minWeight)
+                {
 
-                //left 
-                int x = pos.X - buildingSize;
-                int y = pos.Y;
-                if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
-                {
-                    posFinded = true;
-                }
-                else
-                {
-                    //down
-                    x = pos.X;
-                    y = pos.Y - buildingSize;
-                    if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
+                    for (int jj = 0; jj < 4; jj++)
                     {
-                        posFinded = true;
-                    }
-                    else
-                    {
-                        //right
-                        x = pos.X + 1;
-                        y = pos.Y;
-                        if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
+                        int nx = bx;
+                        int ny = by;
+                        if (jj == 0) nx--;
+                        if (jj == 1) ny--;
+                        if (jj == 2) nx++;
+                        if (jj == 3) ny++;
+
+                        if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                         {
-                            posFinded = true;
-                        }
-                        else
-                        {
-                            //up
-                            x = pos.X;
-                            y = pos.Y + 1;
-                            if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
+                            if (pathMap[nx, ny] == 0)
                             {
-                                posFinded = true;
+                                bool canContinueField = true;
+
+                                // проверка опасной зоны
+                                var dCell = enemyDangerCells[nx][ny];
+                                if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
+                                {
+                                    canContinueField = false;
+                                    pathMap[nx, ny] = WDanger;
+                                }
+                                else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                                {
+                                    canContinueField = false;
+                                    pathMap[nx, ny] = WDanger;
+                                }
+
+                                // проверка занятой клетки
+                                if (canContinueField == true)
+                                {
+                                    int id = cellWithIdAny[nx][ny];
+                                    if (id >= 0)// occupied cell
+                                    {
+                                        if (entityMemories.ContainsKey(id))
+                                        {
+                                            canContinueField = false;
+                                            pathMap[nx, ny] = WBusy;
+                                        }
+                                        else if (enemiesById.ContainsKey(id))// enemy 
+                                        {
+                                            canContinueField = false;
+                                            pathMap[nx, ny] = WEnemy;
+                                        }
+                                        else // it is resource
+                                        {
+                                            canContinueField = false;
+                                            pathMap[nx, ny] = WResource;
+                                        }
+                                    }
+                                }
+
+                                if (canContinueField == true) // empty, safe cell or through free unit
+                                {
+                                    //add weight and findCell
+                                    pathMap[nx, ny] = w - 1;
+                                    findCells.Add(new XYWeight(nx, ny, w - 1));
+                                }
                             }
+                            //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
                         }
                     }
                 }
+                findCells.RemoveAt(0);
+            }
+            #endregion
 
-                if (posFinded)
+            #region ищем место строительства вблизи
+            int findX = -1;
+            int findY = -1;
+            int findDistToBuilder = 0;
+
+            int x = 0;
+            int y = 0;
+            bool first = false;
+            int maxLine = mapSize - buildingSize + 1; // нет смысла искать в крайних позициях, туда не влезет здание
+            for (int line = 0; line < maxLine;)
+            {
+                // провкера
+                if (buildBarrierMap[x, y].CanBuildNow(buildingSize)) // можем здесь построить
                 {
-                    return new Vec2Int(x, y);
-                    //entityMemories[id].SetGroup(houseBuilderGroup);
-                    //entityMemories[id].SetTargetPos(new Vec2Int(x, y));
-                    //entityMemories[id].SetMovePos(entityMemories[id].myEntity.Position);
-                    //entityMemories[id].SetTargetEntityType(EntityType.House);
-                    //break;
+                    // есть ли рядом строители?
+                    int dist = 0;
+                    // обходим здание в поисках ближайшего (max) строителя
+                    for (int i = 0; i < buildingSize; i++)
+                    {
+                        int d1 = GetPathMapValueSafe(pathMap, x - 1, y + i, 0); // left
+                        int d2 = GetPathMapValueSafe(pathMap, x + buildingSize, y + i, 0); // right
+                        int d3 = GetPathMapValueSafe(pathMap, x + i, y - 1, 0); // down
+                        int d4 = GetPathMapValueSafe(pathMap, x + i, y + buildingSize, 0); // up
+                        if (d1 > dist) dist = d1;
+                        if (d2 > dist) dist = d2;
+                        if (d3 > dist) dist = d3;
+                        if (d4 > dist) dist = d4;
+                    }
+
+                    if (dist > findDistToBuilder)
+                    {
+                        findX = x;
+                        findY = y;
+                        findDistToBuilder = dist;
+                        if (dist == startWeight - 1) // на соседней клетке строитель
+                        {
+                            break; // можно не искать дальше
+                        } else
+                        {
+                            maxLine = line + startWeight - dist - 1; // ищем еще несколько линий и хватит
+                        }
+                    }
+                    
+                }
+
+                // инкремент
+
+                if (first)
+                {
+                    if (x == line - 1)
+                    {
+                        x = line;
+                        y = 0;
+                        first = false;
+                    } else
+                    {
+                        x++;
+                    }
+
+                } else
+                {
+                    if (x == y)
+                    {
+                        line++;
+                        x = 0;
+                        y = line;
+                        first = true;
+                    } else {
+                        y++;
+                    }
                 }
             }
-            return new Vec2Int(-1, -1);
+            
+
+            #endregion
+
+            return new Vec2Int(findX, findY);
+
+            // ================================== old code ==========================
+
+            // check house preset
+            //if (preSetHousePlacingComplete == false)
+            //{
+            //    foreach(var v in preSetHousePositions)
+            //    {
+            //        if (buildBarrierMap[v.X, v.Y].CanBuildNow(buildingSize))
+            //        {
+            //            return new Vec2Int(v.X, v.Y);
+            //        }
+            //    }
+            //    preSetHousePlacingComplete = true;
+            //}
+
+        }
+        int GetPathMapValueSafe(int[,] pathMap, int x, int y, int defaultValue)
+        {
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize)
+            {
+                return pathMap[x, y];
+            } else
+            {
+                return defaultValue;
+            }
         }
 
         Vec2Int FindPositionForRangedBase()
