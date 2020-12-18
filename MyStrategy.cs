@@ -7,20 +7,20 @@ namespace Aicup2020
     {
         Dictionary<int, EntityMemory> entityMemories = new Dictionary<int, EntityMemory>();
 
-        #region ��������� ����������
-        EntityType[] entityTypesArray = { EntityType.BuilderUnit, EntityType.RangedUnit, EntityType.MeleeUnit, 
-            EntityType.Turret, EntityType.House, EntityType.BuilderBase, EntityType.MeleeBase, EntityType.RangedBase, EntityType.Wall, 
+        #region Служебные переменные
+        EntityType[] entityTypesArray = { EntityType.BuilderUnit, EntityType.RangedUnit, EntityType.MeleeUnit,
+            EntityType.Turret, EntityType.House, EntityType.BuilderBase, EntityType.MeleeBase, EntityType.RangedBase, EntityType.Wall,
             EntityType.Resource };
 
         bool needPrepare = true;
         #endregion
 
-        #region ������ ��� ����� ��������� ����� ������ ������
+        #region клетки где можно построить юнита вокруг здания
         int largeBuildingSize = 5;
-        int[] buildingPositionDX = {-1, -1, -1, -1, -1, 0, 1, 2, 3 ,4, 5, 5, 5, 5, 5,  4,  3,  2,  1,  0 };
-        int[] buildingPositionDY = { 0,  1,  2,  3,  4, 5, 5, 5, 5, 5, 4, 3, 2, 1, 0, -1, -1, -1, -1, -1 };
+        int[] buildingPositionDX = { -1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5, 5, 5, 5, 5, 4, 3, 2, 1, 0 };
+        int[] buildingPositionDY = { 0, 1, 2, 3, 4, 5, 5, 5, 5, 5, 4, 3, 2, 1, 0, -1, -1, -1, -1, -1 };
         int[] buildingPositionIter = { 0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8, 9, -9, 10 };
-        // ������� ����������� ��� ���
+        // позиции расположены вот так
         //   5  6  7  8  9  
         // 4                10
         // 3                11
@@ -37,12 +37,15 @@ namespace Aicup2020
         Group groupMyBuildersAttackEnemyBuilders = new Group();
 
         List<int> needRepairBuildingIdList = new List<int>();
-        List<int> needRepairUnitsIdList = new List<int>();        
+        List<int> needRepairUnitsIdList = new List<int>();
 
-        enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat, 
+        enum DebugOptions
+        {
+            canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat,
             drawOnceVisibleMap,
             drawPotencAttack, drawOptAttack,
-            canDrawDebugUpdate, allOptionsCount }
+            canDrawDebugUpdate, allOptionsCount
+        }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
 
         PlayerView _playerView;
@@ -101,7 +104,7 @@ namespace Aicup2020
                     {
                         s2canBuildNow = true;
                         s2canBuildAfter = true;
-                    }                             
+                    }
                     else
                         s2canBuildAfter = true;
                 }
@@ -142,7 +145,7 @@ namespace Aicup2020
                 s2howManyResBarrier = s3howManyResBarrier = s5howManyResBarrier = 0;
             }
 
-            public int HowManyResBarrier (int size)
+            public int HowManyResBarrier(int size)
             {
                 switch (size)
                 {
@@ -155,7 +158,7 @@ namespace Aicup2020
                 return 0;
             }
 
-            public bool CanBuildNow (int size)
+            public bool CanBuildNow(int size)
             {
                 switch (size)
                 {
@@ -215,10 +218,10 @@ namespace Aicup2020
             {
                 for (int dx = -4; dx <= 0; dx++)
                 {
-                    for (int dy = -4; dy <= 0 ; dy++)
+                    for (int dy = -4; dy <= 0; dy++)
                     {
-                        bool s2 = dx > -2 && dy >-2;
-                        bool s3 = dx > -3 && dy >-3;
+                        bool s2 = dx > -2 && dy > -2;
+                        bool s3 = dx > -3 && dy > -3;
                         bool s5 = true;
 
                         int nx = x + dx;
@@ -241,15 +244,17 @@ namespace Aicup2020
                     }
                 }
             }
-            public BuildMapCell this[int x , int y]
+            public BuildMapCell this[int x, int y]
             {
-                get { 
-                    if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize) 
+                get
+                {
+                    if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
                         return _buildBarrierMap[x, y];
-                    else 
+                    else
                         return null;
                 }
-                set {
+                set
+                {
                     if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
                         _buildBarrierMap[x, y] = value;
                 }
@@ -260,8 +265,8 @@ namespace Aicup2020
 
         struct EnemyDangerCell
         {
-            public byte rangersWarning; // ����� ������� � ��������� ���
-            public byte rangersAim; // ����� ��������� ������
+            public byte rangersWarning; // могут подойти в следующий ход
+            public byte rangersAim; // могут атаковать сейчас
             public byte turretsAim;
             public byte meleesWarning;
             public byte meleesAim;
@@ -269,8 +274,8 @@ namespace Aicup2020
             public byte buildersAim;
             //public EnemyDangerCell(EnemyDangerCell cell)
             //{
-            //    rangersWarning = cell.rangersAim; // ����� ������� � ��������� ���
-            //    rangersAim = cell.rangersAim; // ����� ��������� ������
+            //    rangersWarning = cell.rangersAim; // могут подойти в следующий ход
+            //    rangersAim = cell.rangersAim; // могут атаковать сейчас
             //    turretsAim = cell.;
             //    meleesWarning = 0;
             //    meleesAim = 0;
@@ -326,7 +331,8 @@ namespace Aicup2020
 
             public PotencAttackCell this[int x, int y]
             {
-                get {
+                get
+                {
                     if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
                         return _potencAttackMap[x, y];
                     else
@@ -348,7 +354,7 @@ namespace Aicup2020
                 if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
                 {
                     _potencAttackMap[x, y].dist5low += d5;
-                    _potencAttackMap[x, y].dist6 += d6; 
+                    _potencAttackMap[x, y].dist6 += d6;
                     _potencAttackMap[x, y].dist7 += d7;
                     _potencAttackMap[x, y].dist8 += d8;
                 }
@@ -363,7 +369,8 @@ namespace Aicup2020
                         else if (dist == 6) _potencAttackMap[x, y].dist6++;
                         else if (dist == 7) _potencAttackMap[x, y].dist7++;
                         else if (dist == 8) _potencAttackMap[x, y].dist8++;
-                    } else
+                    }
+                    else
                     {
                         if (dist <= 5) _potencAttackMap[x, y].dist5low--;
                         else if (dist == 6) _potencAttackMap[x, y].dist6--;
@@ -382,12 +389,12 @@ namespace Aicup2020
             }
         }
         PotencAttackMap potencAttackMap;
-        
 
-        int builderCountForStartBuilding = 3; // ���������� ��������� ��������� ���������� ������� ������ ��� ������ �������������
-        float startBuildingFindDistanceFromHealth = 0.4f; // ��������� ������ ���������� ��� ������� �������� 
 
-        #region ��������������� ����������
+        int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
+        float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
+
+        #region Статичстические переменные
         Dictionary<Model.EntityType, int> currentMyEntityCount = new Dictionary<Model.EntityType, int>();
         Dictionary<Model.EntityType, int> previousEntityCount = new Dictionary<Model.EntityType, int>();
         Dictionary<Model.EntityType, float> buildEntityPriority = new Dictionary<Model.EntityType, float>();
@@ -403,7 +410,7 @@ namespace Aicup2020
         int[] howMuchLiveBuildersLast10Turns = new int[howManyTurnsHistory];
         int howMuchResourcesCollectAll = 0;
         bool iHaveActiveRangedBase = false;
-        
+
         int myResources;
         int myScore;
         int myId;
@@ -412,27 +419,35 @@ namespace Aicup2020
         int populationUsing = 0;
         bool fogOfWar;
         #endregion
-        #region �������, �����, ��������� � �.�.
+        #region Желания, Планы, Намерения и т.д.
 
-        enum DesireType {WantCreateBuilders, WantCreateRangers,
+        enum DesireType
+        {
+            WantCreateBuilders, WantCreateRangers,
             WantCreateHouses, WantCreateRangerBase,
             WantRepairBuildings,
             WantCollectResources, WantRetreatBuilders,
-            WantTurretAttacks, WantAllWarriorsAttack };
+            WantTurretAttacks, WantAllWarriorsAttack
+        };
         List<DesireType> desires = new List<DesireType>();
         List<DesireType> prevDesires = new List<DesireType>();
-        
-        enum PlanType {PlanCreateBuilders, PlanCreateRangers,
+
+        enum PlanType
+        {
+            PlanCreateBuilders, PlanCreateRangers,
             PlanCreateHouses, PlanCreateRangerBase,
             PlanRepairNewBuildings, PlanRepairOldBuildings,
             PlanExtractResources, PlanRetreatBuilders,
-            PlanTurretAttacks, PlanAllWarriorsAttack }
+            PlanTurretAttacks, PlanAllWarriorsAttack
+        }
         List<PlanType> plans = new List<PlanType>();
         List<PlanType> prevPlans = new List<PlanType>();
-        
-        enum IntentionType { IntentionCreateBuilder, IntentionStopCreatingBuilder, 
+
+        enum IntentionType
+        {
+            IntentionCreateBuilder, IntentionStopCreatingBuilder,
             IntentionCreateRanger, IntentionStopCreatingRanger,
-            IntentionCreateHouse,  IntentionCreateRangedBase,
+            IntentionCreateHouse, IntentionCreateRangedBase,
             IntentionRepairNewBuilding, IntentionRepairOldBuilding,
             IntentionExtractResources, IntentionFindResources, IntentionRetreatBuilders, IntentionMyBuiAttackEnemyBui,
             IntentionTurretAttacks,
@@ -460,7 +475,7 @@ namespace Aicup2020
                 targetId = _targetId;
                 targetGroup = new Group();
                 targetPosition = new Vec2Int();
-                targetEntityType = EntityType.Resource;                
+                targetEntityType = EntityType.Resource;
             }
             public Intention(IntentionType type, Group _targetGroup)
             {
@@ -485,7 +500,7 @@ namespace Aicup2020
             public float _y2;
             public Color _color1;
             public Color _color2;
-            public DebugLine(float x1, float y1, float x2, float y2, Color color1, Color color2 )
+            public DebugLine(float x1, float y1, float x2, float y2, Color color1, Color color2)
             {
                 _x1 = x1;
                 _y1 = y1;
@@ -501,7 +516,7 @@ namespace Aicup2020
         {
             _playerView = playerView;
             _debugInterface = debugInterface;
-                
+
             #region first initialization arrays and lists (once)
             if (needPrepare == true)
             {
@@ -522,7 +537,7 @@ namespace Aicup2020
             {
                 if (p.Id == myId)
                 {
-                    howMuchResourcesCollectLastTurn = p.Resource - myResources; // �� ��������� ��������� ������������� ���������
+                    howMuchResourcesCollectLastTurn = p.Resource - myResources; // не учитывает стоимость произведенных сущностей
                     myResources = p.Resource;
                     myScore = p.Score;
                     break;
@@ -548,25 +563,25 @@ namespace Aicup2020
 
             debugLines.Clear();
 
-            GenerateDesires(); // ������� - ��� � ���� �������?       
-            ConvertDesiresToPlans(); // ����� - ����� �� ������� � ���� ������ �������?
+            GenerateDesires(); // Желания - Что я хочу сделать?       
+            ConvertDesiresToPlans(); // Планы - Какие из желаний я могу сейчас сделать?
 
-            PrepareBeforeCreateIntentions(); //���������������� ���������� ����� ���������� ���������
-            ConvertPlansToIntentions(); // ��������� - ��� � ��� � ���� ��������� �����?
-            CorrectCrossIntentions();// ��������� ������������������ � �������������� ���������. ��������� ������ ������.
+            PrepareBeforeCreateIntentions(); //Подготовительные меропрития перед созданиями намерений
+            ConvertPlansToIntentions(); // Намерения - Как и кем я буду выполнять планы?
+            CorrectCrossIntentions();// Проверяем взаимоискулючающие и противоречащие намерения. Оставляем только нужные.
 
-            ConvertIntentionsToOrders(); // ���������� ���������� ������� ��� ������ ��������
-            OptimizeOrders(); // ������������ �������, ����� �� ���� ������������
+            ConvertIntentionsToOrders(); // определяем конкретные приказы для каждой сущности
+            OptimizeOrders(); // корректируем приказы, чтобы не было столкновений
 
-            ConvertOrdersToActions(); // ������� - ��� ����� ��������� ���������? //������� ������������ � ���������� action ��� entities        
+            ConvertOrdersToActions(); // Приказы - Кто будет выполнять намерения? //приказы превращаются в конкретные action для entities        
 
-            SaveEntitiesMemory(); 
+            SaveEntitiesMemory();
 
             if (debugOptions[(int)DebugOptions.canDrawGetAction])
             {
                 if (debugOptions[(int)DebugOptions.drawPotencAttack] == true)
                     DrawPotencMap(3);
-                if(debugOptions[(int)DebugOptions.drawOnceVisibleMap] == true)
+                if (debugOptions[(int)DebugOptions.drawOnceVisibleMap] == true)
                 {
                     for (int x = 0; x < mapSize; x++)
                     {
@@ -608,7 +623,7 @@ namespace Aicup2020
             if (_debugInterface == null)
             {
                 debugOptions[(int)DebugOptions.canDrawGetAction] = false;
-                debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false; // ����������� ���������� ���������� �� ������ debugUpdate
+                debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false; // отображение отладочной информации на стадии debugUpdate
             }
             else
             {
@@ -646,14 +661,14 @@ namespace Aicup2020
 
             if (!fogOfWar)
             {
-                for(int x = 0; x <mapSize; x++)
+                for (int x = 0; x < mapSize; x++)
                 {
-                    for(int y = 0; y < mapSize; y++)
+                    for (int y = 0; y < mapSize; y++)
                     {
                         onceVisibleMap[x][y] = 20;
                         currentVisibleMap[x][y] = true;
                     }
-                }                
+                }
             }
 
             preSetHousePositions = new List<Vec2Int>();
@@ -691,7 +706,8 @@ namespace Aicup2020
             // zero enemies dictionary
             enemiesById.Clear();
             // zero enemy danger cells
-            for (var x = 0; x < mapSize; x++) {
+            for (var x = 0; x < mapSize; x++)
+            {
                 for (var y = 0; y < mapSize; y++)
                 {
                     enemyDangerCells[x][y] = new EnemyDangerCell();
@@ -708,11 +724,11 @@ namespace Aicup2020
             {
                 //use only my entities
                 if (e.PlayerId == myId)
-                {                    
+                {
                     if (entityMemories.ContainsKey(e.Id))
                     {
                         //update
-                        entityMemories[e.Id].Update(e);                        
+                        entityMemories[e.Id].Update(e);
                         //once and current visible map update
                         AddEntityViewToOnceVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
                         AddEntityViewToCurrentVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
@@ -745,7 +761,7 @@ namespace Aicup2020
                             }
                         }
                     }
-                    // ���������� ������� � ������ �������
+                    // добаввляем раненых в списки лечения
                     if (e.Health < properties[e.EntityType].MaxHealth)
                     {
                         if (properties[e.EntityType].CanMove)
@@ -757,7 +773,8 @@ namespace Aicup2020
                 else if (e.PlayerId == null)// it s resource
                 {
                     resourceMemoryMap[e.Position.X][e.Position.Y] = currentTick;
-                } else // it's enemy
+                }
+                else // it's enemy
                 {
                     enemiesById.Add(e.Id, e);
                     AddEnemyDangerCells(e.Position.X, e.Position.Y, e.EntityType);
@@ -780,7 +797,7 @@ namespace Aicup2020
                 howMuchResourcesCollectLastTurn = 0;
             }
             howMuchResourcesCollectAll += howMuchResourcesCollectLastTurn;
-            for(int i = howMuchResourcesCollectCPALastNTurns.Length - 1; i > 0; i--)
+            for (int i = howMuchResourcesCollectCPALastNTurns.Length - 1; i > 0; i--)
             {
                 howMuchResourcesCollectLastNTurns[i] = howMuchResourcesCollectLastNTurns[i - 1];
                 howMuchResourcesCollectCPALastNTurns[i] = howMuchResourcesCollectCPALastNTurns[i - 1];
@@ -819,15 +836,15 @@ namespace Aicup2020
             //zeroing
             for (int i = 0; i < mapSize; i++)
             {
-                resourcePotentialField[i] = new int[mapSize]; 
+                resourcePotentialField[i] = new int[mapSize];
             }
 
-            //��������� ��������, ������� ����� ���������
+            //стартовое значение, которое будем уменьшать
             int startWeight = mapSize * mapSize;
-            //int firstCellWeight = startWeight - 1; // �������� ������ � ��������. �������, ��� ��������� �� ��� ������ �������� ������ � �� ������ ���� ����� ����
-            //int minIndex = startIndex - maxDistance; //����������� ��������, ������ �������� �� ����� ������            
+            //int firstCellWeight = startWeight - 1; // соседние клетки с ресурсом. Считаем, что строители на них всегда добывают ресурс и не строим путь через него
+            //int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать            
 
-            //��������� ��������� ������ ������
+            //добавляем стартовые клетки поиска
             List<XYWeight> findCells = new List<XYWeight>();
             foreach (var en in _playerView.Entities)
             {
@@ -856,23 +873,24 @@ namespace Aicup2020
                     if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                     {
                         if (resourcePotentialField[nx][ny] == 0)
-                        {                            
+                        {
                             bool canContinueField = true;
 
-                            // �������� ������� ����
+                            // проверка опасной зоны
                             var dCell = enemyDangerCells[nx][ny];
                             if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
                             {
                                 canContinueField = false;
                                 resourcePotentialField[nx][ny] = RPFdangerCellWeight;
-                            } else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                            }
+                            else if (dCell.meleesWarning + dCell.rangersWarning > 0)
                             {
                                 canContinueField = false;
                                 resourcePotentialField[nx][ny] = RPFwarningCellWeight;
                                 //findCells.Add(new XYWeight(nx, ny, RPFwarningCellWeight));
                             }
 
-                            // �������� ������� ������
+                            // проверка занятой клетки
                             if (canContinueField == true)
                             {
                                 int id = cellWithIdAny[nx][ny];
@@ -882,7 +900,7 @@ namespace Aicup2020
                                     {
                                         if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
                                         {
-                                            if (w == startWeight)//check my builder �� �������� ������ � ��������s
+                                            if (w == startWeight)//check my builder на соседней клетке с ресурсомs
                                             {
                                                 canContinueField = false;
                                                 resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
@@ -915,7 +933,7 @@ namespace Aicup2020
                                 findCells.Add(new XYWeight(nx, ny, w - 1));
                             }
                         }
-                        //����� �� ��������� ��� ������� ������, ��� ��� � ��� ����� ���������������� �� ������� 1-2-3-4 � �.�.
+                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
                     }
                 }
                 findCells.RemoveAt(0);
@@ -924,7 +942,7 @@ namespace Aicup2020
         void GenerateBuildBarrierMap()
         {
             //zeroing
-            buildBarrierMap.Reset();                
+            buildBarrierMap.Reset();
 
             // check entity self-place barriers
             for (int x = 0; x < mapSize; x++)
@@ -934,7 +952,7 @@ namespace Aicup2020
                     int id = cellWithIdAny[x][y];
                     if (id >= 0)
                     {
-                        for (int k = x - 4; k <=x; k++)
+                        for (int k = x - 4; k <= x; k++)
                         {
                             for (int m = y - 4; m <= y; m++)
                             {
@@ -942,7 +960,7 @@ namespace Aicup2020
                                 bool s3 = (x - k < 3 && y - m < 3);
                                 bool s5 = true; // (x - k < 5 && y - m < 5);
 
-                                if (k >= 0 && m >= 0) // ������ mapSize ������� �� ������
+                                if (k >= 0 && m >= 0) // больше mapSize никогда не станет
                                 {
                                     if (entityMemories.ContainsKey(id))
                                     {
@@ -951,20 +969,23 @@ namespace Aicup2020
                                             if (s2) buildBarrierMap[k, m].s2noBuilderBarrier = false;
                                             if (s3) buildBarrierMap[k, m].s3noBuilderBarrier = false;
                                             if (s5) buildBarrierMap[k, m].s5noBuilderBarrier = false;
-                                        } else
+                                        }
+                                        else
                                         {
                                             if (s2) buildBarrierMap[k, m].s2noBaseOrWarriorBarrier = false;
                                             if (s3) buildBarrierMap[k, m].s3noBaseOrWarriorBarrier = false;
                                             if (s5) buildBarrierMap[k, m].s5noBaseOrWarriorBarrier = false;
                                         }
 
-                                    } else if (enemiesById.ContainsKey(id))
+                                    }
+                                    else if (enemiesById.ContainsKey(id))
                                     {
                                         if (s2) buildBarrierMap[k, m].s2noEnemiesBarrier = false;
                                         if (s3) buildBarrierMap[k, m].s3noEnemiesBarrier = false;
                                         if (s5) buildBarrierMap[k, m].s5noEnemiesBarrier = false;
 
-                                    } else // it's resource
+                                    }
+                                    else // it's resource
                                     {
                                         if (s2) buildBarrierMap[k, m].s2howManyResBarrier++;
                                         if (s3) buildBarrierMap[k, m].s3howManyResBarrier++;
@@ -983,7 +1004,7 @@ namespace Aicup2020
                     }
                 }
             }
-            
+
             // check enemy danger zone place
             foreach (var p in enemiesById)
             {
@@ -1004,7 +1025,7 @@ namespace Aicup2020
                     int dy = 0; // without my cell
                     for (int step = 0; step <= dangerRadius;)
                     {
-                        // ��������
+                        // отмечаем
                         int nx = sx + dx;
                         int ny = sy + dy;
                         if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
@@ -1012,7 +1033,7 @@ namespace Aicup2020
                             buildBarrierMap.BlockCell(nx, ny, true, false);
                         }
 
-                        //������� ����
+                        //двигаем цель
                         if (flag == 0)
                         {
                             dx--;
@@ -1201,7 +1222,7 @@ namespace Aicup2020
                         if (onceVisibleMap[x][y] == 0)
                         {
                             if (onceVisibleMap[x - 1][y] != 0 || onceVisibleMap[x][y - 1] != 0)
-                               buildBarrierMap.BlockCell(x, y , false, true);
+                                buildBarrierMap.BlockCell(x, y, false, true);
                         }
                     }
                 }
@@ -1213,12 +1234,14 @@ namespace Aicup2020
                 for (int y = 0; y < mapSize; y++)
                 {
                     BuildMapCell cell = buildBarrierMap[x, y];
-                    if (fogOfWar == true) { 
+                    if (fogOfWar == true)
+                    {
                         if (onceVisibleMap[x][y] > 0)
                         {
                             cell.Check();
-                        }                        
-                    } else
+                        }
+                    }
+                    else
                     {
                         cell.Check();
                     }
@@ -1230,18 +1253,19 @@ namespace Aicup2020
                 for (int x = 0; x < mapSize; x++)
                 {
                     for (int y = 0; y < mapSize; y++)
-                    {     
-                        if (buildBarrierMap[x,y].s5canBuildAfter == true)
+                    {
+                        if (buildBarrierMap[x, y].s5canBuildAfter == true)
                         {
                             ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0),
                                 (buildBarrierMap[x, y].s5canBuildNow) ? colorBlue : colorMagenta);
                             _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "5", 0.5f, 16)));
-                        } else if (buildBarrierMap[x, y].s3canBuildAfter == true)
+                        }
+                        else if (buildBarrierMap[x, y].s3canBuildAfter == true)
                         {
                             ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0),
                                 (buildBarrierMap[x, y].s3canBuildNow) ? colorBlue : colorMagenta);
                             _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "3", 0.5f, 16)));
-                        } 
+                        }
                         // don't show 2 (turret) place
                         //else if (buildBarrierMap[x, y].s2canBuildAfter == true)
                         //{
@@ -1251,26 +1275,26 @@ namespace Aicup2020
                         //}
                     }
                 }
-                 #region ������� �������������
-                        //if (playerView.CurrentTick == 10)
-                        //{
-                        //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("�������� ���������")));
+                #region примеры использования
+                //if (playerView.CurrentTick == 10)
+                //{
+                //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
 
-                        //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
-                        //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
-                        //    debugInterface.Send(new DebugCommand.Add(text));
+                //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
+                //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
+                //    debugInterface.Send(new DebugCommand.Add(text));
 
-                        //    ColoredVertex[] vertices = new ColoredVertex[] {
-                        //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
-                        //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
-                        //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
-                        //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
-                        //    };
-                        //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
-                        //    debugInterface.Send(new DebugCommand.Add(lines));
-                        //}
-                        #endregion
-                 _debugInterface.Send(new DebugCommand.Flush());
+                //    ColoredVertex[] vertices = new ColoredVertex[] {
+                //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(20,20), new Vec2Float(), colorRed),
+                //        new ColoredVertex(new Vec2Float(10,10), new Vec2Float(), colorRed)
+                //    };
+                //    DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+                //    debugInterface.Send(new DebugCommand.Add(lines));
+                //}
+                #endregion
+                _debugInterface.Send(new DebugCommand.Flush());
             }
         }
         void GeneratePotencAttackMap()
@@ -1297,7 +1321,8 @@ namespace Aicup2020
                 if (entityType == EntityType.RangedUnit)
                 {
                     enemyRangersDistByID.Add(p.Key, new PotencAttackCell());
-                } else if (entityType == EntityType.Turret)
+                }
+                else if (entityType == EntityType.Turret)
                 {
                     enemyTurretDistByID.Add(p.Key, new PotencAttackCell());
                 }
@@ -1309,7 +1334,7 @@ namespace Aicup2020
                 int y1 = enemiesById[enemy.Key].Position.Y;
                 foreach (var myRangerId in rangersId)
                 {
-                    int x2 = entityMemories[myRangerId].myEntity.Position.X; 
+                    int x2 = entityMemories[myRangerId].myEntity.Position.X;
                     int y2 = entityMemories[myRangerId].myEntity.Position.Y;
                     int dist = Abs(x1 - x2) + Abs(y1 - y2);
                     if (dist <= 5) enemy.Value.dist5low++;
@@ -1355,7 +1380,7 @@ namespace Aicup2020
                         potencAttackMap.AddCell(sx - attackRange + cc, sy - cc, attackRange, k == attackRange);//left-down
                         potencAttackMap.AddCell(sx - cc, syUp + attackRange - cc, attackRange, k == attackRange);//left-up
                         potencAttackMap.AddCell(sxRight + attackRange - cc, syUp + cc, attackRange, k == attackRange);//right-up
-                        potencAttackMap.AddCell(sxRight + cc, sy - attackRange  + cc, attackRange, k == attackRange);//right-down
+                        potencAttackMap.AddCell(sxRight + cc, sy - attackRange + cc, attackRange, k == attackRange);//right-down
                     }
                     potencAttackMap.AddCell(sx - attackRange, syUp, attackRange, k == attackRange);//left
                     potencAttackMap.AddCell(sxRight, syUp + attackRange, attackRange, k == attackRange);//up
@@ -1405,7 +1430,7 @@ namespace Aicup2020
                     int sy = p.Value.myEntity.Position.Y;
                     int flag = 3;   //  /2  \3
                     int dx = 0;     //  \1  /0
-                    int dy = 0; 
+                    int dy = 0;
                     for (int step = 0; step <= dist;)
                     {
                         //рисуем
@@ -1422,7 +1447,7 @@ namespace Aicup2020
                             int textSize = 16;
                             if (d5 != 0)
                             {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx, ny + 0.5f), new Vec2Float(0, 0),  colorRed);
+                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx, ny + 0.5f), new Vec2Float(0, 0), colorRed);
                                 _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d5.ToString(), 0, textSize)));
                             }
                             if (d6 != 0)
@@ -1465,7 +1490,8 @@ namespace Aicup2020
                                 flag = 0;
                                 dx++;
                                 step++;
-                            } else if (dy < 0)// first shift from 0,0
+                            }
+                            else if (dy < 0)// first shift from 0,0
                             {
                                 dx = 1;
                                 dy = 0;
@@ -1485,12 +1511,12 @@ namespace Aicup2020
             prevDesires = desires;
             desires = new List<DesireType>();
 
-            #region ���� ������� ���� ��������
+            #region Хочу строить базу лучников
             bool needMakeRangedBase = false;
             if (basicEntityIdGroups[EntityType.RangedBase].members.Count == 0)
             {
                 int maxEnemyResources = 0;
-                foreach(var pl in _playerView.Players)
+                foreach (var pl in _playerView.Players)
                 {
                     if (pl.Id != myId)
                     {
@@ -1519,18 +1545,19 @@ namespace Aicup2020
                     }
 
                 }
-            } else
+            }
+            else
             {
                 if (entityMemories[basicEntityIdGroups[EntityType.RangedBase].members[0]].myEntity.Active == false)
                 {
                     //needMakeRangedBase = true;
                 }
             }
-            
+
             #endregion
 
 
-            #region ���� ������� ����
+            #region Хочу строить дома
             if (needMakeRangedBase == false)
             {
                 int[] popMax = new int[] { 15, 30, 55, 70, 100, 1000 };
@@ -1538,7 +1565,7 @@ namespace Aicup2020
                 for (int i = 0; i < popMax.Length; i++)
                 {
                     int potencPopulation = populationMax;
-                    foreach(var id in basicEntityIdGroups[EntityType.House].members)
+                    foreach (var id in basicEntityIdGroups[EntityType.House].members)
                     {
                         if (entityMemories[id].myEntity.Active == false)
                             potencPopulation += properties[EntityType.House].PopulationProvide;
@@ -1555,11 +1582,11 @@ namespace Aicup2020
             }
             #endregion
 
-            #region �������� ������ ����� �������
+            #region Выбираем какого юнита строить
             int countEnemiesOnMyTerritory = 0;
             int myTerritoryX = mapSize / 2;
             int myTerritoryY = mapSize / 2;
-            foreach(var p in enemiesById)
+            foreach (var p in enemiesById)
             {
                 if (p.Value.Position.X < myTerritoryX && p.Value.Position.Y < myTerritoryY)
                 {
@@ -1572,12 +1599,12 @@ namespace Aicup2020
             {
                 if (countEnemiesOnMyTerritory > 0)
                 {
-                    /// ����� �������� ������������� ����� ������� ���
+                    /// тесты показали эффективность этого расчета над
                     /// + populationMax / 3
                     /// + populationMax / 4
                     /// + populationMax / 5
-                    /// ������������� ������ basic_retreat1 �� ����������� ������ �������� populationMax
-                    /// ��. 10.12_13:51 � 10.12_14:00 � 10.12_14:19
+                    /// соответствует версии basic_retreat1 до исправления ошибки подсчета populationMax
+                    /// см. 10.12_13:51 и 10.12_14:00 и 10.12_14:19
                     int potencyPopul = 0;
                     foreach (var e in properties)
                     {
@@ -1595,7 +1622,8 @@ namespace Aicup2020
                     if (currentMyEntityCount[EntityType.BuilderUnit] < 30)
                     {
                         desires.Add(DesireType.WantCreateBuilders);
-                    } else if (currentMyEntityCount[EntityType.BuilderUnit] > 70)
+                    }
+                    else if (currentMyEntityCount[EntityType.BuilderUnit] > 70)
                     {
                         desires.Add(DesireType.WantCreateRangers);
                     }
@@ -1607,7 +1635,8 @@ namespace Aicup2020
                             desires.Add(DesireType.WantCreateRangers);
                     }
                 }
-            } else // ��� ���� ��������
+            }
+            else // нет базы лучников
             {
                 if (populationUsing < populationMax)
                     desires.Add(DesireType.WantCreateBuilders);
@@ -1657,7 +1686,7 @@ namespace Aicup2020
                 switch (d)
                 {
                     case DesireType.WantCreateBuilders:
-                        #region ���� ��������� ����������
+                        #region хочу создавать строителей
                         //i have base
                         if (currentMyEntityCount[EntityType.BuilderBase] > 0)
                         {
@@ -1667,11 +1696,11 @@ namespace Aicup2020
                             {
                                 plans.Add(PlanType.PlanCreateBuilders);
                             }
-                        }                        
+                        }
                         break;
                     #endregion
                     case DesireType.WantCreateRangers:
-                        #region ���� ��������� ��������
+                        #region Хочу создавать стрелков
                         //i have base
                         if (currentMyEntityCount[EntityType.RangedBase] > 0)
                         {
@@ -1685,7 +1714,7 @@ namespace Aicup2020
                         break;
                     #endregion
                     case DesireType.WantCreateHouses:
-                        #region ���� ������� ����
+                        #region хочу строить дома
                         //i have builders
                         if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
                         {
@@ -1693,16 +1722,16 @@ namespace Aicup2020
                             int newCost = properties[EntityType.House].InitialCost;
                             if (myResources >= newCost)
                             {
-                                // ����������� �� ������������� �������������
+                                // ограничение на одновременное строительство
                                 int count = 0;
-                                foreach(var en in entityMemories)
+                                foreach (var en in entityMemories)
                                 {
-                                    if (en.Value.myEntity.Active == false) 
+                                    if (en.Value.myEntity.Active == false)
                                         count++;
                                 }
                                 if ((populationMax <= 20 && count == 0)
                                     || (populationMax <= 40 && count <= 1)
-                                    || (populationMax <= 60 && count <= 2) 
+                                    || (populationMax <= 60 && count <= 2)
                                     || (count <= 2))
                                 {
                                     plans.Add(PlanType.PlanCreateHouses);
@@ -1712,7 +1741,7 @@ namespace Aicup2020
                         break;
                     #endregion
                     case DesireType.WantCreateRangerBase:
-                        #region ���� ������� ����
+                        #region хочу строить базу
                         //i have builders
                         if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
                         {
@@ -1720,13 +1749,13 @@ namespace Aicup2020
                             int newCost = properties[EntityType.RangedBase].InitialCost;
                             if (myResources >= newCost)
                             {
-                                 plans.Add(PlanType.PlanCreateRangerBase);                                
+                                plans.Add(PlanType.PlanCreateRangerBase);
                             }
                         }
                         break;
-                        #endregion
+                    #endregion
                     case DesireType.WantRepairBuildings:
-                        #region ���� ������������� ������
+                        #region хочу ремонтировать здания
                         {
                             bool needRepairOld = false;
                             bool needRepairNew = false;
@@ -1745,21 +1774,21 @@ namespace Aicup2020
                         break;
                     #endregion
                     case DesireType.WantRetreatBuilders:
-                        #region ���� ����� ��������� ������� �� ������
+                        #region хочу чтобы строители сбегали от врагов
                         plans.Add(PlanType.PlanRetreatBuilders);
                         break;
                     #endregion
                     case DesireType.WantCollectResources:
-                        #region ���� �������� �������
+                        #region хочу добывать ресурсы
                         //i have builders
                         if (currentMyEntityCount[EntityType.BuilderUnit] > 0)
-                        {                            
+                        {
                             plans.Add(PlanType.PlanExtractResources);
                         }
                         break;
                     #endregion
                     case DesireType.WantTurretAttacks:
-                        #region ���� ����� ������ ���������
+                        #region хочу чтобы турели атаковали
                         //i have turret
                         if (currentMyEntityCount[EntityType.Turret] > 0)
                         {
@@ -1768,7 +1797,7 @@ namespace Aicup2020
                         break;
                     #endregion
                     case DesireType.WantAllWarriorsAttack:
-                        #region ���� ����� ��� ����� ���������
+                        #region хочу чтобы все войны атаковали
                         //i have warrior
                         if ((currentMyEntityCount[EntityType.RangedUnit] + currentMyEntityCount[EntityType.MeleeUnit]) > 0)
                         {
@@ -1777,13 +1806,13 @@ namespace Aicup2020
                         break;
                     #endregion
                     default:
-                        throw new System.Exception("����������� ��� �������");//unknown type                        
+                        throw new System.Exception("Неизвестный тип Желаний");//unknown type                        
                 }
             }
         }
         void PrepareBeforeCreateIntentions()
         {
-            #region ������� ������ ������ � ����� ����������
+            #region очищаем группы побега и атаки строителей
             while (groupRetreatBuilders.members.Count > 0)
             {
                 entityMemories[groupRetreatBuilders.members[0]].SetGroup(basicEntityIdGroups[entityMemories[groupRetreatBuilders.members[0]].myEntity.EntityType]);
@@ -1817,7 +1846,7 @@ namespace Aicup2020
                         }
                         break;
                     case PlanType.PlanCreateHouses:
-                        // �������� ��� ����� �������
+                        // выбираем где будем строить
                         {
                             Vec2Int pos = FindPositionForHouse();
                             if (pos.X >= 0)
@@ -1852,15 +1881,15 @@ namespace Aicup2020
                         }
                         break;
                     case PlanType.PlanRetreatBuilders:
-                        #region ���� ����� ��������� ������� �� ������
+                        #region хочу чтобы строители сбегали от врагов
                         {
                             bool needRetreat = false;
                             bool needAttackEnemyBuilders = false;
                             foreach (var em in entityMemories)
                             {
                                 if (em.Value.myEntity.EntityType == EntityType.BuilderUnit)
-                                    //|| em.Value.myEntity.EntityType == EntityType.MeleeUnit
-                                    //|| em.Value.myEntity.EntityType == EntityType.RangedUnit)
+                                //|| em.Value.myEntity.EntityType == EntityType.MeleeUnit
+                                //|| em.Value.myEntity.EntityType == EntityType.RangedUnit)
                                 {
                                     EnemyDangerCell enemyDangerCell = enemyDangerCells[em.Value.myEntity.Position.X][em.Value.myEntity.Position.Y];
                                     if ((enemyDangerCell.meleesWarning + enemyDangerCell.meleesAim + enemyDangerCell.rangersAim + enemyDangerCell.rangersWarning) > 0)
@@ -1884,7 +1913,7 @@ namespace Aicup2020
                                 intentions.Add(new Intention(IntentionType.IntentionMyBuiAttackEnemyBui, groupMyBuildersAttackEnemyBuilders));
                         }
                         break;
-                        #endregion
+                    #endregion
                     case PlanType.PlanExtractResources:
                         intentions.Add(new Intention(IntentionType.IntentionExtractResources, basicEntityIdGroups[EntityType.BuilderUnit]));
                         break;
@@ -1896,7 +1925,7 @@ namespace Aicup2020
                         intentions.Add(new Intention(IntentionType.IntentionAllWarriorsAttack, basicEntityIdGroups[EntityType.RangedUnit]));
                         break;
                     default:
-                        throw new System.Exception("���������� ����");
+                        throw new System.Exception("неучтенный план");
                 }
             }
         }
@@ -1905,13 +1934,13 @@ namespace Aicup2020
             for (int i = 0; i < prevIntentions.Count;)
             {
                 bool delete = false;
-                // ������ ���������� �������
+                // анализ предыдущих заданий
                 switch (prevIntentions[i].intentionType)
                 {
                     case IntentionType.IntentionCreateBuilder:
                         #region  cancel base build 
                         {
-                            if (entityMemories.ContainsKey(prevIntentions[i].targetId)) // �� ������ ���� � ���� ���� �������� ��� ������
+                            if (entityMemories.ContainsKey(prevIntentions[i].targetId)) // на случай если в этом ходу сущность уже мертва
                             {
                                 bool needStop = true;
                                 foreach (var ni in intentions)
@@ -1934,7 +1963,7 @@ namespace Aicup2020
                     case IntentionType.IntentionCreateRanger:
                         #region // cancel Ranger base build
                         {
-                            if (entityMemories.ContainsKey(prevIntentions[i].targetId)) // �� ������ ���� � ���� ���� �������� ��� ������
+                            if (entityMemories.ContainsKey(prevIntentions[i].targetId)) // на случай если в этом ходу сущность уже мертва
                             {
                                 bool needStop = true;
                                 foreach (var ni in intentions)
@@ -1952,22 +1981,22 @@ namespace Aicup2020
                                 {
                                     intentions.Add(new Intention(IntentionType.IntentionStopCreatingRanger, prevIntentions[i].targetId));
                                 }
-                            }   
+                            }
                         }
                         break;
                     #endregion
                     case IntentionType.IntentionCreateHouse:
-                        #region ������� ��������� �� ������ ������������ ��� �������� �������������
+                        #region Создаем намерение на ремонт построенного или отменяем строительство
                         //if (prevIntentions[i].targetId >= 0)
                         //{
-                        //    // ������� �������������, �������� ��������� �� ������
+                        //    // удачное строительство, создавем намерение на ремонт
                         //    Intention intention = new Intention(IntentionType.IntentionRepairNewBuilding, prevIntentions[i].targetId);
                         //    intention.targetGroup = prevIntentions[i].targetGroup;
                         //    intentions.Add(intention);
                         //}
                         //else
                         //{
-                        //    // ��������� �������������, ���������� ������
+                        //    // неудачное строительство, распускаем группу
                         //    while (prevIntentions[i].targetGroup.members.Count > 0)
                         //    {
                         //        int id = prevIntentions[i].targetGroup.members[0];
@@ -1977,7 +2006,7 @@ namespace Aicup2020
                         break;
                     #endregion
                     case IntentionType.IntentionRepairNewBuilding:
-                        #region ���������� ������������� ��� �������� �������
+                        #region продолжаем ремонтировать или отменяем задание
                         //{
                         //    bool removed = false;
                         //    int targetId = prevIntentions[i].targetId;
@@ -1994,7 +2023,7 @@ namespace Aicup2020
                         //        //target die
                         //        removed = true;
                         //    }
-                            
+
                         //    if (removed)
                         //    {
                         //        while (prevIntentions[i].targetGroup.members.Count > 0)
@@ -2073,7 +2102,7 @@ namespace Aicup2020
                     case IntentionType.IntentionRetreatBuilders:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            entityMemories[id].OrderTryRetreat(); 
+                            entityMemories[id].OrderTryRetreat();
                             //OrderRetreatBuilderFromEnemy(id);
                         }
                         break;
@@ -2084,21 +2113,21 @@ namespace Aicup2020
                         }
                         break;
                     default:
-                        throw new System.Exception("�� �������� ���������!");
+                        throw new System.Exception("Не учтенное намерение!");
                 }
             }
         }
         void OptimizeOrders()
         {
-            OptimizeOrderToAttackRM(); // ������������ ������� �� ����� ������
-            // OptimizeOrderToHealWarriors(); // ������������ ������� �� ������� ������
-            OptimizeOrderToRetreat(); // ������������ �����������
+            OptimizeOrderToAttackRM(); // оптимизируем приказы на атаку воинов
+            // OptimizeOrderToHealWarriors(); // оптимизируем приказы на лечение воинов
+            OptimizeOrderToRetreat(); // оптимизируем отступление
 
-            OptimizeOrderToRepairNew(); // ����������� ����� ������
-            OptimizeOrderToBuildNew(); // ������ ����� ������
-            OptimizeOrderToRepairOld(); // ����������� ������ ������
+            OptimizeOrderToRepairNew(); // ремонтируем новые здания
+            OptimizeOrderToBuildNew(); // строим новые здания
+            OptimizeOrderToRepairOld(); // ремонтируем старые здания
 
-            
+
         }
 
         class Target
@@ -2150,8 +2179,8 @@ namespace Aicup2020
         {
             int damageR = properties[EntityType.RangedUnit].Attack.Value.Damage;
             int damageM = properties[EntityType.MeleeUnit].Attack.Value.Damage;
-            // ������������� ��� ��� ��� �����
-            // ������������ ����
+            // рассматриваем тех кто уже воюет
+            // распределяем цели
             Dictionary<int, List<EnemyToOpt>> myRangers = new Dictionary<int, List<EnemyToOpt>>();
             //List<int> enemyRangersId = new List<int>();
             //List<int> enemyMeleesId = new List<int>();
@@ -2165,20 +2194,21 @@ namespace Aicup2020
                     myRangers.Add(en.Key, new List<EnemyToOpt>());
                 }
             }
-            foreach(var en in enemiesById)
+            foreach (var en in enemiesById)
             {
                 if (en.Value.EntityType == EntityType.RangedUnit)
                 {
-                   // enemyRangersId.Add(en.Key);
+                    // enemyRangersId.Add(en.Key);
                     enemyRangers.Add(en.Key, new EnemyToOpt(en.Key, en.Value.EntityType, en.Value.Health, en.Value.Position.X, en.Value.Position.Y));
-                } else if (en.Value.EntityType == EntityType.MeleeUnit)
+                }
+                else if (en.Value.EntityType == EntityType.MeleeUnit)
                 {
                     //enemyMeleesId.Add(en.Key);
                     enemyMelees.Add(en.Key, new EnemyToOpt(en.Key, en.Value.EntityType, en.Value.Health, en.Value.Position.X, en.Value.Position.Y));
                 }
             }
 
-            // �������� ���� ���� ��� �� ��������� �� 5 ������������
+            // собираем пары всех кто на дистанции до 5 включительно
             foreach (var my in myRangers)
             {
                 int x1 = entityMemories[my.Key].myEntity.Position.X;
@@ -2190,7 +2220,7 @@ namespace Aicup2020
                     int y2 = enemiesById[en.Key].Position.Y;
                     int dist = Abs(x1 - x2) + Abs(y1 - y2);
                     if (dist <= 5)
-                    {                        
+                    {
                         my.Value.Add(en.Value);
                         en.Value._me._dist = dist;
                         en.Value.Add(new Target(my.Key, EntityType.RangedUnit, entityMemories[my.Key].myEntity.Health, x1, y1, dist));
@@ -2211,14 +2241,14 @@ namespace Aicup2020
                 }
             }
 
-            #region ������ ������ ��� ������� � ������� ������
+            #region чистим списки кто остался с пустыми парами
             List<int> deleteKeys = new List<int>();
-            foreach(var i in myRangers)
+            foreach (var i in myRangers)
             {
                 if (i.Value.Count == 0)
                     deleteKeys.Add(i.Key);
             }
-            foreach(var i in deleteKeys)
+            foreach (var i in deleteKeys)
             {
                 myRangers.Remove(i);
             }
@@ -2244,7 +2274,7 @@ namespace Aicup2020
             }
             #endregion
 
-            #region ���������� �������� ���, ��� ����� �������� ������ � ������ c ������ (������� � �������) ��� ������� ������� (������� � ������� � ��������� > 2)
+            #region определяем действия тех, кто может стрелять только в одного c равной (стрелок в стрелка) или сильной позиции (стрелок в мечника с дистанции > 2)
             //bool wasRemoved;
             bool wasKilled;
             do
@@ -2296,11 +2326,11 @@ namespace Aicup2020
                 }
                 //if (deleteKeys.Count > 0)
                 //    wasRemoved = true;
-                foreach (var i in deleteKeys) // ������� ����� ������
+                foreach (var i in deleteKeys) // убираем таких парней
                 {
                     myRangers.Remove(i);
                 }
-                //������ ����������� ������ � ��� ��� ��������� �� ������� ����� ����
+                //теперь вычеркиваем убитых и еще раз проверяем на наличие одной цели
                 if (wasKilled)
                 {
                     deleteKeys.Clear();
@@ -2347,9 +2377,9 @@ namespace Aicup2020
             } while (wasKilled == true);
             #endregion
 
-            #region ������������� ���������� �������
+            #region максимизируем количество убийств
 
-            //�������� ������ ������
+            //собираем первую группу
             if (myRangers.Count > 0)
             {
                 List<int> attackers = new List<int>();
@@ -2379,14 +2409,15 @@ namespace Aicup2020
                         if (enemyMelees.ContainsKey(targets[t]))
                         {
                             foreach (var me in enemyMelees[targets[t]]._targetsMyUnitsById)
-                            {                                
+                            {
                                 if (myRangers.ContainsKey(me.Key) == true && attackers.Contains(me.Key) == false)
                                 {
                                     attackers.Add(me.Key);
                                     wasAdded = true;
                                 }
                             }
-                        } else if (enemyRangers.ContainsKey(targets[t]))
+                        }
+                        else if (enemyRangers.ContainsKey(targets[t]))
                         {
                             foreach (var me in enemyRangers[targets[t]]._targetsMyUnitsById)
                             {
@@ -2399,7 +2430,7 @@ namespace Aicup2020
                         }
                     }
                 } while (wasAdded == true);
-                // �������� ������
+                // получили группу
                 int sizeA = attackers.Count;
                 int sizeT = targets.Count;
                 bool[,] arrayPair = new bool[sizeA, sizeT];
@@ -2410,9 +2441,9 @@ namespace Aicup2020
                         arrayPair[att, tar] = false;
                     }
                 }
-                for(int i = 0; i < attackers.Count; i++)
+                for (int i = 0; i < attackers.Count; i++)
                 {
-                    foreach(var en in myRangers[attackers[i]])
+                    foreach (var en in myRangers[attackers[i]])
                     {
                         arrayPair[i, targets.IndexOf(en._me._id)] = true;
                     }
@@ -2423,13 +2454,14 @@ namespace Aicup2020
                     if (enemyMelees.ContainsKey(targets[i]))
                     {
                         targetsHealth[i] = System.Convert.ToInt32(System.Math.Ceiling(((float)enemyMelees[targets[i]]._me._health) / ((float)damageR)));
-                    } else if (enemyRangers.ContainsKey(targets[i]))
+                    }
+                    else if (enemyRangers.ContainsKey(targets[i]))
                     {
                         targetsHealth[i] = System.Convert.ToInt32(System.Math.Ceiling(((float)enemyRangers[targets[i]]._me._health) / ((float)damageR)));
                     }
                 }
 
-                // ������� 1 ���������� �� ������� ���������
+                // вариант 1 рукопашник на близкой дистанции
 
                 if (targets.Count == 1)
                 {
@@ -2455,9 +2487,9 @@ namespace Aicup2020
                             }
                         }
                         else
-                        {                            
+                        {
                             foreach (var id in attackers)
-                            {                                
+                            {
                                 if (myRangers[id][0]._targetsMyUnitsById[id]._dist <= 2)// retreat nearest
                                 {
                                     entityMemories[id].OrderTryRetreat();
@@ -2479,7 +2511,7 @@ namespace Aicup2020
                                 }
                             }
                             // remove attackers
-                            foreach(var id in attackers)
+                            foreach (var id in attackers)
                             {
                                 myRangers.Remove(id);
                             }
@@ -2490,17 +2522,17 @@ namespace Aicup2020
                 else
                 {
 
-                    // ������� 2 ������ ������
+                    // вариант 2 врагов больше
 
                     List<int[]> attackVariants;// = new List<int[]>();
 
                     attackVariants = CalcMaxKillFromArray(sizeA, sizeT, arrayPair, targetsHealth);
 
-                    //������ ������� �� ������ ��������
+                    //отдаем приказы по любому варианту
                     if (attackVariants.Count > 0)
                     {
-                        int index = 0; // �������� ������ �������
-                        // ��������� �������
+                        int index = 0; // выбираем первый варинат
+                        // исполняем вариант
                         for (int kk = 0; kk < sizeA; kk++)
                         {
                             int enemyId = targets[attackVariants[index][kk]];
@@ -2528,15 +2560,15 @@ namespace Aicup2020
                     }
                     else
                     {
-                        // ������� ������, ��� ��� ������ �� �����������
+                        // очищаем список, так как ничего не придумалось
                         ;
                     }
-                    // ������� ������ �����������
+                    // очищаем список атаковавших
                     foreach (var id in attackers)
                     {
                         myRangers.Remove(id);
                     }
-                    // ������� ������ ������
+                    // очищаем список врагов
                     deleteKeys.Clear();
                     foreach (var i in enemyMelees)
                     {
@@ -2578,51 +2610,52 @@ namespace Aicup2020
                         enemyRangers.Remove(id);
                     }
                 }
-                
+
             }
 
-            
+
 
             #endregion
 
-            #region ���������� �������� ��������� ��������
+            #region определяем движение остальных стрелков
 
             #endregion
 
         }
         /// <summary>
-        /// ���������� ����� ����������� ������� ������������� �����, ����� �������� �������� �����
+        /// Определяет самые эффективные способы распределения целей, чтобы поразить максимум целей
         /// </summary>
-        /// <param name="sizeA">���������� ��������</param>
-        /// <param name="sizeT">���������� �����</param>
-        /// <param name="arrayPair">������� [�������, ����], ������ ���� ������� ����� ������� � ���� ��� ���� �������</param>
-        /// <param name="targetsHealth">����� � �����, 1 ������� 1 �����</param>
-        /// <returns>���������� ���� � �������� int[sizeA] ��� �������� �� ������� ������ ����, ������������ ������ �������� � ������������ ��������� �����</returns>
+        /// <param name="sizeA">количество стрелков</param>
+        /// <param name="sizeT">количество целей</param>
+        /// <param name="arrayPair">таблица [стрелки, цели], истина если стрелок может попасть в цель под этим номером</param>
+        /// <param name="targetsHealth">Жизни у целей, 1 выстрел 1 жизнь</param>
+        /// <returns>возвращает лист с массивом int[sizeA] где стрелкам по порядку укзаны цели, присутствуют только варианыт с максимальным убийством целей</returns>
         List<int[]> CalcMaxKillFromArray(int sizeA, int sizeT, bool[,] arrayPair, int[] targetsHealth)
         {
             List<int[]> variants = new List<int[]>(sizeT);
             int count = 0;
-            // �������� ��� ��������
+            // собираем все варианты
             for (int a = 0; a < sizeA; a++)
             {
                 count = variants.Count;
                 for (int t = 0; t < sizeT; t++)
                 {
-                    if (arrayPair[a,t] == true)
+                    if (arrayPair[a, t] == true)
                     {
                         if (a == 0)
                         {
-                            int[] v = new int[sizeA]; // ������� ������ ��������
+                            int[] v = new int[sizeA]; // создаем первые варианты
                             v[a] = t;
                             variants.Add(v);
-                        } else
+                        }
+                        else
                         {
-                            for (int i = 0; i < count; i++)//���������� ��� �������� ��� � ��������
+                            for (int i = 0; i < count; i++)//перебераем все варианты для а стрелков
                             {
-                                int[] v = new int[sizeA]; // �������� �������
+                                int[] v = new int[sizeA]; // копируем вариант
                                 variants[i].CopyTo(v, 0);
 
-                                int sum = 0;// �� ��������� ������� �����
+                                int sum = 0;// не учитываем текущий выбор
                                 for (int k = 0; k < a; k++)
                                 {
                                     if (v[k] == t)
@@ -2630,35 +2663,35 @@ namespace Aicup2020
                                 }
                                 if (sum < targetsHealth[t])
                                 {
-                                    v[a] = t; // ��������� ��� �����
-                                    variants.Add(v); // ��������� �������
+                                    v[a] = t; // учитываем наш выбор
+                                    variants.Add(v); // добавляем вариант
                                 }
                             }
                         }
                     }
                 }
-                variants.RemoveRange(0, count); // ������� �������� � ������� ����������� ��������
+                variants.RemoveRange(0, count); // убираем варианты с меньшим количеством стрелков
             }
-            // ������� ���������� ������� ��� ������� ��������
-            List<int> killsArray = new List<int>(); // ������������ ������, ������� �������� ���������� ������� � ��������
+            // считаем количество убйиств для каждого варианта
+            List<int> killsArray = new List<int>(); // параллельный массив, который содержит количество убийств в варианте
             for (int i = 0; i < variants.Count; i++)
             {
                 int[] damage = new int[sizeT];
-                foreach(var t in variants[i])
+                foreach (var t in variants[i])
                 {
                     damage[t]++;
                 }
                 int kills = 0;
-                for (int t = 0; t <sizeT; t++)
+                for (int t = 0; t < sizeT; t++)
                 {
                     if (targetsHealth[t] == damage[t])
                         kills++;
                 }
                 killsArray.Add(kills);
             }
-            // �������� ������ ��������
+            // выбираем лучшие варианты
             int max = 0;
-            foreach(var n in killsArray)
+            foreach (var n in killsArray)
             {
                 if (n > max)
                     max = n;
@@ -2669,7 +2702,8 @@ namespace Aicup2020
                 {
                     variants.RemoveAt(i);
                     killsArray.RemoveAt(i);
-                } else
+                }
+                else
                 {
                     i++;
                 }
@@ -2679,7 +2713,7 @@ namespace Aicup2020
         }
         void OptimizeOrderToRetreat()
         {
-            // all retreats - ���� ���� ����������� � ������ ���������� ���� �����������. ���� ������ ��
+            // all retreats - ищем всех отступающих и строим глобальный граф отступления. Путь ищется до
             int startWeight = mapSize * mapSize;
             int CWfree = 1;
             int CWoptimizedUnit = -1;
@@ -2710,7 +2744,7 @@ namespace Aicup2020
 
             bool canFindNext = tryRetreatEntitiesId.Count > 0;
 
-            // ����������� ������
+            // распутываем клубок
             while (canFindNext == true)
             {
                 findCells.Clear();
@@ -2731,14 +2765,14 @@ namespace Aicup2020
                     map[entityMemories[cid].movePos.X][entityMemories[cid].movePos.Y] = CWtargetToRetreat;
                 }
 
-                // ���� ������ ����� ������� ����� ����� �� ��������� ������
+                // ищем клетки через которые можно дойти до свободных клеток
                 for (int kk = 0; kk < findCells.Count; kk++)
                 {
                     int ex = findCells[kk].x;
                     int ey = findCells[kk].y;
                     int w = findCells[kk].weight;
 
-                    if ((map[ex][ey] == CWfree || map[ex][ey] == CWfreeAfterRetreat) == false) // �� ���������� ����� �� ��������� �����
+                    if ((map[ex][ey] == CWfree || map[ex][ey] == CWfreeAfterRetreat) == false) // не продолжать поиск от свободных ячеек
                     {
                         for (int rlud = 0; rlud < 4; rlud++) // RightLeftUpDown
                         {
@@ -2751,22 +2785,22 @@ namespace Aicup2020
 
                             if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                             {
-                                if (map[nx][ny] == CWfreeAfterRetreat) // ������ ������ ��� ������������� ������ �� ���������� ����
+                                if (map[nx][ny] == CWfreeAfterRetreat) // особая логика для освобождаемой клетки на предыдущем шаге
                                 {
-                                    findCells.Add(new XYWeight(nx, ny, w - 1)); // ��������, ��� ���� ����� ������, ��� ��� ����
-                                    findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // ������� ���������� ��������� ������ � ��������
+                                    findCells.Add(new XYWeight(nx, ny, w - 1)); // отмечаем, что туда можно прийти, вес уже есть
+                                    findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // считаем количество свободных клеток у сущности
                                     bool cellNotFinded = true;
                                     for (int nnn = 0; nnn < findCells.Count; nnn++)
                                     {
                                         if (findCells[nnn].x == nx && findCells[nnn].y == ny)
                                         {
-                                            findCells[nnn] = new XYWeight(nx, ny, findCells[nnn].weight, findCells[nnn].index - 1); // ������� ���������� ������� � ��������� ������
+                                            findCells[nnn] = new XYWeight(nx, ny, findCells[nnn].weight, findCells[nnn].index - 1); // считаем количество соседей у свободной клетки
                                             cellNotFinded = false;
                                             break;
                                         }
                                     }
                                     if (cellNotFinded == true)
-                                        findCells.Add(new XYWeight(nx, ny, w - 1, -1)); // ��������� ��������� ������ ���� ��� �� ���� �������
+                                        findCells.Add(new XYWeight(nx, ny, w - 1, -1)); // добавляем свободную клетку если она не была найдена
                                 }
                                 else
                                 {
@@ -2776,16 +2810,16 @@ namespace Aicup2020
                                         {
                                             if (findCells[nnn].x == nx && findCells[nnn].y == ny)
                                             {
-                                                findCells[nnn] = new XYWeight(nx, ny, findCells[nnn].weight, findCells[nnn].index - 1); // ������� ���������� ������� � ��������� ������
+                                                findCells[nnn] = new XYWeight(nx, ny, findCells[nnn].weight, findCells[nnn].index - 1); // считаем количество соседей у свободной клетки
                                                 break;
                                             }
                                         }
-                                        findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // ������� ���������� ��������� ������
+                                        findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // считаем количество свободных клеток
                                     }
                                     else
                                     {
 
-                                        if (map[nx][ny] == 0)// ����� ��������� ����� ���� ���������, � ������� �� ��� �� ��� (� ������ ��� �� ���������)
+                                        if (map[nx][ny] == 0)// поиск двигается через моих подданных, в которых он еще не был (в начале они не отступали)
                                         {
                                             // it is danger cell?
                                             EnemyDangerCell cell = enemyDangerCells[nx][ny];
@@ -2796,7 +2830,7 @@ namespace Aicup2020
                                             else
                                             {
                                                 int id = cellWithIdAny[nx][ny];
-                                                if (id > 0) // ����� ����� ����
+                                                if (id > 0) // здесь ктото есть
                                                 {
                                                     if (enemiesById.ContainsKey(id)) // it is enemy!
                                                     {
@@ -2814,7 +2848,8 @@ namespace Aicup2020
                                                             {
                                                                 map[nx][ny] = w - 1;
                                                                 findCells.Add(new XYWeight(nx, ny, w - 1));
-                                                            } else
+                                                            }
+                                                            else
                                                             {
                                                                 map[nx][ny] = CWoptimizedUnit;
                                                             }
@@ -2828,9 +2863,9 @@ namespace Aicup2020
                                                 }
                                                 else
                                                 {
-                                                    map[nx][ny] = CWfree;// ����� ������� ����� ������ �������� �� ����� � � �������
+                                                    map[nx][ny] = CWfree;// можем хранить здесь разные значения на карте и в массиве
                                                     findCells.Add(new XYWeight(nx, ny, w - 1, -1));
-                                                    findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // ������� ���������� ��������� ������
+                                                    findCells[kk] = new XYWeight(ex, ey, w, findCells[kk].index + 1); // считаем количество свободных клеток
                                                 }
                                             }
                                         }
@@ -2843,11 +2878,11 @@ namespace Aicup2020
 
                 if (tryRetreatEntitiesId.Count + tryRetreatEntitiesId.Count > 1)
                 {
-                    ; // ����� ��������� ��� ������
+                    ; // место остановки для тестов
                 }
 
 
-                // ����������� ������� �� ��������� ������ � ����� �������
+                // распутываем начиная со свободных клеток с одним соседом
                 //int freeWeight = 0;
                 bool isFindCellsWithOneFreeNeighpour = false;
                 for (int num = 0; num < findCells.Count; num++)
@@ -2889,14 +2924,14 @@ namespace Aicup2020
                                         break;
                                     }
                                 }
-                                //int g = 5;// ��� ��� �� ������� ������?
+                                //int g = 5;// как это не нашлась клетка?
                             }
                             break;
                         }
                     }
                 }
 
-                // ����� ����������� ��������� ������ � ����������� ��������
+                // иначе распутываем свободные клетки с несколькими соседями
                 bool isFindCellsWithSomeFreeNeighpours = false;
                 if (isFindCellsWithOneFreeNeighpour == false)
                 {
@@ -2939,7 +2974,7 @@ namespace Aicup2020
                                             break;
                                         }
                                     }
-                                    //int g = 5;// ��� ��� �� ������� ������?
+                                    //int g = 5;// как это не нашлась клетка?
                                 }
                                 break;
                             }
@@ -2947,7 +2982,7 @@ namespace Aicup2020
                     }
                 }
 
-                // ���� ��� ��������� ������, �� �������� ���� ��� �� ���� ������� �� ����� � ������� �� �������
+                // если нет свободных клеток, то отмечаем всех кто не смог сбежать на атаку и выходим из расчета
                 if (isFindCellsWithOneFreeNeighpour == false
                     && isFindCellsWithSomeFreeNeighpours == false)
                 {
@@ -2964,7 +2999,7 @@ namespace Aicup2020
             }
 
 
-            //��������� ���������
+            //просмотре состояния
             if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawRetreat])
             {
                 DebugState debugState = _debugInterface.GetState();
@@ -3047,10 +3082,10 @@ namespace Aicup2020
                         _debugInterface.Send(new DebugCommand.Add(lines));
                     }
                 }
-                #region ������� �������������
+                #region примеры использования
                 //if (playerView.CurrentTick == 10)
                 //{
-                //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("�������� ���������")));
+                //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
 
                 //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
                 //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
@@ -3082,15 +3117,15 @@ namespace Aicup2020
         }
         void OptimizeOrderToRepairNew()
         {
-            // ��������� �� ������� ������� �� ������ ������ ������            
+            // проверяем по очереди приказы на ремонт нового здания            
             for (int ni = 0; ni < intentions.Count;)
             {
                 bool deleteIntention = false;
-                if (intentions[ni].intentionType == IntentionType.IntentionRepairNewBuilding)// ��� ������� ������:
+                if (intentions[ni].intentionType == IntentionType.IntentionRepairNewBuilding)// для каждого делаем:
                 {
                     deleteIntention = FindBuildersToBuildOrRepair(intentions[ni]);
                 }
-                // ������� ��������� ��� ��������� � ����������
+                // удаляем намерение или переходим к следующему
                 if (deleteIntention)
                 {
                     intentions.RemoveAt(ni);
@@ -3103,16 +3138,17 @@ namespace Aicup2020
         }
         void OptimizeOrderToBuildNew()
         {
-            // ��������� �� ������� ������� �� �������������
-            // ��� ������� ������:
+            // проверяем по очереди приказы на строительство
+            // для каждого делаем:
             for (int ni = 0; ni < intentions.Count;)
             {
                 bool deleteIntention = false;
                 if (intentions[ni].intentionType == IntentionType.IntentionCreateHouse
-                    || intentions[ni].intentionType == IntentionType.IntentionCreateRangedBase) {
+                    || intentions[ni].intentionType == IntentionType.IntentionCreateRangedBase)
+                {
                     deleteIntention = FindBuildersToBuildOrRepair(intentions[ni]);
                 }
-                // ������� ��������� ��� ��������� � ����������
+                // удаляем намерение или переходим к следующему
                 if (deleteIntention)
                 {
                     intentions.RemoveAt(ni);
@@ -3125,15 +3161,15 @@ namespace Aicup2020
         }
         void OptimizeOrderToRepairOld()
         {
-            // ��������� �� ������� ������� �� ������ ������ ������            
+            // проверяем по очереди приказы на ремонт нового здания            
             for (int ni = 0; ni < intentions.Count;)
             {
                 bool deleteIntention = false;
-                if (intentions[ni].intentionType == IntentionType.IntentionRepairOldBuilding)// ��� ������� ������:
+                if (intentions[ni].intentionType == IntentionType.IntentionRepairOldBuilding)// для каждого делаем:
                 {
                     deleteIntention = FindBuildersToBuildOrRepair(intentions[ni]);
                 }
-                // ������� ��������� ��� ��������� � ����������
+                // удаляем намерение или переходим к следующему
                 if (deleteIntention)
                 {
                     intentions.RemoveAt(ni);
@@ -3154,7 +3190,7 @@ namespace Aicup2020
             int maxHealth = 1;
             int currentHealth = 0;
 
-            switch (intention.intentionType) // ��������
+            switch (intention.intentionType) // различия
             {
                 case IntentionType.IntentionCreateRangedBase:
                 case IntentionType.IntentionCreateHouse:
@@ -3171,36 +3207,36 @@ namespace Aicup2020
                     maxHealth = properties[entityMemories[intention.targetId].myEntity.EntityType].MaxHealth;
                     currentHealth = entityMemories[intention.targetId].myEntity.Health;
                     break;
-                default: throw new System.Exception("����������� ���������");
+                default: throw new System.Exception("Неизвестное намерение");
             }
 
-            if (intention.intentionType == IntentionType.IntentionCreateHouse) // == �������� - ��������� ������� ������ ��� ������� ������ ������
+            if (intention.intentionType == IntentionType.IntentionCreateHouse) // == различие - проверяем начинку только для стройки нового здания
             {
-                for (int cx = sx; cx < sx + size; cx++) // ��������
+                for (int cx = sx; cx < sx + size; cx++) // проверка
                 {
                     for (int cy = sy; cy < sy + size; cy++)
                     {
-                        if (cellWithIdAny[cx][cy] >= 0)// ��������� ��� ������ ��� ������ ������
+                        if (cellWithIdAny[cx][cy] >= 0)// проверяем что никого нет внутри сейчас
                         {
                             deleteIntention = true;
                             break;
                         }
 
-                        if (nextPositionMyUnitsMap[cx][cy] > 0) // ��������� ��� ����� �� ���������� ���� ������ �������
+                        if (nextPositionMyUnitsMap[cx][cy] > 0) // проверяем что никто не собирается идти внутрь стройки
                         {
                             deleteIntention = true;
                             break;
                         }
 
                     }
-                    if (deleteIntention == true)// ����� �������� ��������� �� �������������
+                    if (deleteIntention == true)// иначе отменяем намерение на строительство
                         break;
                 }
             }
 
-            if (deleteIntention == false) // ����� ���, ���� ����������
+            if (deleteIntention == false) // помех нет, ищем строителей
             {
-                #region ��������� ��������
+                #region стартовые значения
                 CellWI[,] pathMap = new CellWI[mapSize, mapSize];
                 for (int x = 0; x < mapSize; x++)
                 {
@@ -3210,7 +3246,7 @@ namespace Aicup2020
                     }
                 }
 
-                //��������� ��������, ������� ����� ���������
+                //стартовое значение, которое будем уменьшать
                 int startWeight = mapSize * mapSize;
                 int minWeight = startWeight - maxHealth;
                 int WInside = -1;
@@ -3224,9 +3260,9 @@ namespace Aicup2020
                 int WUnvisibleCell = -9;
                 #endregion
 
-                #region ���������� ��������� ������
+                #region определяем стартовые клетки
                 List<int> borderMansId = new List<int>();
-                //��������� ��������� ������ ������ ������ ����� ������������� + ������ �� ������� + �������� ������������ ������ (������, �������, �����)
+                //добавляем стартовые клетки поиска вокруг места строительства + юнитов на границе + отмечаем непроходимые клетки (здания, ресурсы, враги)
                 List<XYWeight> findCells = new List<XYWeight>();
                 for (int m = 0; m < size; m++)
                 {
@@ -3261,11 +3297,11 @@ namespace Aicup2020
                             {
                                 if (entityMemories.ContainsKey(id))
                                 {
-                                    if (properties[entityMemories[id].myEntity.EntityType].CanMove)// ������ �����, ������ ����� �� �����
+                                    if (properties[entityMemories[id].myEntity.EntityType].CanMove)// только юниты, здания здесь не нужны
                                     {
-                                        findCells.Add(new XYWeight(fx, fy, startWeight)); //  ���� �� ��� ��� ����� �� �������
+                                        findCells.Add(new XYWeight(fx, fy, startWeight)); //  ищем от тех что стоит на границе
                                         pathMap[fx, fy].weight = startWeight;
-                                        borderMansId.Add(id); // ��������� ��� ��� ����� �� ������� ����� ������������� � ��� ����� ����� ���� �����
+                                        borderMansId.Add(id); // учитываем тех кто стоит на границе места строительства в том числе Могут быть войны
                                     }
                                     else
                                     {
@@ -3290,7 +3326,7 @@ namespace Aicup2020
                     }
                 }
 
-                // ���������� ������ ������ ������
+                // обозначаем клетки внутри здания
                 for (int cx = sx; cx < sx + size; cx++)
                 {
                     for (int cy = sy; cy < sy + size; cy++)
@@ -3300,7 +3336,7 @@ namespace Aicup2020
                 }
                 #endregion
 
-                #region ���������� ���������� ������� ���������� � ������� ��� �������� ������
+                #region опредеялем количество соседов строителей и сколько нам осталось искать
                 int builderCount = 0;
                 foreach (var id in borderMansId)
                 {
@@ -3335,7 +3371,7 @@ namespace Aicup2020
                                         true
                                         );
                                     break;
-                                default: throw new System.Exception("����������� ���������");
+                                default: throw new System.Exception("Неизвестное намерение");
                             }
                         }
                     }
@@ -3345,15 +3381,15 @@ namespace Aicup2020
                 int planHealth = currentHealth;
                 int prevDistContact = 0;
                 if (builderCount > 0)
-                {//���� �������� �� �������� ����������� ������� �������������
+                {//ищем максимум на половину оставшегося времени строительства
                     planDistance = (maxHealth - planHealth) / builderCount;
                     minWeight = startWeight - planDistance / 2;
                 }
                 #endregion
 
-                #region ��������� ������ � ����� � ���
-                // ���������� ��������� ������ � ������, � ������ ������ ������� ������ ������ ���� ���������� ������ (������� ������� �� �����, ����� ���� ��������)
-                int lastIndex = 1; // 0 ������������ � ������ �����
+                #region стартовые группы и место в них
+                // объединяем стартовые ячейки в группы, у каждой группы соседей теперь должен быть одинаковый индекс (порядок номеров не важен, могут быть пропуски)
+                int lastIndex = 1; // 0 используется у пустых групп
                 for (int iter = 0; iter < findCells.Count; iter++)
                 {
                     int myIndex = findCells[iter].index;
@@ -3364,14 +3400,14 @@ namespace Aicup2020
                         lastIndex++;
                     }
 
-                    // ���� ���� ������� � ��������� �� ������
+                    // ищем всех соседей и проверяем их индекс
                     int mx = findCells[iter].x;
                     int my = findCells[iter].y;
                     for (int i = iter + 1; i < findCells.Count; i++)
                     {
                         int dist = Abs(mx - findCells[i].x) + Abs(my - findCells[i].y);
 
-                        if (dist == 1)// ��� ��� �����
+                        if (dist == 1)// это мой сосед
                         {
                             if (findCells[i].index == 0)
                             {
@@ -3379,7 +3415,7 @@ namespace Aicup2020
                             }
                             else
                             {
-                                // ��� ������� ����, ���� ����� ��� ������ ���� � ���� ���� ��� ��������� ��� ������
+                                // это старший брат, надо взять его индекс себе и всем кому уже присвоили мой индекс
                                 int newIndex = findCells[i].index;
                                 for (int n = 0; n < findCells.Count; n++)
                                 {
@@ -3394,7 +3430,7 @@ namespace Aicup2020
                     }
                 }
 
-                // ��������� ���������� ��������� ���� � �������
+                // учитываем количество свободных мест в группах
                 Dictionary<int, int> freePlaceInIndexGroup = new Dictionary<int, int>();
                 foreach (var c in findCells)
                 {
@@ -3408,11 +3444,11 @@ namespace Aicup2020
                         freePlaceInIndexGroup[c.index] = 1;
                     }
                 }
-                foreach (var id in borderMansId) // ������� ��� ��� ����� �� �������
+                foreach (var id in borderMansId) // убираем тех кто стоит на границе
                 {
                     int x = entityMemories[id].myEntity.Position.X;
                     int y = entityMemories[id].myEntity.Position.Y;
-                    for (int i = 0; i < findCells.Count;i++)
+                    for (int i = 0; i < findCells.Count; i++)
                     {
                         if (findCells[i].x == x && findCells[i].y == y)
                         {
@@ -3424,7 +3460,7 @@ namespace Aicup2020
                 }
                 #endregion
 
-                // �������� ������ ��������� ����������
+                // начинаем искать свободных строителей
                 for (int iter = 0; iter < findCells.Count; iter++)
                 {
                     int fx = findCells[iter].x;
@@ -3444,14 +3480,14 @@ namespace Aicup2020
                             if (jj == 2) nx++;
                             if (jj == 3) ny++;
 
-                            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // ��� � �������� �����
+                            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
                             {
                                 if (pathMap[nx, ny].weight == 0)
                                 {
                                     bool canContinue = true;
 
                                     var dCell = enemyDangerCells[nx][ny];
-                                    if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0) // �������� ������� ����
+                                    if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0) // проверка опасной зоны
                                     {
                                         canContinue = false;
                                         pathMap[nx, ny].weight = WDanger;
@@ -3461,11 +3497,12 @@ namespace Aicup2020
                                         canContinue = false;
                                         pathMap[nx, ny].weight = WDanger;
                                     }
-                                    else if (nextPositionMyUnitsMap[nx][ny] > 0) // �������� ������ ������� �� ��������� ���
+                                    else if (nextPositionMyUnitsMap[nx][ny] > 0) // проверка пустой позиции на следующий ход
                                     {
                                         canContinue = false;
                                         pathMap[nx, ny].weight = WNextPosition;
-                                    } else if (onceVisibleMap[nx][ny] == 0)
+                                    }
+                                    else if (onceVisibleMap[nx][ny] == 0)
                                     {
                                         canContinue = false;
                                         pathMap[nx, ny].weight = WUnvisibleCell;
@@ -3480,11 +3517,11 @@ namespace Aicup2020
                                             {
                                                 if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
                                                 {
-                                                    // ����� ���������!!!
-                                                    // ��� ���������� �������� ��������� ���� �� ������ ������
-                                                    // ��� ��������� ����� � ������� ���������
+                                                    // нашли строителя!!!
+                                                    // при нахождении человека проверяем надо ли искать дальше
+                                                    // при окончании места в группах обновляем
 
-                                                    //if (w == startWeight)//check my builder �� �������� ������ � ��������s
+                                                    //if (w == startWeight)//check my builder на соседней клетке с ресурсомs
                                                     //{
                                                     //    //canContinueField = false;
                                                     //    //resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
@@ -3498,7 +3535,7 @@ namespace Aicup2020
                                                         }
                                                         if (debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
                                                         {
-                                                            DrawLineOnce(nx + 0.5f, ny + 0.5f, fx+0.5f, fy +0.5f, colorMagenta, colorMagenta);
+                                                            DrawLineOnce(nx + 0.5f, ny + 0.5f, fx + 0.5f, fy + 0.5f, colorMagenta, colorMagenta);
                                                         }
                                                         switch (intention.intentionType)// == difference
                                                         {
@@ -3510,22 +3547,22 @@ namespace Aicup2020
                                                             case IntentionType.IntentionRepairOldBuilding:
                                                                 entityMemories[id].OrderRepairGo(intention.targetId, new Vec2Int(fx, fy), true, true, true);
                                                                 break;
-                                                            default: throw new System.Exception("����������� ���������");
+                                                            default: throw new System.Exception("Неизвестное намерение");
                                                         }
                                                         pathMap[nx, ny].weight = WDeniedBuilder;
                                                         nextPositionMyUnitsMap[fx][fy] = id;
                                                         freePlaceInIndexGroup[pathMap[fx, fy].index]--;
-                                                        // �������� ����������� ���������
+                                                        // обновить минимальную дистанцию
                                                         int curDistance = startWeight - fw;
                                                         planHealth += (curDistance - prevDistContact) * builderCount;
                                                         builderCount++;
                                                         prevDistContact = curDistance;
                                                         planDistance = curDistance + (maxHealth - planHealth) / builderCount;
                                                         minWeight = startWeight - planDistance / 2;
-                                                        // ������ ���� ����������� �����
+                                                        // чистка если закончились места
                                                         if (freePlaceInIndexGroup[pathMap[fx, fy].index] == 0)
                                                         {
-                                                            // �������� pathMap, ������ ����� ������� ������ startWeight, �� ������ 0
+                                                            // обновить pathMap, убрать следы которые меньше startWeight, но больше 0
                                                             foreach (var c in findCells)
                                                             {
                                                                 if (pathMap[c.x, c.y].weight > 0)
@@ -3535,7 +3572,7 @@ namespace Aicup2020
                                                                     pathMap[c.x, c.y].index = 0;
                                                                 }
                                                             }
-                                                            // ����� ������ findcells ��� ��������� ������
+                                                            // новый список findcells без указанной группы
                                                             for (int i = 0; i < findCells.Count;)
                                                             {
                                                                 bool del = false;
@@ -3549,9 +3586,9 @@ namespace Aicup2020
                                                                 else
                                                                     i++;
                                                             }
-                                                            // ��������� � ����� ������
+                                                            // итераторы в самое начало
                                                             iter = 0;
-                                                            //��������� ���������� ��������� ����
+                                                            //обновляем количество стартовых мест
                                                             freePlaceInIndexGroup.Clear();
                                                             foreach (var c in findCells)
                                                             {
@@ -3566,7 +3603,7 @@ namespace Aicup2020
                                                                 }
                                                             }
                                                         }
-                                                        break; // ���������� ����� �� ���� ������
+                                                        break; // прекратить поиск из этой клетки
                                                     }
                                                     else
                                                     {
@@ -3620,16 +3657,16 @@ namespace Aicup2020
                                 }
                                 else
                                 {
-                                    // MOD ����� �� ��������� �� ���������� ���� �������� ����� ���� ������
-                                    if (pathMap[nx, ny].weight > 0 && pathMap[nx, ny].weight < startWeight) // ��� ��� ���������� ������, ���� ���������, ����� �� ������������
+                                    // MOD можно не проверять на совпадения если осталась всего одна группа
+                                    if (pathMap[nx, ny].weight > 0 && pathMap[nx, ny].weight < startWeight) // это уже пройденная клетка, надо проверить, будем ли объединяться
                                     {
                                         if (pathMap[nx, ny].index == 0)
                                         {
-                                            ;// ������ �� ������ ���� ��� ��� ������ ����, � ������� ������ ���!!!
+                                            ;// такого не должно быть что вес больше нуля, а индекса группы нет!!!
                                         }
 
                                         if (pathMap[nx, ny].index != fi)
-                                        {// ��������� ������ � ������ ��������, ������ ���� ���������� ������
+                                        {// встретили клетку с другим индексом, значит надо объединить группы
                                             int oldIndex = pathMap[nx, ny].index;
                                             int newIndex = fi;
 
@@ -3638,7 +3675,7 @@ namespace Aicup2020
                                                 ;
                                             }
 
-                                            for (int x = 0; x < mapSize; x++)//��������� �����
+                                            for (int x = 0; x < mapSize; x++)//обновляем карту
                                             {
                                                 for (int y = 0; y < mapSize; y++)
                                                 {
@@ -3646,7 +3683,7 @@ namespace Aicup2020
                                                         pathMap[x, y].index = newIndex;
                                                 }
                                             }
-                                            foreach (var c in findCells)//��������� ������ ������
+                                            foreach (var c in findCells)//обновляем клетки поиска
                                             {
                                                 if (c.index == oldIndex)
                                                     c.index = newIndex;
@@ -3658,7 +3695,7 @@ namespace Aicup2020
                                         }
                                     }
                                 }
-                                //����� �� ��������� ��� ������� ������, ��� ��� � ��� ����� ���������������� �� ������� 1-2-3-4 � �.�.
+                                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
                             }
                         }
                         if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
@@ -3678,9 +3715,9 @@ namespace Aicup2020
                 nextPositionMyUnitsMap[x] = new int[mapSize];
             }
 
-            actions.Clear();            
+            actions.Clear();
 
-            foreach(var em in entityMemories)
+            foreach (var em in entityMemories)
             {
                 BuildAction buildAction = new BuildAction();
                 MoveAction moveAction = new MoveAction();
@@ -3713,7 +3750,7 @@ namespace Aicup2020
                         moveAction.Target = em.Value.movePos;
 
                         if (em.Value.targetId == null)
-                            throw new System.Exception("������� ������ �� ������� Id!");
+                            throw new System.Exception("Пытаюсь чинить не получив Id!");
                         repairAction.Target = em.Value.targetId ?? 0;
                         actions.Add(em.Key, new EntityAction(moveAction, null, null, repairAction));
                         break;
@@ -3744,9 +3781,9 @@ namespace Aicup2020
 
                         break;
                     default:
-                        throw new System.Exception("����������� ������"); // ������� ���������� ������
+                        throw new System.Exception("неизвестный приказ"); // тревога незнакомый приказ
                 }
-            }            
+            }
         }
 
         void OrderCreateUnit(int baseId, bool agressive)
@@ -3814,7 +3851,7 @@ namespace Aicup2020
                         ty = ny;
                         maxW = resourcePotentialField[nx][ny];
                     }
-                } 
+                }
             }
 
             entityMemories[id].order = EntityOrders.collect;
@@ -3845,7 +3882,7 @@ namespace Aicup2020
         //}
         //void OrderRepairBuilding(int id, int targetId)
         //{
-            
+
         //    entityMemories[id].order = EntityOrders.repairGo;
         //    entityMemories[id].movePos = entityMemories[targetId].myEntity.Position;
         //    entityMemories[id].moveBreakThrough = false;
@@ -3869,7 +3906,7 @@ namespace Aicup2020
             int tx = ex;
             int ty = ey;
             int maxFindWeight = 0;
-            int limitWeight = mapSize * mapSize; // ��� ������ �������� �� ��������, ��� ��� ���� �������, � �� ��������
+            int limitWeight = mapSize * mapSize; // вес клеток ресурсов не подходит, так как надо убегать, а не добывать
 
             for (int i = 0; i < 4; i++)
             {
@@ -3883,7 +3920,7 @@ namespace Aicup2020
                 if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                 {
                     int w = resourcePotentialField[nx][ny];
-                    if ((w < limitWeight && w > maxFindWeight) || w == RPFdeniedBuilderWeight)//��������� ������ ��� ������ ������� ����������
+                    if ((w < limitWeight && w > maxFindWeight) || w == RPFdeniedBuilderWeight)//свободная клетка или клетка занятая строителем
                     {
                         tx = nx;
                         ty = ny;
@@ -3892,7 +3929,7 @@ namespace Aicup2020
                 }
             }
 
-            if (maxFindWeight > 0) // ���� ���� ������ �� ������� RPF
+            if (maxFindWeight > 0) // есть путь отхода по клеткам RPF
             {
                 entityMemories[id].order = EntityOrders.tryRetreat;
                 entityMemories[id].moveBreakThrough = true;
@@ -3978,10 +4015,10 @@ namespace Aicup2020
                 else
                 {
                     entityMemories[id].order = EntityOrders.attack;
-                    entityMemories[id].autoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypesArray); // ��������� ��������� ����
+                    entityMemories[id].autoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypesArray); // атаковать абсолютно всех
 
                     //AttackAction attackAction = new AttackAction();
-                    //attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypesArray); // ��������� ��������� ����
+                    //attackAction.AutoAttack = new AutoAttack(properties[entityMemories[id].myEntity.EntityType].SightRange, entityTypesArray); // атаковать абсолютно всех
                     //debugLines.Add(new DebugLine(ex, ey, ex + 1, ey + 1, colorRed, colorRed));
                     //actions.Add(id, new EntityAction(null, null, attackAction, null));
                 }
@@ -3997,7 +4034,7 @@ namespace Aicup2020
                 properties[EntityType.Turret].Size,
                 range);
 
-            entityMemories[id].order = EntityOrders.attack;            
+            entityMemories[id].order = EntityOrders.attack;
 
             //AttackAction attackAction = new AttackAction();
             if (availableTargetsType[(int)EntityType.RangedUnit] == true)
@@ -4040,7 +4077,7 @@ namespace Aicup2020
         //    int size = properties[type].Size;
         //    int buildPoints = properties[type].MaxHealth;
 
-        //    //��������� ��������, ������� ����� ���������
+        //    //стартовое значение, которое будем уменьшать
         //    int startWeight = mapSize * mapSize;
         //    int minWeight = startWeight - buildPoints;
         //    int WInside = 2;
@@ -4140,7 +4177,7 @@ namespace Aicup2020
         //        for (int i = iter + 1; i < findCells.Count; i++)
         //        {
         //            int dist = Abs(mx - findCells[i].x) + Abs(my - findCells[i].y);
-                    
+
         //            if (dist == 1)// это мой сосед
         //            {
         //                if (findCells[i].index == 0)
@@ -4322,7 +4359,7 @@ namespace Aicup2020
         //        }
         //    }
 
-            
+
 
 
         //    while (findCells.Count > 0)
@@ -4415,7 +4452,7 @@ namespace Aicup2020
         bool[] FindAvailableTargetType(int sx, int sy, int size, int range)
         {
             bool[] availableType = new bool[entityTypesArray.Length];
-            foreach(var i in entityTypesArray)
+            foreach (var i in entityTypesArray)
             {
                 availableType[(int)i] = false;
             }
@@ -4471,7 +4508,8 @@ namespace Aicup2020
             {
                 type = enemiesById[enemyID].EntityType;
                 return true;
-            } else
+            }
+            else
             {
                 return false;
             }
@@ -4504,7 +4542,7 @@ namespace Aicup2020
             #region определяем стартовые клетки
             //добавляем стартовые клетки поиска
             List<XYWeight> findCells = new List<XYWeight>();
-            foreach(var en in entityMemories)
+            foreach (var en in entityMemories)
             {
                 if (en.Value.myEntity.EntityType == EntityType.BuilderUnit)
                 {
@@ -4608,7 +4646,7 @@ namespace Aicup2020
             }
             #endregion
 
-            #region ���� ����� ������������� ������
+            #region ищем место строительства вблизи
             int findX = -1;
             int findY = -1;
             int findDistToBuilder = 0;
@@ -4616,15 +4654,15 @@ namespace Aicup2020
             int x = 0;
             int y = 0;
             bool first = false;
-            int maxLine = mapSize - buildingSize + 1; // ��� ������ ������ � ������� ��������, ���� �� ������ ������
+            int maxLine = mapSize - buildingSize + 1; // нет смысла искать в крайних позициях, туда не влезет здание
             for (int line = 0; line < maxLine;)
             {
-                // ��������
-                if (buildBarrierMap[x, y].CanBuildNow(buildingSize)) // ����� ����� ���������
+                // провкера
+                if (buildBarrierMap[x, y].CanBuildNow(buildingSize)) // можем здесь построить
                 {
-                    // ���� �� ����� ���������?
+                    // есть ли рядом строители?
                     int dist = 0;
-                    // ������� ������ � ������� ���������� (max) ���������
+                    // обходим здание в поисках ближайшего (max) строителя
                     for (int i = 0; i < buildingSize; i++)
                     {
                         int d1 = GetPathMapValueSafe(pathMap, x - 1, y + i, 0); // left
@@ -4642,18 +4680,19 @@ namespace Aicup2020
                         findX = x;
                         findY = y;
                         findDistToBuilder = dist;
-                        if (dist == startWeight) // �� �������� ������ ���������
+                        if (dist == startWeight) // на соседней клетке строитель
                         {
-                            break; // ����� �� ������ ������
-                        } else
+                            break; // можно не искать дальше
+                        }
+                        else
                         {
-                            maxLine = line + startWeight - dist + buildingSize; // ���� ��� ��������� ����� � ������
+                            maxLine = line + startWeight - dist + buildingSize; // ищем еще несколько линий и хватит
                         }
                     }
-                    
+
                 }
 
-                // ���������
+                // инкремент
 
                 if (first)
                 {
@@ -4662,12 +4701,14 @@ namespace Aicup2020
                         x = line;
                         y = 0;
                         first = false;
-                    } else
+                    }
+                    else
                     {
                         x++;
                     }
 
-                } else
+                }
+                else
                 {
                     if (x == y)
                     {
@@ -4675,12 +4716,14 @@ namespace Aicup2020
                         x = 0;
                         y = line;
                         first = true;
-                    } else {
+                    }
+                    else
+                    {
                         y++;
                     }
                 }
             }
-            
+
 
             #endregion
 
@@ -4707,7 +4750,8 @@ namespace Aicup2020
             if (x >= 0 && x < mapSize && y >= 0 && y < mapSize)
             {
                 return pathMap[x, y];
-            } else
+            }
+            else
             {
                 return defaultValue;
             }
@@ -4728,18 +4772,18 @@ namespace Aicup2020
             //int dy = 0; // without my cell
             for (int step = 0; step <= maxFind;)
             {
-                // ��������
+                // отмечаем
                 int nx = sx + dx;
                 int ny = sy + dy;
                 if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                 {
-                   if (buildBarrierMap[nx, ny].CanBuildNow(5))
+                    if (buildBarrierMap[nx, ny].CanBuildNow(5))
                     {
                         return new Vec2Int(nx, ny);
                     }
                 }
 
-                //������� ����
+                //двигаем цель
                 if (flag == 0)
                 {
                     dx--;
@@ -4838,10 +4882,10 @@ namespace Aicup2020
         //        map[i] = new int[mapSize];
         //    }
 
-        //    int startIndex = mapSize * mapSize; //��������� ��������, ������� ����� ���������
-        //    int minIndex = startIndex - maxDistance; //����������� ��������, ������ �������� �� ����� ������
+        //    int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
+        //    int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
 
-        //    //��������� ������������� ���������� �� ������� ������� �������
+        //    //заполняем максимальными значениями на клетках текущей позиции
         //    for (int x = target.X; x < size + target.X; x++)
         //    {
         //        for (int y = target.Y; y < size + target.Y; y++)
@@ -4851,7 +4895,7 @@ namespace Aicup2020
         //            }
         //        }
         //    }
-        //    //��������� ��������� ������ ������
+        //    //добавляем стартовые клетки поиска
         //    List<XYWeight> findCells = new List<XYWeight>();
         //    for (int x = target.X; x < size + target.X; x++)
         //    {
@@ -4903,7 +4947,7 @@ namespace Aicup2020
         //                            findCells.Add(new XYWeight(nx, ny, w - 1));
         //                    }
         //                }
-        //                //����� �� ��������� ��� ������� ������, ��� ��� � ��� ����� ���������������� �� ������� 1-2-3-4 � �.�.
+        //                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
 
         //            }
         //        }
@@ -4928,7 +4972,7 @@ namespace Aicup2020
                     //my base
                     for (int siy = 0; siy < size; siy++)
                     {
-                        // ��� ���� �� ��������
+                        // сам себе не угрожает
                         //AddEnemyDangerValueToCellSafe(sx + si, sy + siy, entityType, true);
                     }
 
@@ -5005,7 +5049,7 @@ namespace Aicup2020
         {
             int sightRange = properties[entityType].SightRange + 1;
             int size = properties[entityType].Size;
-            // � ���� ������ ��� �� �������� �� �������� (��������� ����������� ��� ������ ������)
+            // с этой клетки еще не смотрели по сторонам (благодаря перемещению или новому зданию)
             if (onceVisibleMap[sx][sy] < sightRange)
             {
                 int sxRight = sx + size - 1;
@@ -5046,7 +5090,7 @@ namespace Aicup2020
         {
             int sightRange = properties[entityType].SightRange;
             int size = properties[entityType].Size;
-            
+
             int sxRight = sx + size - 1;
             int syUp = sy + size - 1;
             for (int si = 0; si < size; si++)
@@ -5076,11 +5120,11 @@ namespace Aicup2020
                     SetCurrentVisibleMapSafe(sxRight + aa, syUp + bb);//right-up
                     SetCurrentVisibleMapSafe(sxRight + aa, sy - bb);//right-down
                 }
-            }            
+            }
         }
         void SetOnceVisibleMapSafe(int x, int y, int value)
         {
-            if (x >= 0 && x < mapSize && y >=0 && y < mapSize)
+            if (x >= 0 && x < mapSize && y >= 0 && y < mapSize)
             {
                 if (onceVisibleMap[x][y] < value)
                     onceVisibleMap[x][y] = value;
@@ -5101,7 +5145,7 @@ namespace Aicup2020
                 e.Value.SavePrevState();
             }
         }
-        
+
         Vec2Int FindSpawnPosition(int myX, int myY, bool agressive)
         {
             //find nearest enemy
@@ -5112,7 +5156,8 @@ namespace Aicup2020
             if (agressive)
             {
                 targetPos = FindNearestEnemy(cx, cy);
-            } else
+            }
+            else
             {
                 targetPos = FindNearestResource(cx, cy);
             }
@@ -5160,7 +5205,7 @@ namespace Aicup2020
                 xRight = true;
             else
                 xMiddle = true;
-            
+
             bool yUp = false;
             bool yDown = false;
             bool yCenter = false;
@@ -5192,11 +5237,11 @@ namespace Aicup2020
                 }
                 if (xMiddle)
                 {
-                    targetD = 19 - tx + bx ;//19-15
+                    targetD = 19 - tx + bx;//19-15
                 }
                 if (xRight)
                 {
-                    targetD = 14  + random.Next(2); //14-15
+                    targetD = 14 + random.Next(2); //14-15
                 }
             }
 
@@ -5216,7 +5261,7 @@ namespace Aicup2020
                 }
             }
 
-            if ( targetD < 0 || targetD >= 20)
+            if (targetD < 0 || targetD >= 20)
             {
                 return random.Next(20);
             }
@@ -5224,7 +5269,7 @@ namespace Aicup2020
             {
                 return targetD;
             }
-                
+
         }
 
         Vec2Int FindNearestResource(int sx, int sy)
@@ -5235,7 +5280,7 @@ namespace Aicup2020
             for (int i = 0; i < _playerView.Entities.Length; i++)
             {
                 if (_playerView.Entities[i].PlayerId == null)
-                {                    
+                {
                     int d = System.Math.Abs(sx - _playerView.Entities[i].Position.X) + System.Math.Abs(sy - _playerView.Entities[i].Position.Y);
                     if (d < distance)
                     {
@@ -5269,16 +5314,16 @@ namespace Aicup2020
             }
         }
         /// <summary>
-        /// ���� ��������� (�� ���������� �������) � ���� ������ � ���������� �� ������ ������������ � �� �������
+        /// ищет ближайший (по пройденным клеткам) к базе ресурс и возвращает ХУ клетки производства и ХУ ресурса
         /// </summary>
-        /// <param name="baseX">��������� � ���� �������� </param>
-        /// <param name="baseY">��������� � ���� ��������</param>
+        /// <param name="baseX">положение Х базы родителя </param>
+        /// <param name="baseY">положение У базы родителя</param>
         /// <returns>  </returns>
         Vec2Int FindNearestToBaseResourceReturnSpawnPlace(int baseX, int baseY)
         {
             //int size = properties[EntityType.BuilderBase].Size;
-            //int startIndex = mapSize * mapSize; //��������� ��������, ������� ����� ���������
-            //int minIndex = startIndex - maxDistance; //����������� ��������, ������ �������� �� ����� ������
+            //int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
+            //int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
 
             int tx = 0;
             int ty = 0;
@@ -5303,14 +5348,14 @@ namespace Aicup2020
                 }
             }
             return new Vec2Int(tx, ty);
-            // �������, ��� ��� ���������? 
-            // 1) ��� ����� ������������� ������ ����
+            // странно, как это произошло? 
+            // 1) нет места строительства вокруг базы
         }
         Vec2Int FindNearestEnemy(int sx, int sy)
         {
             int enemyIndex = -1;
             int distance = _playerView.MapSize * 3;
-                                    
+
             for (int i = 0; i < _playerView.Entities.Length; i++)
             {
                 if (_playerView.Entities[i].PlayerId != null)
@@ -5330,7 +5375,8 @@ namespace Aicup2020
             if (enemyIndex >= 0)
             {
                 return _playerView.Entities[enemyIndex].Position;
-            }else
+            }
+            else
             {
                 if (_playerView.CurrentTick < 500)
                     return new Vec2Int(73, 7);
@@ -5338,14 +5384,14 @@ namespace Aicup2020
                     return new Vec2Int(73, 73);
                 else return new Vec2Int(7, 73);
 
-                    //return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
+                //return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
             }
         }
         bool IsFreeCellsRange(int x1, int y1, int x2, int y2, bool onlyBuildings = false, bool ignoreBorder = false)
         {
             //xy1 always <= xy2
             if (x2 < x1) { int k = x1; x1 = x2; x2 = k; }
-            if (y2 < y1) { int k = y1; y1 = y2; y2 = k; } 
+            if (y2 < y1) { int k = y1; y1 = y2; y2 = k; }
 
             //check map border
             if (ignoreBorder)
@@ -5393,15 +5439,15 @@ namespace Aicup2020
                         if (cellWithIdAny[x][y] >= 0) return false;
                     }
                 }
-            }            
+            }
             return true;
         }
 
         bool TryFindSpawnPlace(ref int sx, ref int sy, int size, bool horizontal)//horizontal is [[[]]]
         {
             //check map borders
-            if (sx < 0 
-                || sy < 0 
+            if (sx < 0
+                || sy < 0
                 || sx >= _playerView.MapSize
                 || sy >= _playerView.MapSize)
             {
@@ -5409,7 +5455,7 @@ namespace Aicup2020
             }
 
             //check first line
-            if (!IsFreeCellsRange(sx, sy, (horizontal)? sx : (sx + size - 1), (horizontal) ? (sy + size - 1):sy))
+            if (!IsFreeCellsRange(sx, sy, (horizontal) ? sx : (sx + size - 1), (horizontal) ? (sy + size - 1) : sy))
             {
                 return false;
             }
@@ -5422,12 +5468,12 @@ namespace Aicup2020
                 if (horizontal)
                 {
                     if (!IsFreeCellsRange(sx - i, sy, sx - i, sy + size - 1))
-                        break;                    
+                        break;
                 }
                 else
                 {
                     if (!IsFreeCellsRange(sx, sy - i, sx + size - 1, sy - i))
-                        break;                    
+                        break;
                 }
                 minimum = -i;
             }
@@ -5458,7 +5504,8 @@ namespace Aicup2020
                     if (horizontal)
                     {
                         sx += minimum;
-                    } else
+                    }
+                    else
                     {
                         sy += minimum;
                     }
@@ -5534,7 +5581,7 @@ namespace Aicup2020
         //    }
         //}
         void CountNumberOfEntitiesAndMap()
-        {           
+        {
             //clear map
             for (int x = 0; x < mapSize; x++)
             {
@@ -5546,7 +5593,7 @@ namespace Aicup2020
             }
 
             //save previous number of entities
-            foreach(var p in previousEntityCount)
+            foreach (var p in previousEntityCount)
             {
                 previousEntityCount[p.Key] = currentMyEntityCount[p.Key];
             }
@@ -5576,12 +5623,12 @@ namespace Aicup2020
                     for (int y = y1; y <= y2; y++)
                     {
                         //this is building
-                        if (!canMove) 
+                        if (!canMove)
                             cellWithIdOnlyBuilding[x][y] = id;
                         //this is any enitites
                         cellWithIdAny[x][y] = id;
                     }
-                }                   
+                }
 
                 if (entity.PlayerId == myId)
                 {
@@ -5590,12 +5637,12 @@ namespace Aicup2020
                     // calc max population
                     if (entity.Active)
                         populationMax += properties[entity.EntityType].PopulationProvide;
-                } 
+                }
             }
             //calc max and current population
             populationUsing = 0;
             foreach (var e in properties)
-            {                
+            {
                 populationUsing += currentMyEntityCount[e.Key] * e.Value.PopulationUse;
             }
 
@@ -5606,7 +5653,7 @@ namespace Aicup2020
         public void DrawLineOnce(float x1, float y1, float x2, float y2, Color color1, Color color2)
         {
             if (debugOptions[(int)DebugOptions.canDrawGetAction])
-            {                
+            {
                 ColoredVertex[] vertices = new ColoredVertex[] {
                     new ColoredVertex(new Vec2Float(x1,y1), new Vec2Float(), color1),
                     new ColoredVertex(new Vec2Float(x2,y2), new Vec2Float(), color2),
@@ -5808,10 +5855,10 @@ namespace Aicup2020
 
                     #endregion
                 }
-                #region ������� �������������
+                #region примеры использования
                 //if (playerView.CurrentTick == 10)
                 //{
-                //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("�������� ���������")));
+                //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
 
                 //ColoredVertex position = new ColoredVertex(new Vec2Float(10, 10), new Vec2Float(0, 0), colorGreen);
                 //    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "Ghbdtn", 0, 16)));
@@ -5831,7 +5878,7 @@ namespace Aicup2020
 
     }
 
-    enum EntityOrders {none, spawnUnit, buildNow, buildGo, repairGo, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll}
+    enum EntityOrders { none, spawnUnit, buildNow, buildGo, repairGo, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll }
     class EntityMemory
     {
         public Group group { get; private set; }
@@ -5849,7 +5896,7 @@ namespace Aicup2020
         public EntityOrders prevOrder;
         public bool optimized;
 
-        public Entity myEntity { get; private set; } 
+        public Entity myEntity { get; private set; }
 
         public bool checkedNow;
 
@@ -5897,7 +5944,7 @@ namespace Aicup2020
             movePos = moveP;
             moveBreakThrough = breakThrough;
             moveFindClosestPosition = findClosestPosition;
-        }        
+        }
 
         public void OrderAttack(int? tarId, AutoAttack? autoAt, bool opt)
         {
@@ -5952,8 +5999,8 @@ namespace Aicup2020
             group = g;
             group.AddMember(myId);
         }
-               
-        public void SavePrevState ()
+
+        public void SavePrevState()
         {
             prevOrder = order;
             prevHealth = myEntity.Health;
@@ -5968,7 +6015,8 @@ namespace Aicup2020
         }
     }
 
-    class Group{
+    class Group
+    {
 
         public List<int> members { get; private set; }
 
