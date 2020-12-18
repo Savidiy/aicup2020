@@ -502,10 +502,10 @@ namespace Aicup2020
             #region draw debug settings
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
-            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
+            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = false;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
-            debugOptions[(int)DebugOptions.drawPotencAttack] = true;
+            debugOptions[(int)DebugOptions.drawPotencAttack] = false;
             debugOptions[(int)DebugOptions.drawOptAttack] = true;
 
             debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
@@ -845,7 +845,7 @@ namespace Aicup2020
                 }
             }
 
-            // check barriers
+            // check entity self-place barriers
             for (int x = 0; x < mapSize; x++)
             {
                 for (int y = 0; y < mapSize; y++)
@@ -901,7 +901,81 @@ namespace Aicup2020
                         }
                     }
                 }
-            }            
+            }
+            
+            // check enemy danger zone place
+            foreach (var p in enemiesById)
+            {
+                int dangerRadius = 0;
+                if (p.Value.EntityType == EntityType.Turret) dangerRadius = 6;
+                else if (p.Value.EntityType == EntityType.MeleeUnit) dangerRadius = 10;
+                else if (p.Value.EntityType == EntityType.RangedUnit) dangerRadius = 13;
+
+                if (dangerRadius > 0)
+                {
+                    int sx = p.Value.Position.X;
+                    int sy = p.Value.Position.Y;
+                    // int flag = 3;   //  /2  \3
+                    // int dx = 0;     //  \1  /0
+                    // int dy = 0; // with my cell
+                    int flag = 0;   //  /2  \3
+                    int dx = 1;     //  \1  /0
+                    int dy = 0; // without my cell
+                    for (int step = 0; step <= dangerRadius;)
+                    {
+                        // отмечаем
+                        int nx = sx + dx;
+                        int ny = sy + dy;
+                        if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                        {
+                            buildBarrierMap[nx, ny].s2noEnemiesBarrier = false;
+                            buildBarrierMap[nx, ny].s3noEnemiesBarrier = false;
+                            buildBarrierMap[nx, ny].s5noEnemiesBarrier = false;
+                        }
+
+                        //двигаем цель
+                        if (flag == 0)
+                        {
+                            dx--;
+                            dy--;
+                            if (dx == 0) flag = 1;
+                        }
+                        else if (flag == 1)
+                        {
+                            dx--;
+                            dy++;
+                            if (dy == 0) flag = 2;
+                        }
+                        else if (flag == 2)
+                        {
+                            dx++;
+                            dy++;
+                            if (dx == 0) flag = 3;
+                        }
+                        else if (flag == 3)
+                        {
+                            dx++;
+                            dy--;
+                            if (dy == 0)
+                            {
+                                flag = 0;
+                                dx++;
+                                step++;
+                            }
+                            else if (dy < 0)// first shift from 0,0
+                            {
+                                dx = 1;
+                                dy = 0;
+                                flag = 0;
+                                step++;
+                            }
+
+                        }
+                    }
+                }
+            }
+
+
 
             // calc can build now
             for (int x = 0; x < mapSize; x++)
