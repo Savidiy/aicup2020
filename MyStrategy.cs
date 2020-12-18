@@ -216,8 +216,8 @@ namespace Aicup2020
                 {
                     for (int dy = -4; dy <= 0 ; dy++)
                     {
-                        bool s2 = dx > -2;
-                        bool s3 = dx > -3;
+                        bool s2 = dx > -2 && dy >-2;
+                        bool s3 = dx > -3 && dy >-3;
                         bool s5 = true;
 
                         int nx = x + dx;
@@ -1037,8 +1037,20 @@ namespace Aicup2020
                 }
             }
 
-            // check base border cells
+            #region check base and turret border cells
             EntityType entityType = EntityType.BuilderBase;
+            foreach (var id in basicEntityIdGroups[entityType].members)
+            {
+                int sx = entityMemories[id].myEntity.Position.X;
+                int sy = entityMemories[id].myEntity.Position.Y;
+                int size = properties[entityType].Size;
+                for (int i = 0; i <= size; i++)
+                {
+                    buildBarrierMap.BlockCell(sx + size, sy + i, false, true); // right
+                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                }
+            }
+            entityType = EntityType.RangedBase;
             foreach (var id in basicEntityIdGroups[entityType].members)
             {
                 int sx = entityMemories[id].myEntity.Position.X;
@@ -1048,13 +1060,39 @@ namespace Aicup2020
                 {
                     buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
                     buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
-                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // up
-                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // right                  
+                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
+                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
                 }
             }
-
-            // check turret border cells
-
+            entityType = EntityType.MeleeBase;
+            foreach (var id in basicEntityIdGroups[entityType].members)
+            {
+                int sx = entityMemories[id].myEntity.Position.X;
+                int sy = entityMemories[id].myEntity.Position.Y;
+                int size = properties[entityType].Size;
+                for (int i = 0; i <= size; i++)
+                {
+                    buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
+                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
+                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
+                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                }
+            }
+            entityType = EntityType.Turret;
+            foreach (var id in basicEntityIdGroups[entityType].members)
+            {
+                int sx = entityMemories[id].myEntity.Position.X;
+                int sy = entityMemories[id].myEntity.Position.Y;
+                int size = properties[entityType].Size;
+                for (int i = 0; i <= size; i++)
+                {
+                    buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
+                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
+                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
+                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                }
+            }
+            #endregion
             // check house border cells
 
 
