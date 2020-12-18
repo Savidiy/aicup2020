@@ -1487,9 +1487,8 @@ namespace Aicup2020
             {
                 if (entityMemories[basicEntityIdGroups[EntityType.RangedBase].members[0]].myEntity.Active == false)
                 {
-                    needMakeRangedBase = true;
+                    //needMakeRangedBase = true;
                 }
-
             }
             
             #endregion
@@ -1499,12 +1498,18 @@ namespace Aicup2020
             if (needMakeRangedBase == false)
             {
                 int[] popMax = new int[] { 15, 30, 55, 70, 100, 1000 };
-                int[] popRange = new int[] { 0, 4, 8, 10, 15, 20 };
+                int[] popRange = new int[] { 0, 4, 8, 10, 10, 10 };
                 for (int i = 0; i < popMax.Length; i++)
                 {
-                    if (populationMax <= popMax[i])
+                    int potencPopulation = populationMax;
+                    foreach(var id in basicEntityIdGroups[EntityType.House].members)
                     {
-                        if (populationUsing + popRange[i] >= populationMax)
+                        if (entityMemories[id].myEntity.Active == false)
+                            potencPopulation += properties[EntityType.House].PopulationProvide;
+                    }
+                    if (potencPopulation <= popMax[i])
+                    {
+                        if (populationUsing + popRange[i] >= potencPopulation)
                         {
                             desires.Add(DesireType.WantCreateHouses);
                             break;
@@ -1514,7 +1519,7 @@ namespace Aicup2020
             }
             #endregion
 
-            #region Выбираем кого строить
+            #region Выбираем какого юнита строить
             int countEnemiesOnMyTerritory = 0;
             int myTerritoryX = mapSize / 2;
             int myTerritoryY = mapSize / 2;
@@ -1654,17 +1659,15 @@ namespace Aicup2020
                             {
                                 // ограничение на одновременное строительство
                                 int count = 0;
-                                foreach(var ni in prevIntentions)
+                                foreach(var en in entityMemories)
                                 {
-                                    if (ni.intentionType == IntentionType.IntentionCreateHouse) 
+                                    if (en.Value.myEntity.Active == false) 
                                         count++;
                                 }
-                                foreach (var ni in intentions)
-                                {
-                                    if (ni.intentionType == IntentionType.IntentionCreateHouse)
-                                        count++;
-                                }
-                                if ((populationMax <= 30 && count == 0) || (populationMax <= 60 && count <= 2) || (count <= 4))
+                                if ((populationMax <= 20 && count == 0)
+                                    || (populationMax <= 40 && count <= 1)
+                                    || (populationMax <= 60 && count <= 2) 
+                                    || (count <= 2))
                                 {
                                     plans.Add(PlanType.PlanCreateHouses);
                                 }
@@ -4463,7 +4466,25 @@ namespace Aicup2020
             {
                 if (en.Value.myEntity.EntityType == EntityType.BuilderUnit)
                 {
-                    findCells.Add(new XYWeight(en.Value.myEntity.Position.X, en.Value.myEntity.Position.Y, startWeight));
+                    switch (en.Value.prevOrder)
+                    {
+                        case EntityOrders.attack:
+                        case EntityOrders.attackAndMove:
+                        case EntityOrders.buildNow:
+                        case EntityOrders.repairGo:
+                        case EntityOrders.tryRetreat:
+                        case EntityOrders.canRetreat:
+                            break;
+                        case EntityOrders.cancelAll:
+                        case EntityOrders.collect:
+                        case EntityOrders.buildGo:
+                        case EntityOrders.move:
+                        case EntityOrders.none:
+                            findCells.Add(new XYWeight(en.Value.myEntity.Position.X, en.Value.myEntity.Position.Y, startWeight));
+                            break;
+                        default:
+                            throw new System.Exception("Неизвестный старый приказ");
+                    }
                 }
             }
             #endregion
@@ -5722,6 +5743,7 @@ namespace Aicup2020
         public AutoAttack? autoAttack;
         public EntityType targetEntityType;
         public EntityOrders order { get; set; }
+        public EntityOrders prevOrder;
         public bool optimized;
 
         public Entity myEntity { get; private set; } 
@@ -5830,6 +5852,7 @@ namespace Aicup2020
                
         public void SavePrevState ()
         {
+            prevOrder = order;
             prevHealth = myEntity.Health;
             prevPosition = myEntity.Position;
         }
