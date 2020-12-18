@@ -40,6 +40,7 @@ namespace Aicup2020
         List<int> needRepairUnitsIdList = new List<int>();        
 
         enum DebugOptions { canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat, 
+            drawOnceVisibleMap,
             drawPotencAttack, drawOptAttack,
             canDrawDebugUpdate, allOptionsCount }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
@@ -565,6 +566,22 @@ namespace Aicup2020
             {
                 if (debugOptions[(int)DebugOptions.drawPotencAttack] == true)
                     DrawPotencMap(3);
+                if(debugOptions[(int)DebugOptions.drawOnceVisibleMap] == true)
+                {
+                    for (int x = 0; x < mapSize; x++)
+                    {
+                        for (int y = 0; y < mapSize; y++)
+                        {
+                            ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorRed);
+                            debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, onceVisibleMap[x][y].ToString(), 0, 16)));
+                            //if (onceVisibleMap[x][y] == 0)
+                            //{
+                            //    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y+0.3f), new Vec2Float(0, 0), colorRed);
+                            //    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0, 16)));
+                            //}
+                        }
+                    }
+                }
 
                 _debugInterface.Send(new DebugCommand.Flush());
             }
@@ -578,6 +595,8 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
             debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
+            debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
+
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
             debugOptions[(int)DebugOptions.drawPotencAttack] = false;
@@ -1172,6 +1191,22 @@ namespace Aicup2020
             }
             #endregion
 
+            #region uncheck fog of war
+            if (fogOfWar)
+            {
+                for (int x = mapSize - 1; x > 0; x--)
+                {
+                    for (int y = mapSize - 1; y > 0; y--)
+                    {
+                        if (onceVisibleMap[x][y] == 0)
+                        {
+                            if (onceVisibleMap[x - 1][y] != 0 || onceVisibleMap[x][y - 1] != 0)
+                               buildBarrierMap.BlockCell(x, y , false, true);
+                        }
+                    }
+                }
+            }
+            #endregion
             // calc can build now
             for (int x = 0; x < mapSize; x++)
             {
@@ -1472,7 +1507,7 @@ namespace Aicup2020
                     {
                         for (int y = 0; y < mapSize; y++)
                         {
-                            if (buildBarrierMap[x, y].CanBuildNow(5))
+                            if (buildBarrierMap[x, y].CanBuildAfter(5))
                             {
                                 desires.Add(DesireType.WantCreateRangerBase);
                                 needMakeRangedBase = true;
@@ -4676,22 +4711,84 @@ namespace Aicup2020
         {
             int buildingSize = properties[EntityType.RangedBase].Size;
 
-            int y = 0;
-            for (int x = 12; x < mapSize;)
+            int sx = 15;
+            int sy = 15;
+            int maxFind = 70;
+            int flag = 3;   //  /2  \3
+            int dx = 0;     //  \1  /0
+            int dy = 0; // with my cell
+            //int flag = 0;   //  /2  \3
+            //int dx = 1;     //  \1  /0
+            //int dy = 0; // without my cell
+            for (int step = 0; step <= maxFind;)
             {
-                if (buildBarrierMap[x, y].CanBuildNow(buildingSize))
+                // отмечаем
+                int nx = sx + dx;
+                int ny = sy + dy;
+                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                 {
-                    return new Vec2Int(x, y);
+                   if (buildBarrierMap[nx, ny].CanBuildNow(5))
+                    {
+                        return new Vec2Int(nx, ny);
+                    }
                 }
 
-                x--;
-                y++;
-                if (x < 0)
+                //двигаем цель
+                if (flag == 0)
                 {
-                    x = y;
-                    y = 0;
+                    dx--;
+                    dy--;
+                    if (dx == 0) flag = 1;
+                }
+                else if (flag == 1)
+                {
+                    dx--;
+                    dy++;
+                    if (dy == 0) flag = 2;
+                }
+                else if (flag == 2)
+                {
+                    dx++;
+                    dy++;
+                    if (dx == 0) flag = 3;
+                }
+                else if (flag == 3)
+                {
+                    dx++;
+                    dy--;
+                    if (dy == 0)
+                    {
+                        flag = 0;
+                        dx++;
+                        step++;
+                    }
+                    else if (dy < 0)// first shift from 0,0
+                    {
+                        dx = 1;
+                        dy = 0;
+                        flag = 0;
+                        step++;
+                    }
+
                 }
             }
+
+            //int y = 0;
+            //for (int x = 12; x < mapSize;)
+            //{
+            //    if (buildBarrierMap[x, y].CanBuildNow(buildingSize))
+            //    {
+            //        return new Vec2Int(x, y);
+            //    }
+
+            //    x--;
+            //    y++;
+            //    if (x < 0)
+            //    {
+            //        x = y;
+            //        y = 0;
+            //    }
+            //}
 
             return new Vec2Int(-1, -1);
         }
@@ -4900,7 +4997,7 @@ namespace Aicup2020
         }
         void AddEntityViewToOnceVisibleMap(EntityType entityType, int sx, int sy)
         {
-            int sightRange = properties[entityType].SightRange;
+            int sightRange = properties[entityType].SightRange + 1;
             int size = properties[entityType].Size;
             // с этой клетки еще не смотрели по сторонам (благодаря перемещению или новому зданию)
             if (onceVisibleMap[sx][sy] < sightRange)
@@ -5710,10 +5807,8 @@ namespace Aicup2020
                 //{
                 //    debugInterface.Send(new DebugCommand.Add(new DebugData.Log("Тестовое сообщение")));
 
-                //    ColoredVertex position = new ColoredVertex(null, new Vec2Float(10, 10), colorGreen);
-                //    DebugData.PlacedText text = new DebugData.PlacedText(position, "Ghbdtn", 0, 16);
-                //    debugInterface.Send(new DebugCommand.Add(text));
-
+                //ColoredVertex position = new ColoredVertex(new Vec2Float(10, 10), new Vec2Float(0, 0), colorGreen);
+                //    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "Ghbdtn", 0, 16)));
                 //    ColoredVertex[] vertices = new ColoredVertex[] {
                 //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
                 //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
