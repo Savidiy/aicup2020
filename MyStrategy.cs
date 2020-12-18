@@ -4480,6 +4480,7 @@ namespace Aicup2020
                         case EntityOrders.buildGo:
                         case EntityOrders.move:
                         case EntityOrders.none:
+                            pathMap[en.Value.myEntity.Position.X, en.Value.myEntity.Position.Y] = startWeight;
                             findCells.Add(new XYWeight(en.Value.myEntity.Position.X, en.Value.myEntity.Position.Y, startWeight));
                             break;
                         default:
@@ -4604,7 +4605,7 @@ namespace Aicup2020
                             break; // можно не искать дальше
                         } else
                         {
-                            maxLine = line + startWeight - dist - 1; // ищем еще несколько линий и хватит
+                            maxLine = line + startWeight - dist + buildingSize; // ищем еще несколько линий и хватит
                         }
                     }
                     
