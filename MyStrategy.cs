@@ -560,6 +560,7 @@ namespace Aicup2020
             ConvertOrdersToActions(); // Приказы - Кто будет выполнять намерения? //приказы превращаются в конкретные action для entities        
 
             SaveEntitiesMemory(); 
+
             if (debugOptions[(int)DebugOptions.canDrawGetAction])
             {
                 if (debugOptions[(int)DebugOptions.drawPotencAttack] == true)
@@ -4484,7 +4485,7 @@ namespace Aicup2020
                             findCells.Add(new XYWeight(en.Value.myEntity.Position.X, en.Value.myEntity.Position.Y, startWeight));
                             break;
                         default:
-                            throw new System.Exception("Неизвестный старый приказ");
+                            throw new System.Exception("Неизвестный старый приказ: " + nameof(en.Value.prevOrder) + " - " + en.Value.prevOrder);
                     }
                 }
             }
@@ -5729,7 +5730,7 @@ namespace Aicup2020
 
     }
 
-    enum EntityOrders { spawnUnit, buildNow, buildGo, repairGo, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll, none}
+    enum EntityOrders {none, spawnUnit, buildNow, buildGo, repairGo, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll}
     class EntityMemory
     {
         public Group group { get; private set; }
