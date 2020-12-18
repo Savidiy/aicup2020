@@ -179,7 +179,81 @@ namespace Aicup2020
                 return false;
             }
         }
-        BuildMapCell[,] buildBarrierMap;
+        BuildBarrierMap buildBarrierMap;
+        class BuildBarrierMap
+        {
+            BuildMapCell[,] _buildBarrierMap;
+            int _mapSize;
+
+            public BuildBarrierMap(int size)
+            {
+                _mapSize = size;
+                _buildBarrierMap = new BuildMapCell[_mapSize, _mapSize];
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _buildBarrierMap[x, y] = new BuildMapCell();
+                    }
+
+                }
+            }
+            public void Reset()
+            {
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _buildBarrierMap[x, y].Reset();
+                    }
+
+                }
+            }
+
+            public void BlockCell(int x, int y, bool isEnemy, bool isBuilding)
+            {
+                for (int dx = -4; dx <= 0; dx++)
+                {
+                    for (int dy = -4; dy <= 0 ; dy++)
+                    {
+                        bool s2 = dx > -2;
+                        bool s3 = dx > -3;
+                        bool s5 = true;
+
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx >= 0 && nx < _mapSize && ny >= 0 && ny < _mapSize)
+                        {
+                            if (isEnemy)
+                            {
+                                if (s2) _buildBarrierMap[nx, ny].s2noEnemiesBarrier = false;
+                                if (s3) _buildBarrierMap[nx, ny].s3noEnemiesBarrier = false;
+                                if (s5) _buildBarrierMap[nx, ny].s5noEnemiesBarrier = false;
+                            }
+                            if (isBuilding)
+                            {
+                                if (s2) _buildBarrierMap[nx, ny].s2noBaseOrWarriorBarrier = false;
+                                if (s3) _buildBarrierMap[nx, ny].s3noBaseOrWarriorBarrier = false;
+                                if (s5) _buildBarrierMap[nx, ny].s5noBaseOrWarriorBarrier = false;
+                            }
+                        }
+                    }
+                }
+            }
+            public BuildMapCell this[int x , int y]
+            {
+                get { 
+                    if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize) 
+                        return _buildBarrierMap[x, y];
+                    else 
+                        return null;
+                }
+                set {
+                    if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                        _buildBarrierMap[x, y] = value;
+                }
+            }
+        }
         List<Vec2Int> preSetHousePositions;
         bool preSetHousePlacingComplete = false;
 
@@ -547,14 +621,7 @@ namespace Aicup2020
             }
 
             potencAttackMap = new PotencAttackMap(mapSize);
-            buildBarrierMap = new BuildMapCell[mapSize, mapSize];
-            for (int x = 0; x < mapSize; x++)
-            {
-                for (int y = 0; y < mapSize; y++)
-                {
-                    buildBarrierMap[x, y] = new BuildMapCell();
-                }
-            }
+            buildBarrierMap = new BuildBarrierMap(mapSize);
             #endregion
 
             if (!fogOfWar)
@@ -837,13 +904,7 @@ namespace Aicup2020
         void GenerateBuildBarrierMap()
         {
             //zeroing
-            for (int x = 0; x < mapSize; x++)
-            {
-                for (int y = 0; y < mapSize; y++)
-                {
-                    buildBarrierMap[x, y].Reset();
-                }
-            }
+            buildBarrierMap.Reset();                
 
             // check entity self-place barriers
             for (int x = 0; x < mapSize; x++)
@@ -928,9 +989,10 @@ namespace Aicup2020
                         int ny = sy + dy;
                         if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                         {
-                            buildBarrierMap[nx, ny].s2noEnemiesBarrier = false;
-                            buildBarrierMap[nx, ny].s3noEnemiesBarrier = false;
-                            buildBarrierMap[nx, ny].s5noEnemiesBarrier = false;
+                            buildBarrierMap.BlockCell(nx, ny, true, false);
+                            //buildBarrierMap[nx, ny].s2noEnemiesBarrier = false;
+                            //buildBarrierMap[nx, ny].s3noEnemiesBarrier = false;
+                            //buildBarrierMap[nx, ny].s5noEnemiesBarrier = false;
                         }
 
                         //двигаем цель
@@ -975,6 +1037,25 @@ namespace Aicup2020
                 }
             }
 
+            // check base border cells
+            EntityType entityType = EntityType.BuilderBase;
+            foreach (var id in basicEntityIdGroups[entityType].members)
+            {
+                int sx = entityMemories[id].myEntity.Position.X;
+                int sy = entityMemories[id].myEntity.Position.Y;
+                int size = properties[entityType].Size;
+                for (int i = 0; i <= size; i++)
+                {
+                    buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
+                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
+                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // up
+                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // right                  
+                }
+            }
+
+            // check turret border cells
+
+            // check house border cells
 
 
             // calc can build now
