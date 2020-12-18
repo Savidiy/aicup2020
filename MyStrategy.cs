@@ -990,9 +990,6 @@ namespace Aicup2020
                         if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                         {
                             buildBarrierMap.BlockCell(nx, ny, true, false);
-                            //buildBarrierMap[nx, ny].s2noEnemiesBarrier = false;
-                            //buildBarrierMap[nx, ny].s3noEnemiesBarrier = false;
-                            //buildBarrierMap[nx, ny].s5noEnemiesBarrier = false;
                         }
 
                         //двигаем цель
@@ -1093,8 +1090,86 @@ namespace Aicup2020
                 }
             }
             #endregion
-            // check house border cells
+            #region check house border cells
+            entityType = EntityType.House;
+            foreach (var id in basicEntityIdGroups[entityType].members)
+            {
+                int sx = entityMemories[id].myEntity.Position.X;
+                int sy = entityMemories[id].myEntity.Position.Y;
+                int size = properties[entityType].Size;
 
+                if (sx == 0 && sy == 0)
+                {
+                    buildBarrierMap.BlockCell(sx + size, sy + size, false, true); // up-right corner only
+                }
+                else if (sx == 0)
+                {
+                    for (int i = -1; i <= size; i++)
+                    {
+                        buildBarrierMap.BlockCell(sx + size, sy + i, false, true); // right                
+                    }
+                }
+                else if (sy == 0)
+                {
+                    for (int i = -1; i <= size; i++)
+                    {
+                        buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up         
+                    }
+                }
+                else if (sx == 2 && sy == 2)
+                {
+                    for (int i = -1; i <= size; i++)
+                    {
+                        buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
+                        buildBarrierMap.BlockCell(sx + i, sy - 1, false, true); // down               
+                    }
+                }
+                else if (sx == 2 && sy > 2 && sy <= 6)
+                {
+                    for (int i = -1; i <= size; i++)
+                    {
+                        buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left              
+                    }
+                }
+                else if (sx == 2 && sy > 6 && sy <= 10)
+                {
+                    for (int i = 0; i <= size; i++)
+                    {
+                        buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
+                        //buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
+                        buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
+                        buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                    }
+                }
+                else if (sy == 2 && sx > 2 && sx <= 6)
+                {
+                    for (int i = -1; i <= size; i++)
+                    {
+                        buildBarrierMap.BlockCell(sx + i, sy - 1, false, true); // down              
+                    }
+                }
+                else if (sy == 2 && sx > 6 && sx <= 10)
+                {
+                    for (int i = -1; i <= size; i++)
+                    {
+                        //buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
+                        buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
+                        buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
+                        buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i <= size; i++)
+                    {
+                        buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
+                        buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
+                        buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
+                        buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                    }
+                }
+            }
+            #endregion
 
             // calc can build now
             for (int x = 0; x < mapSize; x++)
