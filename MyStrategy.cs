@@ -3221,6 +3221,7 @@ namespace Aicup2020
                 int WWarrior = -6;
                 int WNextPosition = -7;
                 int WDeniedBuilder = -8;
+                int WUnvisibleCell = -9;
                 #endregion
 
                 #region определяем стартовые клетки
@@ -3462,7 +3463,12 @@ namespace Aicup2020
                                     }
                                     else if (nextPositionMyUnitsMap[nx][ny] > 0) // проверка пустой позиции на следующий ход
                                     {
+                                        canContinue = false;
                                         pathMap[nx, ny].weight = WNextPosition;
+                                    } else if (onceVisibleMap[nx][ny] == 0)
+                                    {
+                                        canContinue = false;
+                                        pathMap[nx, ny].weight = WUnvisibleCell;
                                     }
 
                                     if (canContinue == true)
