@@ -1527,7 +1527,7 @@ namespace Aicup2020
                     }
                 }
 
-                if (_playerView.CurrentTick > 200 || maxEnemyResources > 300)
+                if (_playerView.CurrentTick > 170 || maxEnemyResources > 300)
                 {
                     for (int x = 0; x < mapSize; x++)
                     {
