@@ -4578,7 +4578,7 @@ namespace Aicup2020
                         findX = x;
                         findY = y;
                         findDistToBuilder = dist;
-                        if (dist == startWeight - 1) // на соседней клетке строитель
+                        if (dist == startWeight) // на соседней клетке строитель
                         {
                             break; // можно не искать дальше
                         } else
