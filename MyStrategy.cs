@@ -73,6 +73,7 @@ namespace Aicup2020
             public bool s2noBaseOrWarriorBarrier;
             public bool s2noBuilderBarrier;
             public bool s2noEnemiesBarrier;
+            public bool s2noUnvisivleBarrier;
             public int s2howManyResBarrier;
 
             public bool s3canBuildNow;
@@ -80,6 +81,7 @@ namespace Aicup2020
             public bool s3noBaseOrWarriorBarrier;
             public bool s3noBuilderBarrier;
             public bool s3noEnemiesBarrier;
+            public bool s3noUnvisivleBarrier;
             public int s3howManyResBarrier;
 
             public bool s5canBuildNow;
@@ -87,6 +89,7 @@ namespace Aicup2020
             public bool s5noBaseOrWarriorBarrier;
             public bool s5noBuilderBarrier;
             public bool s5noEnemiesBarrier;
+            public bool s5noUnvisivleBarrier;
             public int s5howManyResBarrier;
 
             public BuildMapCell()
@@ -97,41 +100,37 @@ namespace Aicup2020
             public void Check()
             {
                 if (s2noBaseOrWarriorBarrier
-                        && s2noEnemiesBarrier
-                        && s2howManyResBarrier == 0)
+                    && s2noEnemiesBarrier
+                    && s2howManyResBarrier == 0
+                    && s2noUnvisivleBarrier)
                 {
+                    s2canBuildAfter = true;
                     if (s2noBuilderBarrier)
                     {
                         s2canBuildNow = true;
-                        s2canBuildAfter = true;
                     }
-                    else
-                        s2canBuildAfter = true;
                 }
                 if (s3noBaseOrWarriorBarrier
                     && s3noEnemiesBarrier
-                    && s3howManyResBarrier == 0)
+                    && s3howManyResBarrier == 0
+                    && s3noUnvisivleBarrier)
                 {
+                    s3canBuildAfter = true;
                     if (s3noBuilderBarrier)
                     {
                         s3canBuildNow = true;
-                        s3canBuildAfter = true;
                     }
-                    else
-                        s3canBuildAfter = true;
                 }
                 if (s5noBaseOrWarriorBarrier
                     && s5noEnemiesBarrier
-                    && s5noBuilderBarrier
-                    && s5howManyResBarrier == 0)
+                    && s5howManyResBarrier == 0
+                    && s5noUnvisivleBarrier)
                 {
+                    s5canBuildAfter = true;
                     if (s5noBuilderBarrier)
                     {
                         s5canBuildNow = true;
-                        s5canBuildAfter = true;
                     }
-                    else
-                        s5canBuildAfter = true;
                 }
             }
 
@@ -143,6 +142,7 @@ namespace Aicup2020
                 s2noBuilderBarrier = s3noBuilderBarrier = s5noBuilderBarrier = true;
                 s2noEnemiesBarrier = s3noEnemiesBarrier = s5noEnemiesBarrier = true;
                 s2howManyResBarrier = s3howManyResBarrier = s5howManyResBarrier = 0;
+                s2noUnvisivleBarrier = s3noUnvisivleBarrier = s5noUnvisivleBarrier = true;
             }
 
             public int HowManyResBarrier(int size)
@@ -213,8 +213,8 @@ namespace Aicup2020
 
                 }
             }
-
-            public void BlockCell(int x, int y, bool isEnemy, bool isBuilding)
+            public enum BlockVariant {Enemy, Builder, MyBuilding, Unvisible };
+            public void BlockCell(int x, int y, BlockVariant variant)
             {
                 for (int dx = -4; dx <= 0; dx++)
                 {
@@ -228,18 +228,52 @@ namespace Aicup2020
                         int ny = y + dy;
                         if (nx >= 0 && nx < _mapSize && ny >= 0 && ny < _mapSize)
                         {
-                            if (isEnemy)
+                            switch (variant)
                             {
-                                if (s2) _buildBarrierMap[nx, ny].s2noEnemiesBarrier = false;
-                                if (s3) _buildBarrierMap[nx, ny].s3noEnemiesBarrier = false;
-                                if (s5) _buildBarrierMap[nx, ny].s5noEnemiesBarrier = false;
+                                case BlockVariant.Enemy:
+                                    if (s2) _buildBarrierMap[nx, ny].s2noEnemiesBarrier = false;
+                                    if (s3) _buildBarrierMap[nx, ny].s3noEnemiesBarrier = false;
+                                    if (s5) _buildBarrierMap[nx, ny].s5noEnemiesBarrier = false;
+                                    break;
+                                case BlockVariant.Builder:
+                                    if (s2) _buildBarrierMap[nx, ny].s2noBuilderBarrier = false;
+                                    if (s3) _buildBarrierMap[nx, ny].s3noBuilderBarrier = false;
+                                    if (s5) _buildBarrierMap[nx, ny].s5noBuilderBarrier = false;
+                                    break;
+                                case BlockVariant.MyBuilding:
+                                    if (s2) _buildBarrierMap[nx, ny].s2noBaseOrWarriorBarrier = false;
+                                    if (s3) _buildBarrierMap[nx, ny].s3noBaseOrWarriorBarrier = false;
+                                    if (s5) _buildBarrierMap[nx, ny].s5noBaseOrWarriorBarrier = false;
+                                    break;
+                                case BlockVariant.Unvisible:
+                                    if (s2) _buildBarrierMap[nx, ny].s2noUnvisivleBarrier = false;
+                                    if (s3) _buildBarrierMap[nx, ny].s3noUnvisivleBarrier = false;
+                                    if (s5) _buildBarrierMap[nx, ny].s5noUnvisivleBarrier = false;
+                                    break;
+                                default:
+                                    throw new System.Exception("unknown variant");
                             }
-                            if (isBuilding)
-                            {
-                                if (s2) _buildBarrierMap[nx, ny].s2noBaseOrWarriorBarrier = false;
-                                if (s3) _buildBarrierMap[nx, ny].s3noBaseOrWarriorBarrier = false;
-                                if (s5) _buildBarrierMap[nx, ny].s5noBaseOrWarriorBarrier = false;
-                            }
+                        }
+                    }
+                }
+            }
+            public void AddResource(int x, int y)
+            {
+                for (int dx = -4; dx <= 0; dx++)
+                {
+                    for (int dy = -4; dy <= 0; dy++)
+                    {
+                        bool s2 = dx > -2 && dy > -2;
+                        bool s3 = dx > -3 && dy > -3;
+                        bool s5 = true;
+
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx >= 0 && nx < _mapSize && ny >= 0 && ny < _mapSize)
+                        {
+                            if (s2) _buildBarrierMap[nx, ny].s2howManyResBarrier++;
+                            if (s3) _buildBarrierMap[nx, ny].s3howManyResBarrier++;
+                            if (s5) _buildBarrierMap[nx, ny].s5howManyResBarrier++;                            
                         }
                     }
                 }
@@ -260,8 +294,8 @@ namespace Aicup2020
                 }
             }
         }
-        List<Vec2Int> preSetHousePositions;
-        bool preSetHousePlacingComplete = false;
+        //List<Vec2Int> preSetHousePositions;
+        //bool preSetHousePlacingComplete = false;
 
         struct EnemyDangerCell
         {
@@ -393,6 +427,8 @@ namespace Aicup2020
         float buildBuildingDistCoef = 0.3f; // коэффициент как далеко мы ищем строителей для помощи 0,3 = 30% от расчетного времени строительства (меньше ищем)
         float repairBuildingDistCoef = 0.5f; // аналогично но для ремонта
         int buildTurretThenResourcesOver = 720;
+        Vec2Int rangedBasePotencPlace1;
+        Vec2Int rangedBasePotencPlace2;
 
         //int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
         //float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
@@ -554,6 +590,7 @@ namespace Aicup2020
             GenerateResourcePotentialField();
             GenerateBuildBarrierMap();
             GeneratePotencAttackMap();
+            SelectRangedBasePotencPlace();
 
             iHaveActiveRangedBase = false;
             foreach (var id in basicEntityIdGroups[EntityType.RangedBase].members)
@@ -612,6 +649,45 @@ namespace Aicup2020
                             //}
                         }
                     }
+                }
+                if (debugOptions[(int)DebugOptions.drawRangedBasePotencPlace] == true)
+                {
+                    int x1 = rangedBasePotencPlace1.X - 1;
+                    int y1 = rangedBasePotencPlace1.Y - 1;
+                    int size = 7;
+                    DrawLineOnce(x1, y1, x1 + size, y1, colorWhite,colorWhite);
+                    DrawLineOnce(x1 + size, y1, x1 + size, y1 + size, colorWhite, colorWhite);
+                    DrawLineOnce(x1 + size, y1 + size, x1, y1 + size, colorWhite, colorWhite);
+                    DrawLineOnce(x1, y1 + size, x1, y1, colorWhite, colorWhite);
+
+                    x1 = rangedBasePotencPlace2.X - 1;
+                    y1 = rangedBasePotencPlace2.Y - 1;
+                    size = 7;
+                    DrawLineOnce(x1, y1, x1 + size, y1, colorGreen, colorGreen);
+                    DrawLineOnce(x1 + size, y1, x1 + size, y1 + size, colorGreen, colorGreen);
+                    DrawLineOnce(x1 + size, y1 + size, x1, y1 + size, colorGreen, colorGreen);
+                    DrawLineOnce(x1, y1 + size, x1, y1, colorGreen, colorGreen);
+
+                    //for (int x = 0; x < mapSize; x++)
+                    //{
+                    //    for (int y = 0; y < mapSize; y++)
+                    //    {
+                    //        //int res = buildBarrierMap[x, y].HowManyResBarrier(5);
+                    //        //if (res > 0)
+                    //        //{
+
+                    //        //    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorRed);
+                    //        //    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, res.ToString(), 0.5f, 16)));
+                    //        //}
+                           
+                    //        if (buildBarrierMap[x, y].s5noUnvisivleBarrier == false)
+                    //        {
+
+                    //            ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.3f), new Vec2Float(0, 0), colorRed);
+                    //            debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "x", 0.5f, 16)));
+                    //        }
+                    //    }
+                    //}
                 }
 
                 _debugInterface.Send(new DebugCommand.Flush());
@@ -688,12 +764,12 @@ namespace Aicup2020
                 }
             }
 
-            preSetHousePositions = new List<Vec2Int>();
-            preSetHousePositions.Add(new Vec2Int(2, 2));
-            preSetHousePositions.Add(new Vec2Int(5, 2));
-            preSetHousePositions.Add(new Vec2Int(8, 2));
-            preSetHousePositions.Add(new Vec2Int(2, 5));
-            preSetHousePositions.Add(new Vec2Int(2, 8));
+            //preSetHousePositions = new List<Vec2Int>();
+            //preSetHousePositions.Add(new Vec2Int(2, 2));
+            //preSetHousePositions.Add(new Vec2Int(5, 2));
+            //preSetHousePositions.Add(new Vec2Int(8, 2));
+            //preSetHousePositions.Add(new Vec2Int(2, 5));
+            //preSetHousePositions.Add(new Vec2Int(2, 8));
 
 
             //prepare current and previous entity counter
@@ -789,7 +865,7 @@ namespace Aicup2020
                 }
                 else if (e.PlayerId == null)// it s resource
                 {
-                    resourceMemoryMap[e.Position.X][e.Position.Y] = currentTick;
+                    resourceMemoryMap[e.Position.X][e.Position.Y] = currentTick+1;
                 }
                 else // it's enemy
                 {
@@ -842,7 +918,7 @@ namespace Aicup2020
                 {
                     if (currentVisibleMap[x][y] == true)
                     {
-                        if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                        if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] <= currentTick)
                             resourceMemoryMap[x][y] = 0;
                     }
                 }
@@ -969,55 +1045,30 @@ namespace Aicup2020
                     int id = cellWithIdAny[x][y];
                     if (id >= 0)
                     {
-                        for (int k = x - 4; k <= x; k++)
+                        if (entityMemories.ContainsKey(id))
                         {
-                            for (int m = y - 4; m <= y; m++)
+                            if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
                             {
-                                bool s2 = (x - k < 2 && y - m < 2);
-                                bool s3 = (x - k < 3 && y - m < 3);
-                                bool s5 = true; // (x - k < 5 && y - m < 5);
-
-                                if (k >= 0 && m >= 0) // больше mapSize никогда не станет
-                                {
-                                    if (entityMemories.ContainsKey(id))
-                                    {
-                                        if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
-                                        {
-                                            if (s2) buildBarrierMap[k, m].s2noBuilderBarrier = false;
-                                            if (s3) buildBarrierMap[k, m].s3noBuilderBarrier = false;
-                                            if (s5) buildBarrierMap[k, m].s5noBuilderBarrier = false;
-                                        }
-                                        else
-                                        {
-                                            if (s2) buildBarrierMap[k, m].s2noBaseOrWarriorBarrier = false;
-                                            if (s3) buildBarrierMap[k, m].s3noBaseOrWarriorBarrier = false;
-                                            if (s5) buildBarrierMap[k, m].s5noBaseOrWarriorBarrier = false;
-                                        }
-
-                                    }
-                                    else if (enemiesById.ContainsKey(id))
-                                    {
-                                        if (s2) buildBarrierMap[k, m].s2noEnemiesBarrier = false;
-                                        if (s3) buildBarrierMap[k, m].s3noEnemiesBarrier = false;
-                                        if (s5) buildBarrierMap[k, m].s5noEnemiesBarrier = false;
-
-                                    }
-                                    else // it's resource
-                                    {
-                                        if (s2) buildBarrierMap[k, m].s2howManyResBarrier++;
-                                        if (s3) buildBarrierMap[k, m].s3howManyResBarrier++;
-                                        if (s5) buildBarrierMap[k, m].s5howManyResBarrier++;
-                                    }
-
-                                    if (resourceMemoryMap[k][m] > 0)
-                                    {
-                                        if (s2) buildBarrierMap[k, m].s2howManyResBarrier++;
-                                        if (s3) buildBarrierMap[k, m].s3howManyResBarrier++;
-                                        if (s5) buildBarrierMap[k, m].s5howManyResBarrier++;
-                                    }
-                                }
+                                buildBarrierMap.BlockCell(x, y, BuildBarrierMap.BlockVariant.Builder);
                             }
+                            else
+                            {
+                                buildBarrierMap.BlockCell(x, y, BuildBarrierMap.BlockVariant.MyBuilding);
+                            }
+
                         }
+                        else if (enemiesById.ContainsKey(id))
+                        {
+                            buildBarrierMap.BlockCell(x, y, BuildBarrierMap.BlockVariant.Enemy);
+
+                        }
+                        else // it's resource
+                        {
+                            buildBarrierMap.AddResource(x, y);
+                        }
+                    } else if (resourceMemoryMap[x][y] > 0)
+                    {
+                        buildBarrierMap.AddResource(x, y);
                     }
                 }
             }
@@ -1047,7 +1098,7 @@ namespace Aicup2020
                         int ny = sy + dy;
                         if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                         {
-                            buildBarrierMap.BlockCell(nx, ny, true, false);
+                            buildBarrierMap.BlockCell(nx, ny, BuildBarrierMap.BlockVariant.Enemy);
                         }
 
                         //двигаем цель
@@ -1101,8 +1152,8 @@ namespace Aicup2020
                 int size = properties[entityType].Size;
                 for (int i = 0; i <= size; i++)
                 {
-                    buildBarrierMap.BlockCell(sx + size, sy + i, false, true); // right
-                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                    buildBarrierMap.BlockCell(sx + size, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // right
+                    buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up                  
                 }
             }
             entityType = EntityType.RangedBase;
@@ -1113,10 +1164,10 @@ namespace Aicup2020
                 int size = properties[entityType].Size;
                 for (int i = 0; i <= size; i++)
                 {
-                    buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
-                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
-                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
-                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                    buildBarrierMap.BlockCell(sx - 1, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // left
+                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, BuildBarrierMap.BlockVariant.MyBuilding); // down
+                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, BuildBarrierMap.BlockVariant.MyBuilding); // right
+                    buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up                  
                 }
             }
             entityType = EntityType.MeleeBase;
@@ -1127,10 +1178,10 @@ namespace Aicup2020
                 int size = properties[entityType].Size;
                 for (int i = 0; i <= size; i++)
                 {
-                    buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
-                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
-                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
-                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                    buildBarrierMap.BlockCell(sx - 1, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // left
+                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, BuildBarrierMap.BlockVariant.MyBuilding); // down
+                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, BuildBarrierMap.BlockVariant.MyBuilding); // right
+                    buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up                  
                 }
             }
             entityType = EntityType.Turret;
@@ -1141,10 +1192,10 @@ namespace Aicup2020
                 int size = properties[entityType].Size;
                 for (int i = 0; i <= size; i++)
                 {
-                    buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
-                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
-                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
-                    buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                    buildBarrierMap.BlockCell(sx - 1, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // left
+                    buildBarrierMap.BlockCell(sx + i - 1, sy - 1, BuildBarrierMap.BlockVariant.MyBuilding); // down
+                    buildBarrierMap.BlockCell(sx + size, sy + i - 1, BuildBarrierMap.BlockVariant.MyBuilding); // right
+                    buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up                  
                 }
             }
             #endregion
@@ -1158,52 +1209,52 @@ namespace Aicup2020
 
                 if (sx == 0 && sy == 0)
                 {
-                    buildBarrierMap.BlockCell(sx + size, sy + size, false, true); // up-right corner only
+                    buildBarrierMap.BlockCell(sx + size, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up-right corner only
                 }
                 else if (sx == 0)
                 {
                     for (int i = -1; i <= size; i++)
                     {
-                        buildBarrierMap.BlockCell(sx + size, sy + i, false, true); // right                
+                        buildBarrierMap.BlockCell(sx + size, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // right                
                     }
                 }
                 else if (sy == 0)
                 {
                     for (int i = -1; i <= size; i++)
                     {
-                        buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up         
+                        buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up         
                     }
                 }
                 else if (sx == 2 && sy == 2)
                 {
                     for (int i = -1; i <= size; i++)
                     {
-                        buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
-                        buildBarrierMap.BlockCell(sx + i, sy - 1, false, true); // down               
+                        buildBarrierMap.BlockCell(sx - 1, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // left
+                        buildBarrierMap.BlockCell(sx + i, sy - 1, BuildBarrierMap.BlockVariant.MyBuilding); // down               
                     }
                 }
                 else if (sx == 2 && sy > 2 && sy <= 6)
                 {
                     for (int i = -1; i <= size; i++)
                     {
-                        buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left              
+                        buildBarrierMap.BlockCell(sx - 1, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // left              
                     }
                 }
                 else if (sx == 2 && sy > 6 && sy <= 10)
                 {
                     for (int i = 0; i <= size; i++)
                     {
-                        buildBarrierMap.BlockCell(sx - 1, sy + i - 1, false, true); // left
+                        buildBarrierMap.BlockCell(sx - 1, sy + i - 1, BuildBarrierMap.BlockVariant.MyBuilding); // left
                         //buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
-                        buildBarrierMap.BlockCell(sx + size, sy + i, false, true); // right
-                        buildBarrierMap.BlockCell(sx + i - 1, sy + size, false, true); // up                  
+                        buildBarrierMap.BlockCell(sx + size, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // right
+                        buildBarrierMap.BlockCell(sx + i - 1, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up                  
                     }
                 }
                 else if (sy == 2 && sx > 2 && sx <= 6)
                 {
                     for (int i = -1; i <= size; i++)
                     {
-                        buildBarrierMap.BlockCell(sx + i, sy - 1, false, true); // down              
+                        buildBarrierMap.BlockCell(sx + i, sy - 1, BuildBarrierMap.BlockVariant.MyBuilding); // down              
                     }
                 }
                 else if (sy == 2 && sx > 6 && sx <= 10)
@@ -1211,19 +1262,19 @@ namespace Aicup2020
                     for (int i = -1; i <= size; i++)
                     {
                         //buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
-                        buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
-                        buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
-                        buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                
+                        buildBarrierMap.BlockCell(sx + i - 1, sy - 1, BuildBarrierMap.BlockVariant.MyBuilding); // down
+                        buildBarrierMap.BlockCell(sx + size, sy + i - 1, BuildBarrierMap.BlockVariant.MyBuilding); // right
+                        buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up                
                     }
                 }
                 else
                 {
                     for (int i = 0; i <= size; i++)
                     {
-                        buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
-                        buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
-                        buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
-                        buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                        buildBarrierMap.BlockCell(sx - 1, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // left
+                        buildBarrierMap.BlockCell(sx + i - 1, sy - 1, BuildBarrierMap.BlockVariant.MyBuilding); // down
+                        buildBarrierMap.BlockCell(sx + size, sy + i - 1, BuildBarrierMap.BlockVariant.MyBuilding); // right
+                        buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up                  
                     }
                 }
             }
@@ -1239,7 +1290,7 @@ namespace Aicup2020
                         if (onceVisibleMap[x][y] == 0)
                         {
                             if (onceVisibleMap[x - 1][y] != 0 || onceVisibleMap[x][y - 1] != 0)
-                                buildBarrierMap.BlockCell(x, y, false, true);
+                                buildBarrierMap.BlockCell(x, y, BuildBarrierMap.BlockVariant.Unvisible);
                         }
                     }
                 }
@@ -1435,7 +1486,110 @@ namespace Aicup2020
             }
 
         }
+        void SelectRangedBasePotencPlace()
+        {
+            bool place1find = false; // место где уже можно ставить базу
+            bool place2find = false; // место ближе к стартовой точке, где надо убрать минимальное количество ресурсов
+            if (basicEntityIdGroups[EntityType.RangedBase].members.Count == 0)
+            {
+                int buildingSize = properties[EntityType.RangedBase].Size;
+                int place2radius = 7;
+                int minCountResources = 25;
 
+                int sx = 15;
+                int sy = 15;
+                int maxFind = 70;
+                int flag = 3;   //  /2  \3
+                int dx = 0;     //  \1  /0
+                int dy = 0; // with my cell
+                            //int flag = 0;   //  /2  \3
+                            //int dx = 1;     //  \1  /0
+                            //int dy = 0; // without my cell
+                for (int step = 0; step <= maxFind;)
+                {
+                    // отмечаем
+                    int nx = sx + dx;
+                    int ny = sy + dy;
+                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                    {
+                        if (place1find == false)
+                        {
+                            if (buildBarrierMap[nx, ny].CanBuildAfter(buildingSize))
+                            {
+                                place1find = true;
+                                rangedBasePotencPlace1 = new Vec2Int(nx, ny);
+                            }
+                        }
+                        if (step < place2radius)
+                        {
+                            if (onceVisibleMap[nx][ny] > 0)
+                            {
+                                if (buildBarrierMap[nx, ny].s5noBaseOrWarriorBarrier == true
+                                    && buildBarrierMap[nx, ny].s5noEnemiesBarrier == true
+                                    && buildBarrierMap[nx, ny].s5noUnvisivleBarrier == true)
+                                {
+                                    if (buildBarrierMap[nx, ny].s5howManyResBarrier < minCountResources)
+                                    {
+                                        minCountResources = buildBarrierMap[nx, ny].s5howManyResBarrier;
+                                        place2find = true;
+                                        rangedBasePotencPlace2 = new Vec2Int(nx, ny);
+                                    }
+                                }
+                            }
+                        }
+                        else if (place1find == true)
+                        {
+                            break;
+                        }
+
+                    }
+
+                    //двигаем цель
+                    if (flag == 0)
+                    {
+                        dx--;
+                        dy--;
+                        if (dx == 0) flag = 1;
+                    }
+                    else if (flag == 1)
+                    {
+                        dx--;
+                        dy++;
+                        if (dy == 0) flag = 2;
+                    }
+                    else if (flag == 2)
+                    {
+                        dx++;
+                        dy++;
+                        if (dx == 0) flag = 3;
+                    }
+                    else if (flag == 3)
+                    {
+                        dx++;
+                        dy--;
+                        if (dy == 0)
+                        {
+                            flag = 0;
+                            dx++;
+                            step++;
+                        }
+                        else if (dy < 0)// first shift from 0,0
+                        {
+                            dx = 1;
+                            dy = 0;
+                            flag = 0;
+                            step++;
+                        }
+
+                    }
+                }
+
+            }
+            if (place1find == false)
+                rangedBasePotencPlace1 = new Vec2Int(-10, -10);
+            if (place2find == false)
+                rangedBasePotencPlace2 = new Vec2Int(-10, -10);
+        }
         void DrawPotencMap(int dist)
         {
             foreach (var p in entityMemories)
@@ -1678,7 +1832,8 @@ namespace Aicup2020
 
             if (myResources > buildTurretThenResourcesOver)
             {
-                desires.Add(DesireType.WantCreateTurret);
+                if (basicEntityIdGroups[EntityType.House].members.Count > basicEntityIdGroups[EntityType.Turret].members.Count)
+                    desires.Add(DesireType.WantCreateTurret);
             }
 
             #endregion
@@ -1734,6 +1889,7 @@ namespace Aicup2020
                             int newCost = properties[EntityType.BuilderUnit].InitialCost + currentMyEntityCount[EntityType.BuilderUnit] - 1;
                             if (howMuchResourcesIHaveNextTurn >= newCost)
                             {
+                                myResources -= newCost;
                                 plans.Add(PlanType.PlanCreateBuilders);
                             }
                         }
@@ -1748,6 +1904,7 @@ namespace Aicup2020
                             int newCost = properties[EntityType.RangedUnit].InitialCost + currentMyEntityCount[EntityType.RangedUnit] - 1;
                             if (howMuchResourcesIHaveNextTurn >= newCost)
                             {
+                                myResources -= newCost;
                                 plans.Add(PlanType.PlanCreateRangers);
                             }
                         }
@@ -1774,6 +1931,7 @@ namespace Aicup2020
                                     || (populationMax <= 60 && count <= 2)
                                     || (count <= 2))
                                 {
+                                    myResources -= newCost;
                                     plans.Add(PlanType.PlanCreateHouses);
                                 }
                             }
@@ -1789,6 +1947,7 @@ namespace Aicup2020
                             int newCost = properties[EntityType.RangedBase].InitialCost;
                             if (myResources >= newCost)
                             {
+                                myResources -= newCost;
                                 plans.Add(PlanType.PlanCreateRangerBase);
                             }
                         }
@@ -4597,7 +4756,7 @@ namespace Aicup2020
 
             int[,] pathMap = new int[mapSize, mapSize];
             //стартовое значение, которое будем уменьшать
-            int startWeight = 6;
+            int startWeight = 15;
             int minWeight = 0;
             int WBusy = -1;
             //int WBuilding = -2;
@@ -4728,36 +4887,47 @@ namespace Aicup2020
                 // провкера
                 if (buildBarrierMap[x, y].CanBuildNow(buildingSize)) // можем здесь построить
                 {
-                    // есть ли рядом строители?
-                    int dist = 0;
-                    // обходим здание в поисках ближайшего (max) строителя
-                    for (int i = 0; i < buildingSize; i++)
+                    bool blocked = false;
+                    int bx = rangedBasePotencPlace1.X;
+                    int by = rangedBasePotencPlace1.Y;
+                    if (x >= bx - 1 - buildingSize && x < bx + 6 && y >= by - 1 - buildingSize && y < by + 6)
+                        blocked = true;
+                    bx = rangedBasePotencPlace2.X;
+                    by = rangedBasePotencPlace2.Y;
+                    if (x >= bx - 1 - buildingSize && x < bx + 6 && y >= by - 1 - buildingSize && y < by + 6)
+                        blocked = true;
+                    if (blocked == false)
                     {
-                        int d1 = GetPathMapValueSafe(pathMap, x - 1, y + i, 0); // left
-                        int d2 = GetPathMapValueSafe(pathMap, x + buildingSize, y + i, 0); // right
-                        int d3 = GetPathMapValueSafe(pathMap, x + i, y - 1, 0); // down
-                        int d4 = GetPathMapValueSafe(pathMap, x + i, y + buildingSize, 0); // up
-                        if (d1 > dist) dist = d1;
-                        if (d2 > dist) dist = d2;
-                        if (d3 > dist) dist = d3;
-                        if (d4 > dist) dist = d4;
-                    }
-
-                    if (dist > findDistToBuilder)
-                    {
-                        findX = x;
-                        findY = y;
-                        findDistToBuilder = dist;
-                        if (dist == startWeight) // на соседней клетке строитель
+                        // есть ли рядом строители?
+                        int dist = 0;
+                        // обходим здание в поисках ближайшего (max) строителя
+                        for (int i = 0; i < buildingSize; i++)
                         {
-                            break; // можно не искать дальше
+                            int d1 = GetPathMapValueSafe(pathMap, x - 1, y + i, 0); // left
+                            int d2 = GetPathMapValueSafe(pathMap, x + buildingSize, y + i, 0); // right
+                            int d3 = GetPathMapValueSafe(pathMap, x + i, y - 1, 0); // down
+                            int d4 = GetPathMapValueSafe(pathMap, x + i, y + buildingSize, 0); // up
+                            if (d1 > dist) dist = d1;
+                            if (d2 > dist) dist = d2;
+                            if (d3 > dist) dist = d3;
+                            if (d4 > dist) dist = d4;
                         }
-                        else
+
+                        if (dist > findDistToBuilder)
                         {
-                            maxLine = line + startWeight - dist + buildingSize; // ищем еще несколько линий и хватит
+                            findX = x;
+                            findY = y;
+                            findDistToBuilder = dist;
+                            if (dist == startWeight) // на соседней клетке строитель
+                            {
+                                break; // можно не искать дальше
+                            }
+                            else
+                            {
+                                maxLine = line + startWeight - dist + buildingSize; // ищем еще несколько линий и хватит
+                            }
                         }
                     }
-
                 }
 
                 // инкремент
@@ -4797,20 +4967,6 @@ namespace Aicup2020
 
             return new Vec2Int(findX, findY);
 
-            // ================================== old code ==========================
-
-            // check house preset
-            //if (preSetHousePlacingComplete == false)
-            //{
-            //    foreach(var v in preSetHousePositions)
-            //    {
-            //        if (buildBarrierMap[v.X, v.Y].CanBuildNow(buildingSize))
-            //        {
-            //            return new Vec2Int(v.X, v.Y);
-            //        }
-            //    }
-            //    preSetHousePlacingComplete = true;
-            //}
 
         }
         int GetPathMapValueSafe(int[,] pathMap, int x, int y, int defaultValue)
@@ -4845,7 +5001,7 @@ namespace Aicup2020
                 int ny = sy + dy;
                 if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
                 {
-                    if (buildBarrierMap[nx, ny].CanBuildNow(5))
+                    if (buildBarrierMap[nx, ny].CanBuildNow(buildingSize))
                     {
                         return new Vec2Int(nx, ny);
                     }
@@ -4891,23 +5047,6 @@ namespace Aicup2020
                 }
             }
 
-            //int y = 0;
-            //for (int x = 12; x < mapSize;)
-            //{
-            //    if (buildBarrierMap[x, y].CanBuildNow(buildingSize))
-            //    {
-            //        return new Vec2Int(x, y);
-            //    }
-
-            //    x--;
-            //    y++;
-            //    if (x < 0)
-            //    {
-            //        x = y;
-            //        y = 0;
-            //    }
-            //}
-
             return new Vec2Int(-1, -1);
         }
 
@@ -4932,101 +5071,7 @@ namespace Aicup2020
                 index = _index;
             }
         }
-        //List<int> FindFreeNearestBuilders(Vec2Int target, int size, int builderCount, int maxDistance)
-        //{
-        //    List<int> list = new List<int>();
-
-        //    if (builderCount > basicEntityIdGroups[EntityType.BuilderUnit].members.Count)
-        //    {
-        //        builderCount = basicEntityIdGroups[EntityType.BuilderUnit].members.Count;
-        //    }
-
-        //    if (builderCount == 0) 
-        //        return list;
-
-        //    int[][] map = new int[mapSize][];
-        //    for (int i = 0; i < mapSize; i++)
-        //    {
-        //        map[i] = new int[mapSize];
-        //    }
-
-        //    int startIndex = mapSize * mapSize; //стартовое значение, которое будем уменьшать
-        //    int minIndex = startIndex - maxDistance; //минимальное значение, дальше которого не будем искать
-
-        //    //заполняем максимальными значениями на клетках текущей позиции
-        //    for (int x = target.X; x < size + target.X; x++)
-        //    {
-        //        for (int y = target.Y; y < size + target.Y; y++)
-        //        {
-        //            if (x >= 0 && y >= 0 && x < mapSize && y < mapSize) {
-        //                map[x][y] = startIndex;
-        //            }
-        //        }
-        //    }
-        //    //добавляем стартовые клетки поиска
-        //    List<XYWeight> findCells = new List<XYWeight>();
-        //    for (int x = target.X; x < size + target.X; x++)
-        //    {
-        //        findCells.Add(new XYWeight(x, target.Y, startIndex));
-        //        if (size > 1)
-        //            findCells.Add(new XYWeight(x, target.Y + size - 1, startIndex));
-        //    }
-        //    for (int y = target.Y + 1; y < size + target.Y - 1; y++)
-        //    {
-        //        findCells.Add(new XYWeight(target.X, y, startIndex));
-        //        findCells.Add(new XYWeight(target.X + size - 1, y, startIndex));
-        //    }
-
-        //    while (findCells.Count > 0)
-        //    {
-        //        int x = findCells[0].x;
-        //        int y = findCells[0].y;
-        //        int w = findCells[0].weight;
-
-        //        for (int jj = 0; jj < 4; jj++)
-        //        {
-        //            int nx = x;
-        //            int ny = y;
-        //            if (jj == 0) nx--;
-        //            if (jj == 1) ny--;
-        //            if (jj == 2) nx++;
-        //            if (jj == 3) ny++;
-
-        //            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
-        //            {
-        //                if (map[nx][ny] == 0)
-        //                {
-        //                    map[nx][ny] = w - 1;
-        //                    int id = cellWithIdAny[nx][ny];
-        //                    if (id >= 0)
-        //                    {
-        //                        //check builder
-        //                        if (basicEntityIdGroups[EntityType.BuilderUnit].members.Contains(id))
-        //                        {
-        //                            list.Add(id);
-        //                            if (list.Count >= builderCount)
-        //                                break;
-        //                        }
-        //                    }
-        //                    else
-        //                    {
-        //                        //add findCell
-        //                        if (w > minIndex)
-        //                            findCells.Add(new XYWeight(nx, ny, w - 1));
-        //                    }
-        //                }
-        //                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
-
-        //            }
-        //        }
-        //        findCells.RemoveAt(0);
-
-        //        if (list.Count >= builderCount)
-        //            break;
-        //    }
-        //    return list;
-        //}
-
+        
         void AddEnemyDangerCells(int sx, int sy, EntityType entityType)
         {
             if ((entityType == EntityType.BuilderUnit) || (entityType == EntityType.MeleeUnit) || (entityType == EntityType.RangedUnit) || (entityType == EntityType.Turret))
@@ -5783,7 +5828,7 @@ namespace Aicup2020
                     {
                         for (int y = 0; y < mapSize; y++)
                         {
-                            if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] < currentTick)
+                            if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] <= currentTick)
                             {
                                 ColoredVertex[] vertices = new ColoredVertex[] {
                             new ColoredVertex(new Vec2Float(x, y), new Vec2Float(), colorBlue),
