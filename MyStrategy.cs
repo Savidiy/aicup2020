@@ -410,6 +410,7 @@ namespace Aicup2020
         int[] howMuchLiveBuildersLast10Turns = new int[howManyTurnsHistory];
         int howMuchResourcesCollectAll = 0;
         bool iHaveActiveRangedBase = false;
+        bool opponentHasResourcesForRangersBase = false;
 
         int myResources;
         int myScore;
@@ -609,7 +610,7 @@ namespace Aicup2020
             #region draw debug settings
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
-            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
+            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = true;
             debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
@@ -1176,10 +1177,10 @@ namespace Aicup2020
                 {
                     for (int i = 0; i <= size; i++)
                     {
-                        buildBarrierMap.BlockCell(sx - 1, sy + i, false, true); // left
+                        buildBarrierMap.BlockCell(sx - 1, sy + i - 1, false, true); // left
                         //buildBarrierMap.BlockCell(sx + i - 1, sy - 1, false, true); // down
-                        buildBarrierMap.BlockCell(sx + size, sy + i - 1, false, true); // right
-                        buildBarrierMap.BlockCell(sx + i, sy + size, false, true); // up                  
+                        buildBarrierMap.BlockCell(sx + size, sy + i, false, true); // right
+                        buildBarrierMap.BlockCell(sx + i - 1, sy + size, false, true); // up                  
                     }
                 }
                 else if (sy == 2 && sx > 2 && sx <= 6)
@@ -1512,9 +1513,12 @@ namespace Aicup2020
             desires = new List<DesireType>();
 
             #region Хочу строить базу лучников
+
+
             bool needMakeRangedBase = false;
             if (basicEntityIdGroups[EntityType.RangedBase].members.Count == 0)
             {
+
                 int maxEnemyResources = 0;
                 foreach (var pl in _playerView.Players)
                 {
@@ -1526,8 +1530,12 @@ namespace Aicup2020
                         }
                     }
                 }
+                if (maxEnemyResources > 200)
+                {
+                    opponentHasResourcesForRangersBase = true;
+                }
 
-                if (_playerView.CurrentTick > 200 || maxEnemyResources > 300)
+                if (_playerView.CurrentTick > 200 || opponentHasResourcesForRangersBase)
                 {
                     for (int x = 0; x < mapSize; x++)
                     {
@@ -1583,63 +1591,66 @@ namespace Aicup2020
             #endregion
 
             #region Выбираем какого юнита строить
-            int countEnemiesOnMyTerritory = 0;
-            int myTerritoryX = mapSize / 2;
-            int myTerritoryY = mapSize / 2;
-            foreach (var p in enemiesById)
+            if (needMakeRangedBase == false)
             {
-                if (p.Value.Position.X < myTerritoryX && p.Value.Position.Y < myTerritoryY)
+                int countEnemiesOnMyTerritory = 0;
+                int myTerritoryX = mapSize / 2;
+                int myTerritoryY = mapSize / 2;
+                foreach (var p in enemiesById)
                 {
-                    countEnemiesOnMyTerritory++;
-                }
-            }
-
-            bool needCreateWarriors = false;
-            if (iHaveActiveRangedBase == true)
-            {
-                if (countEnemiesOnMyTerritory > 0)
-                {
-                    /// тесты показали эффективность этого расчета над
-                    /// + populationMax / 3
-                    /// + populationMax / 4
-                    /// + populationMax / 5
-                    /// соответствует версии basic_retreat1 до исправления ошибки подсчета populationMax
-                    /// см. 10.12_13:51 и 10.12_14:00 и 10.12_14:19
-                    int potencyPopul = 0;
-                    foreach (var e in properties)
+                    if (p.Value.Position.X < myTerritoryX && p.Value.Position.Y < myTerritoryY)
                     {
-                        potencyPopul += currentMyEntityCount[e.Key] * e.Value.PopulationProvide;
-                    }
-
-                    if (currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit] <= countEnemiesOnMyTerritory + potencyPopul / 5)
-                    {
-                        needCreateWarriors = true;
-                        desires.Add(DesireType.WantCreateRangers);
+                        countEnemiesOnMyTerritory++;
                     }
                 }
-                if (needCreateWarriors == false)
+
+                bool needCreateWarriors = false;
+                if (iHaveActiveRangedBase == true)
                 {
-                    if (currentMyEntityCount[EntityType.BuilderUnit] < 30)
+                    if (countEnemiesOnMyTerritory > 0)
                     {
-                        desires.Add(DesireType.WantCreateBuilders);
-                    }
-                    else if (currentMyEntityCount[EntityType.BuilderUnit] > 70)
-                    {
-                        desires.Add(DesireType.WantCreateRangers);
-                    }
-                    else
-                    {
-                        if (currentMyEntityCount[EntityType.BuilderUnit] < currentMyEntityCount[EntityType.RangedUnit] * 2)
-                            desires.Add(DesireType.WantCreateBuilders);
-                        else
+                        /// тесты показали эффективность этого расчета над
+                        /// + populationMax / 3
+                        /// + populationMax / 4
+                        /// + populationMax / 5
+                        /// соответствует версии basic_retreat1 до исправления ошибки подсчета populationMax
+                        /// см. 10.12_13:51 и 10.12_14:00 и 10.12_14:19
+                        int potencyPopul = 0;
+                        foreach (var e in properties)
+                        {
+                            potencyPopul += currentMyEntityCount[e.Key] * e.Value.PopulationProvide;
+                        }
+
+                        if (currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit] <= countEnemiesOnMyTerritory + potencyPopul / 5)
+                        {
+                            needCreateWarriors = true;
                             desires.Add(DesireType.WantCreateRangers);
+                        }
+                    }
+                    if (needCreateWarriors == false)
+                    {
+                        if (currentMyEntityCount[EntityType.BuilderUnit] < 30)
+                        {
+                            desires.Add(DesireType.WantCreateBuilders);
+                        }
+                        else if (currentMyEntityCount[EntityType.BuilderUnit] > 70)
+                        {
+                            desires.Add(DesireType.WantCreateRangers);
+                        }
+                        else
+                        {
+                            if (currentMyEntityCount[EntityType.BuilderUnit] < currentMyEntityCount[EntityType.RangedUnit] * 2)
+                                desires.Add(DesireType.WantCreateBuilders);
+                            else
+                                desires.Add(DesireType.WantCreateRangers);
+                        }
                     }
                 }
-            }
-            else // нет базы лучников
-            {
-                if (populationUsing < populationMax)
-                    desires.Add(DesireType.WantCreateBuilders);
+                else // нет базы лучников
+                {
+                    if (populationUsing < populationMax)
+                        desires.Add(DesireType.WantCreateBuilders);
+                }
             }
             #endregion
 
