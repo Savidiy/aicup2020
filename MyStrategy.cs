@@ -390,11 +390,13 @@ namespace Aicup2020
         }
         PotencAttackMap potencAttackMap;
 
+        float buildBuildingDistCoef = 0.3f; // коэффициент как далеко мы ищем строителей для помощи 0,3 = 30% от расчетного времени строительства (меньше ищем)
+        float repairBuildingDistCoef = 0.5f; // аналогично но для ремонта
 
-        int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
-        float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
+        //int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
+        //float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
 
-        #region Статичстические переменные
+        #region Статистические переменные
         Dictionary<Model.EntityType, int> currentMyEntityCount = new Dictionary<Model.EntityType, int>();
         Dictionary<Model.EntityType, int> previousEntityCount = new Dictionary<Model.EntityType, int>();
         Dictionary<Model.EntityType, float> buildEntityPriority = new Dictionary<Model.EntityType, float>();
@@ -610,7 +612,7 @@ namespace Aicup2020
             #region draw debug settings
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
-            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = true;
+            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
             debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
@@ -3394,7 +3396,20 @@ namespace Aicup2020
                 if (builderCount > 0)
                 {//ищем максимум на половину оставшегося времени строительства
                     planDistance = (maxHealth - planHealth) / builderCount;
-                    minWeight = startWeight - planDistance / 2;
+                    int remains = 0;
+                    switch (intention.intentionType)// == difference
+                    {
+                        case IntentionType.IntentionCreateRangedBase:
+                        case IntentionType.IntentionCreateHouse:
+                            remains = (int)((float)planDistance * buildBuildingDistCoef);
+                            break;
+                        case IntentionType.IntentionRepairNewBuilding:
+                        case IntentionType.IntentionRepairOldBuilding:
+                            remains = (int)((float)planDistance * repairBuildingDistCoef);
+                            break;
+                        default: throw new System.Exception("Неизвестное намерение");
+                    }
+                    minWeight = startWeight - remains;
                 }
                 #endregion
 
@@ -3548,18 +3563,6 @@ namespace Aicup2020
                                                         {
                                                             DrawLineOnce(nx + 0.5f, ny + 0.5f, fx + 0.5f, fy + 0.5f, colorMagenta, colorMagenta);
                                                         }
-                                                        switch (intention.intentionType)// == difference
-                                                        {
-                                                            case IntentionType.IntentionCreateRangedBase:
-                                                            case IntentionType.IntentionCreateHouse:
-                                                                entityMemories[id].OrderGoToBuild(new Vec2Int(fx, fy), true, true, true);
-                                                                break;
-                                                            case IntentionType.IntentionRepairNewBuilding:
-                                                            case IntentionType.IntentionRepairOldBuilding:
-                                                                entityMemories[id].OrderRepairGo(intention.targetId, new Vec2Int(fx, fy), true, true, true);
-                                                                break;
-                                                            default: throw new System.Exception("Неизвестное намерение");
-                                                        }
                                                         pathMap[nx, ny].weight = WDeniedBuilder;
                                                         nextPositionMyUnitsMap[fx][fy] = id;
                                                         freePlaceInIndexGroup[pathMap[fx, fy].index]--;
@@ -3569,7 +3572,22 @@ namespace Aicup2020
                                                         builderCount++;
                                                         prevDistContact = curDistance;
                                                         planDistance = curDistance + (maxHealth - planHealth) / builderCount;
-                                                        minWeight = startWeight - planDistance / 2;
+                                                        int remains = 0;
+                                                        switch (intention.intentionType)// == difference
+                                                        {
+                                                            case IntentionType.IntentionCreateRangedBase:
+                                                            case IntentionType.IntentionCreateHouse:
+                                                                remains = (int)((float)planDistance * buildBuildingDistCoef);
+                                                                entityMemories[id].OrderGoToBuild(new Vec2Int(fx, fy), true, true, true);
+                                                                break;
+                                                            case IntentionType.IntentionRepairNewBuilding:
+                                                            case IntentionType.IntentionRepairOldBuilding:
+                                                                remains = (int)((float)planDistance * repairBuildingDistCoef);
+                                                                entityMemories[id].OrderRepairGo(intention.targetId, new Vec2Int(fx, fy), true, true, true);
+                                                                break;
+                                                            default: throw new System.Exception("Неизвестное намерение");
+                                                        }
+                                                        minWeight = startWeight - remains;
                                                         // чистка если закончились места
                                                         if (freePlaceInIndexGroup[pathMap[fx, fy].index] == 0)
                                                         {
