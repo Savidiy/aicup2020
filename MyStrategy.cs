@@ -4924,7 +4924,9 @@ namespace Aicup2020
                             }
                             else
                             {
-                                maxLine = line + startWeight - dist + buildingSize; // ищем еще несколько линий и хватит
+                                int newValue = line + startWeight - dist + buildingSize; // ограничиваем поиск за крайем карты
+                                if (newValue < maxLine)
+                                    maxLine = newValue; // ищем еще несколько линий и хватит
                             }
                         }
                     }
