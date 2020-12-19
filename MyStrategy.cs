@@ -412,6 +412,7 @@ namespace Aicup2020
         int[] howMuchLiveBuildersLast10Turns = new int[howManyTurnsHistory];
         int howMuchResourcesCollectAll = 0;
         bool iHaveActiveRangedBase = false;
+        bool iHaveActiveBuilderBase = false;
         bool opponentHasResourcesForRangersBase = false;
 
         int myResources;
@@ -559,8 +560,19 @@ namespace Aicup2020
                 if (entityMemories[id].myEntity.Active == true)
                 {
                     iHaveActiveRangedBase = true;
+                    break;
                 }
             }
+            iHaveActiveBuilderBase = false;
+            foreach (var id in basicEntityIdGroups[EntityType.BuilderBase].members)
+            {
+                if (entityMemories[id].myEntity.Active == true)
+                {
+                    iHaveActiveBuilderBase = true;
+                    break;
+                }
+            }
+
 
             #endregion
 
@@ -1607,7 +1619,7 @@ namespace Aicup2020
                 }
 
                 bool needCreateWarriors = false;
-                if (iHaveActiveRangedBase == true)
+                if (iHaveActiveRangedBase == true && iHaveActiveBuilderBase == true)
                 {
                     if (countEnemiesOnMyTerritory > 0)
                     {
@@ -1647,8 +1659,12 @@ namespace Aicup2020
                                 desires.Add(DesireType.WantCreateRangers);
                         }
                     }
+                } else if (iHaveActiveRangedBase == true && iHaveActiveBuilderBase == false) // нет базы строителей
+                {
+                    if (populationUsing < populationMax)
+                        desires.Add(DesireType.WantCreateRangers);
                 }
-                else // нет базы лучников
+                else if (iHaveActiveRangedBase == false && iHaveActiveBuilderBase == true)// нет базы лучников
                 {
                     if (populationUsing < populationMax)
                         desires.Add(DesireType.WantCreateBuilders);
