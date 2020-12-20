@@ -429,6 +429,7 @@ namespace Aicup2020
         int buildTurretThenResourcesOver = 720;
         Vec2Int rangedBasePotencPlace1;
         Vec2Int rangedBasePotencPlace2;
+        
 
         //int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
         //float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
@@ -451,6 +452,7 @@ namespace Aicup2020
         bool iHaveActiveRangedBase = false;
         bool iHaveActiveBuilderBase = false;
         bool opponentHasResourcesForRangersBase = false;
+        bool isFinal = false;
 
         int myResources;
         int myScore;
@@ -567,6 +569,10 @@ namespace Aicup2020
                 properties = _playerView.EntityProperties;
                 needPrepare = false;
                 fogOfWar = _playerView.FogOfWar;
+                if (_playerView.Players.Length == 2)
+                {
+                    isFinal = true;
+                }
                 Prepare();
 
             }
@@ -1700,7 +1706,7 @@ namespace Aicup2020
                         }
                     }
                 }
-                if (maxEnemyResources > 200)
+                if (maxEnemyResources > 300)
                 {
                     opponentHasResourcesForRangersBase = true;
                 }
@@ -5493,12 +5499,18 @@ namespace Aicup2020
             }
             else
             {
-                if (_playerView.CurrentTick < 500)
-                    return new Vec2Int(73, 7);
-                else if (_playerView.CurrentTick < 750)
-                    return new Vec2Int(73, 73);
-                else return new Vec2Int(7, 73);
-
+                if (isFinal)
+                {
+                    return new Vec2Int(70, 70);
+                }
+                else
+                {
+                    if (_playerView.CurrentTick < 500)
+                        return new Vec2Int(73, 7);
+                    else if (_playerView.CurrentTick < 750)
+                        return new Vec2Int(73, 73);
+                    else return new Vec2Int(7, 73);
+                }
                 //return new Vec2Int(_playerView.MapSize / 2, _playerView.MapSize / 2);
             }
         }
