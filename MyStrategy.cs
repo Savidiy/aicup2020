@@ -43,6 +43,7 @@ namespace Aicup2020
         {
             canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat,
             drawOnceVisibleMap, drawRangedBasePotencPlace,
+            drawInteresMap,
             drawPotencAttack, drawOptAttack,
             canDrawDebugUpdate, allOptionsCount
         }
@@ -294,6 +295,162 @@ namespace Aicup2020
                 }
             }
         }
+        class InteresQuad
+        {
+            public int X1 { get; private set; }
+            public int Y1 { get; private set; }
+            public int X2 { get; private set; }
+            public int Y2 { get; private set; }
+            public bool _isEnemyBase;
+            //int _lastEnemyBaseTick;
+            public bool _isMyBorder;
+            public bool _isMyTerritory;
+            int _lastMyTerritoryTick;
+            public bool _isEnemyWarriors;
+            public bool _isEnemyBuilders;
+            int _lastEnemyWarriorTick;
+            public bool _isExplored;
+            int _lastExploreTick;
+
+            public InteresQuad(int xx1, int yy1, int xx2, int yy2, int lastExploreTick)
+            {
+                X1 = xx1;
+                Y1 = yy1;
+                X2 = xx2;
+                Y2 = yy2;
+                _isEnemyBuilders = false;
+                _isEnemyBase = false;
+                _isMyBorder = false;
+                _isMyTerritory = false;
+                _lastMyTerritoryTick = -1;
+                _isEnemyWarriors = false;
+                //_lastEnemyBaseTick = -1;
+                _lastEnemyWarriorTick = -1;
+                _isExplored = false;
+                _lastExploreTick = lastExploreTick;
+            }
+
+            public void NextTick(int currentTick, bool isMyTerritory, bool isEnemyBase, int enemyMelees, int enemyRangers, int enemyBuilders, int visibleCells)
+            {
+                _isMyBorder = false; // проверяем это на втором этапе
+                if (isMyTerritory)
+                {
+                    _isMyTerritory = isMyTerritory;
+                    _lastMyTerritoryTick = currentTick;
+                }
+                if (isEnemyBase)
+                {
+                    _isEnemyBase = isEnemyBase;
+                } else
+                {
+                    if (visibleCells >= InteresMap.numberVisCellsForEnemyBase)//сбрасывать флаг вражеской базы, только если убедились в отсутствии врага на % клеток
+                    {
+                        _isEnemyBase = isEnemyBase;
+                    }
+                }
+
+                if (enemyMelees + enemyRangers > 0){
+                    _isEnemyWarriors = true;
+                    _lastEnemyWarriorTick = currentTick;
+                }         
+                if (enemyBuilders > 0)
+                {
+                    _isEnemyBuilders = true;
+                } else
+                {
+                    if (visibleCells >= InteresMap.numberVisCellsForEnemyBase)//сбрасывать флаг вражеской базы, только если убедились в отсутствии врага на % клеток
+                    {
+                        _isEnemyBuilders = false;
+                    }
+                }
+                if (visibleCells >= InteresMap.numberVisCellsForExplore)
+                {
+                    _isExplored = true;
+                    _lastExploreTick = currentTick;
+                }
+
+                if (currentTick - _lastEnemyWarriorTick > InteresMap.memoryAttackDuration)
+                    _isEnemyWarriors = false;
+                if (currentTick - _lastExploreTick > InteresMap.memoryExploreDuration)
+                    _isExplored = false;
+                if (currentTick - _lastMyTerritoryTick > InteresMap.memoryMyDuration)
+                    _isMyTerritory = false;
+            }
+        }
+        class InteresMap
+        {
+            InteresQuad[,] interesQuads;
+            public const int quadSize = 8;
+            public const int memoryExploreDuration = 200;
+            public const int memoryAttackDuration = 30;
+            public const int memoryMyDuration = 50;
+            const float percVisForExplore = 0.6f;
+            public const int numberVisCellsForExplore = (int)(quadSize * quadSize * percVisForExplore);
+            const float percVisForEnemyBase = 0.9f;
+            public const int numberVisCellsForEnemyBase = (int)(quadSize * quadSize * percVisForEnemyBase);
+
+            public int cellCount { get; private set; }
+            int mapSize;
+
+            public InteresMap(int mapSize)
+            {
+                this.mapSize = mapSize;
+                cellCount = mapSize / quadSize;
+                interesQuads = new InteresQuad[cellCount, cellCount];
+                for (int x = 0; x < cellCount; x++)
+                {
+                    for (int y = 0; y < cellCount; y++)
+                    {
+                        interesQuads[x, y] = new InteresQuad(x * quadSize, y * quadSize, (x + 1) * quadSize - 1, (y + 1) * quadSize - 1, -memoryExploreDuration);
+                    }
+                }
+            }
+            //public void NextTick(int currentTick)
+            //{
+            //    for (int a = 0; a < cellCount; a++)
+            //    {
+            //        for (int b = 0; b < cellCount; b++)
+            //        {
+            //            //interesQuads[a, b] = new InteresQuad(a * cellCount, b * cellCount, (a + 1) * cellCount - 1, (b + 1) * cellCount - 1, -memoryExploreDuration);
+
+            //        }
+            //    }
+            //}
+            public InteresQuad this[int x, int y]
+            {
+                get {
+                    if (x >= 0 && x < cellCount && y >= 0 && y < cellCount)
+                        return interesQuads[x, y];
+                    else
+                        throw new System.Exception("неверный индекс массива");
+                }
+            }
+            public void CheckBorder(int x, int y)
+            {
+
+                for (int i = 0; i < 8; i++)
+                {
+                    int nx = x;
+                    int ny = y;
+                    if (i == 0) nx++;
+                    if (i == 1) nx--;
+                    if (i == 2) ny++;
+                    if (i == 3) ny--;
+                    if (i == 4) { nx++; ny++; }
+                    if (i == 5) { nx--; ny++; }
+                    if (i == 6) { nx++; ny--; }
+                    if (i == 7) { nx--; ny--; }
+
+                    if (nx >= 0 && nx < cellCount && ny >= 0 && ny< cellCount)
+                    {
+                        if (interesQuads[nx, ny]._isMyTerritory == false)
+                            interesQuads[nx, ny]._isMyBorder = true;
+                    }
+                }
+
+            }
+        }
+        InteresMap interesMap;
         //List<Vec2Int> preSetHousePositions;
         //bool preSetHousePlacingComplete = false;
 
@@ -461,6 +618,7 @@ namespace Aicup2020
         int populationMax = 0;
         int populationUsing = 0;
         bool fogOfWar;
+
         #endregion
         #region Желания, Планы, Намерения и т.д.
 
@@ -535,6 +693,8 @@ namespace Aicup2020
         Dictionary<int, EntityAction> actions = new Dictionary<int, EntityAction>();
         #endregion
 
+
+
         struct DebugLine
         {
             public float _x1;
@@ -597,6 +757,7 @@ namespace Aicup2020
             GenerateBuildBarrierMap();
             GeneratePotencAttackMap();
             SelectRangedBasePotencPlace();
+            UpdateInteresMap();
 
             iHaveActiveRangedBase = false;
             foreach (var id in basicEntityIdGroups[EntityType.RangedBase].members)
@@ -639,7 +800,9 @@ namespace Aicup2020
             if (debugOptions[(int)DebugOptions.canDrawGetAction])
             {
                 if (debugOptions[(int)DebugOptions.drawPotencAttack] == true)
+                {
                     DrawPotencMap(3);
+                }
                 if (debugOptions[(int)DebugOptions.drawOnceVisibleMap] == true)
                 {
                     for (int x = 0; x < mapSize; x++)
@@ -695,8 +858,11 @@ namespace Aicup2020
                     //    }
                     //}
                 }
-
-                _debugInterface.Send(new DebugCommand.Flush());
+                if (debugOptions[(int)DebugOptions.drawInteresMap] == true)
+                {
+                    DrawInteresMap();
+                }
+                    _debugInterface.Send(new DebugCommand.Flush());
             }
 
             return new Action(actions);
@@ -709,6 +875,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawRetreat] = true;
             debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
             debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
+            debugOptions[(int)DebugOptions.drawInteresMap] = true;            
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
@@ -756,6 +923,7 @@ namespace Aicup2020
 
             potencAttackMap = new PotencAttackMap(mapSize);
             buildBarrierMap = new BuildBarrierMap(mapSize);
+            interesMap = new InteresMap(mapSize);
             #endregion
 
             if (!fogOfWar)
@@ -1678,6 +1846,144 @@ namespace Aicup2020
 
                         }
                     }
+                }
+            }
+        }
+        void UpdateInteresMap()
+        {
+            for (int ix = 0; ix < interesMap.cellCount; ix++)
+            {
+                for (int iy = 0; iy < interesMap.cellCount; iy++)
+                {
+                    InteresQuad quad = interesMap[ix, iy];
+
+                    bool isMyTerritory = false;
+                    int myBuilders = 0;
+                    bool isEnemyBase = false;
+                    // bool isMyBorder = false;
+                    int visibleCells = 0;
+                    int enemyMelees = 0;
+                    int enemyRangers = 0;
+                    int enemyBuilders = 0;
+
+                    for (int x = quad.X1; x <= quad.X2; x++)
+                    {
+                        for (int y = quad.Y1; y <= quad.Y2; y++)
+                        {
+                            if (currentVisibleMap[x][y] == true)
+                                visibleCells++;
+                            int id = cellWithIdAny[x][y];
+                            if (id > 0)
+                            {
+                                if (entityMemories.ContainsKey(id))
+                                {
+                                    EntityType type = entityMemories[id].myEntity.EntityType;
+                                    if (properties[type].CanMove)
+                                    {
+                                        if (type == EntityType.BuilderUnit)
+                                        {
+                                            myBuilders++;
+                                        }
+                                    } else
+                                    {
+                                        isMyTerritory = true;
+                                    }
+
+                                } else if (enemiesById.ContainsKey(id))
+                                {
+                                    EntityType type = enemiesById[id].EntityType;
+                                    if (properties[type].CanMove)
+                                    {
+                                        if (type == EntityType.BuilderUnit)
+                                        {
+                                            //isEnemyBase = true;
+                                            enemyBuilders++;
+                                        } else
+                                        {
+                                            if (type == EntityType.RangedUnit)
+                                                enemyRangers++;
+                                            else
+                                                enemyMelees++;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        isEnemyBase = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (myBuilders >= 3)
+                        isMyTerritory = true;
+
+                    quad.NextTick(_playerView.CurrentTick, isMyTerritory, isEnemyBase, enemyMelees, enemyRangers, enemyBuilders, visibleCells);
+                }
+            }
+            for (int ix = 0; ix < interesMap.cellCount; ix++)
+            {
+                for (int iy = 0; iy < interesMap.cellCount; iy++)
+                {
+                    InteresQuad quad = interesMap[ix, iy];
+
+                    if (quad._isMyTerritory)
+                    {
+                        interesMap.CheckBorder(ix, iy);
+                    }
+                }
+            }
+
+        }
+        void DrawInteresMap()
+        {
+            for (int ix = 0; ix < interesMap.cellCount; ix++)
+            {
+                for (int iy = 0; iy < interesMap.cellCount; iy++)
+                {
+                    InteresQuad quad = interesMap[ix, iy];
+                    float tx = quad.X1;
+                    float ty = quad.Y2;
+                    float step = 1f;
+                    int textSize = 16;
+                    if (quad._isExplored)
+                    {
+                        ColoredVertex position = new ColoredVertex(new Vec2Float(tx, ty), new Vec2Float(0, 0), colorWhite);
+                        _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "Ex", 0f, textSize)));
+                    }
+                    tx += step;
+                    if (quad._isMyTerritory)
+                    {
+                        ColoredVertex position = new ColoredVertex(new Vec2Float(tx, ty), new Vec2Float(0, 0), colorGreen);
+                        _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "My", 0f, textSize)));
+                    }
+                    tx += step;
+                    if (quad._isMyBorder)
+                    {
+                        ColoredVertex position = new ColoredVertex(new Vec2Float(tx, ty), new Vec2Float(0, 0), colorBlue);
+                        _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "Bo", 0f, textSize)));
+                    }
+                    ty -= step;
+                    tx = quad.X1;
+                    if (quad._isEnemyWarriors)
+                    {
+                        ColoredVertex position = new ColoredVertex(new Vec2Float(tx, ty), new Vec2Float(0, 0), colorRed);
+                        _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "UA", 0f, textSize)));
+                    }
+                    tx += step;
+                    if (quad._isEnemyBase)
+                    {
+                        ColoredVertex position = new ColoredVertex(new Vec2Float(tx, ty), new Vec2Float(0, 0), colorMagenta);
+                        _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "Ba", 0f, textSize)));
+                    }
+                    tx += step;
+                    if (quad._isEnemyBuilders)
+                    {
+                        ColoredVertex position = new ColoredVertex(new Vec2Float(tx, ty), new Vec2Float(0, 0), colorGreen);
+                        _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "Bu", 0f, textSize)));
+                    }
+                    DrawLineOnce(quad.X1, quad.Y2 + 1, quad.X2 + 1, quad.Y2 + 1, colorBlack, colorBlack);
+                    DrawLineOnce(quad.X2 + 1, quad.Y1, quad.X2 + 1, quad.Y2 + 1, colorBlack, colorBlack);
+
                 }
             }
         }
@@ -5708,7 +6014,7 @@ namespace Aicup2020
         //    }
         //}
         void CountNumberOfEntitiesAndMap()
-        {
+        {            
             //clear map
             for (int x = 0; x < mapSize; x++)
             {
@@ -6004,7 +6310,7 @@ namespace Aicup2020
         }
 
     }
-
+    
     enum EntityOrders { none, spawnUnit, buildNow, buildGo, repairGo, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll }
     class EntityMemory
     {
@@ -6141,7 +6447,6 @@ namespace Aicup2020
             }
         }
     }
-
     class Group
     {
 
