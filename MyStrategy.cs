@@ -940,7 +940,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackOverMy] = false;
-            debugOptions[(int)DebugOptions.drawPotencAttackAll] = true;
+            debugOptions[(int)DebugOptions.drawPotencAttackAll] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackMove] = true;
             debugOptions[(int)DebugOptions.drawPotencAttackPathfind] = false;
             debugOptions[(int)DebugOptions.drawRangedBasePotencPlace] = true;
