@@ -1583,7 +1583,7 @@ namespace Aicup2020
                 //    debugInterface.Send(new DebugCommand.Add(lines));
                 //}
                 #endregion
-                _debugInterface.Send(new DebugCommand.Flush());
+                //_debugInterface.Send(new DebugCommand.Flush());
             }
         }
         void GeneratePotencAttackMap()
@@ -3691,7 +3691,7 @@ namespace Aicup2020
                 //    debugInterface.Send(new DebugCommand.Add(lines));
                 //}
                 #endregion
-                _debugInterface.Send(new DebugCommand.Flush());
+                //_debugInterface.Send(new DebugCommand.Flush());
             }
 
         }
