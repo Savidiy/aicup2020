@@ -43,8 +43,9 @@ namespace Aicup2020
         {
             canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat,
             drawOnceVisibleMap, drawRangedBasePotencPlace,
-            drawInteresMap, drawMemories,
-            drawPotencAttack, drawOptAttack,
+            drawInteresMap, drawMemoryResources, drawMemoryEnemies,
+            drawPotencAttackOverMy, drawPotencAttackAll,
+            drawOptAttack,
             canDrawDebugUpdate, allOptionsCount
         }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
@@ -482,6 +483,7 @@ namespace Aicup2020
             public int dist6;
             public int dist7;
             public int dist8;
+            public int min;
             public bool drawn;
             public PotencAttackCell()
             {
@@ -491,6 +493,10 @@ namespace Aicup2020
             {
                 dist5low = dist6 = dist7 = dist8 = 0;
                 drawn = false;
+            }
+            public void CalcMin()
+            {
+                min = Min( Min( Min(dist5low, dist6), dist7), dist8);
             }
             public bool TryDraw()
             {
@@ -570,13 +576,54 @@ namespace Aicup2020
                     }
                 }
             }
-            public bool TryDraw(int x, int y)
+            public bool TryDraw(int x, int y, DebugInterface debugInterface)
             {
                 if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
                 {
-                    return _potencAttackMap[x, y].TryDraw();
+                    if (_potencAttackMap[x, y].TryDraw())
+                    {
+                        PotencAttackCell cell = _potencAttackMap[x, y];
+                        int d5 = cell.dist5low;
+                        int d6 = cell.dist6;
+                        int d7 = cell.dist7;
+                        int d8 = cell.dist8;
+                        int sum = d5 + d6 + d7 + d8;
+                        int min = cell.min;
+                        int textSize = 16;
+                        if (min != 0)
+                        {
+                            ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.2f), new Vec2Float(0, 0), min > 0 ? colorGreen : colorRed);
+                            debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, min.ToString(), 0.5f, textSize)));
+                        }
+                        //if (d5 != 0)
+                        //{
+                        //    ColoredVertex position = new ColoredVertex(new Vec2Float(x, y + 0.5f), new Vec2Float(0, 0), colorRed);
+                        //    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d5.ToString(), 0, textSize)));
+                        //}
+                        //if (d6 != 0)
+                        //{
+                        //    ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.5f), new Vec2Float(0, 0), colorMagenta);
+                        //    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d6.ToString(), 0f, textSize)));
+                        //}
+                        //if (d7 != 0)
+                        //{
+                        //    ColoredVertex position = new ColoredVertex(new Vec2Float(x, y + 0.05f), new Vec2Float(0, 0), colorGreen);
+                        //    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d7.ToString(), 0f, textSize)));
+                        //}
+                    }
+
                 }
                 return false;
+            }
+            public void CalcMin()
+            {
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _potencAttackMap[x, y].CalcMin();
+                    }
+                }
             }
         }
         PotencAttackMap potencAttackMap;
@@ -797,9 +844,13 @@ namespace Aicup2020
 
             if (debugOptions[(int)DebugOptions.canDrawGetAction])
             {
-                if (debugOptions[(int)DebugOptions.drawPotencAttack] == true)
+                if (debugOptions[(int)DebugOptions.drawPotencAttackOverMy] == true)
                 {
-                    DrawPotencMap(3);
+                    DrawPotencMapOverMyUnits(3);
+                }
+                if (debugOptions[(int)DebugOptions.drawPotencAttackAll] == true)
+                {
+                    DrawPotencMapAll();
                 }
                 if (debugOptions[(int)DebugOptions.drawOnceVisibleMap] == true)
                 {
@@ -860,10 +911,15 @@ namespace Aicup2020
                 {
                     DrawInteresMap();
                 }
-                if (debugOptions[(int)DebugOptions.drawMemories] == true)
+                if (debugOptions[(int)DebugOptions.drawMemoryEnemies] == true)
                 {
-                    DrawMemories();
+                    DrawMemoryEnemies();
                 }
+                if (debugOptions[(int)DebugOptions.drawMemoryResources] == true)
+                {
+                    DrawMemoryResources();
+                }
+                
                 _debugInterface.Send(new DebugCommand.Flush());
             }
 
@@ -878,11 +934,13 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
             debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
             debugOptions[(int)DebugOptions.drawInteresMap] = false;
-            debugOptions[(int)DebugOptions.drawMemories] = true;
+            debugOptions[(int)DebugOptions.drawMemoryResources] = false;
+            debugOptions[(int)DebugOptions.drawMemoryEnemies] = true;
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
-            debugOptions[(int)DebugOptions.drawPotencAttack] = false;
+            debugOptions[(int)DebugOptions.drawPotencAttackOverMy] = false;
+            debugOptions[(int)DebugOptions.drawPotencAttackAll] = true;
             debugOptions[(int)DebugOptions.drawRangedBasePotencPlace] = true;
             debugOptions[(int)DebugOptions.drawOptAttack] = true;
 
@@ -1705,7 +1763,7 @@ namespace Aicup2020
                 }
 
             }
-
+            potencAttackMap.CalcMin();
         }
         void SelectRangedBasePotencPlace()
         {
@@ -1811,7 +1869,7 @@ namespace Aicup2020
             if (place2find == false)
                 rangedBasePotencPlace2 = new Vec2Int(-10, -10);
         }
-        void DrawPotencMap(int dist)
+        void DrawPotencMapOverMyUnits(int dist)
         {
             foreach (var p in entityMemories)
             {
@@ -1828,31 +1886,7 @@ namespace Aicup2020
                         //рисуем
                         int nx = sx + dx;
                         int ny = sy + dy;
-                        if (potencAttackMap.TryDraw(nx, ny))
-                        {
-                            PotencAttackCell cell = potencAttackMap[nx, ny];
-                            int d5 = cell.dist5low;
-                            int d6 = cell.dist6;
-                            int d7 = cell.dist7;
-                            int d8 = cell.dist8;
-                            int sum = d5 + d6 + d7 + d8;
-                            int textSize = 16;
-                            if (d5 != 0)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx, ny + 0.5f), new Vec2Float(0, 0), colorRed);
-                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d5.ToString(), 0, textSize)));
-                            }
-                            if (d6 != 0)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx + 1f, ny + 0.5f), new Vec2Float(0, 0), colorMagenta);
-                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d6.ToString(), 1f, textSize)));
-                            }
-                            if (d7 != 0)
-                            {
-                                ColoredVertex position = new ColoredVertex(new Vec2Float(nx, ny + 0.05f), new Vec2Float(0, 0), colorGreen);
-                                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, d7.ToString(), 0f, textSize)));
-                            }
-                        }
+                        potencAttackMap.TryDraw(nx, ny, _debugInterface);                        
 
                         //двигаем цель
                         if (flag == 0)
@@ -1893,6 +1927,16 @@ namespace Aicup2020
 
                         }
                     }
+                }
+            }
+        }
+        void DrawPotencMapAll()
+        {
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    potencAttackMap.TryDraw(x, y, _debugInterface);
                 }
             }
         }
@@ -2034,22 +2078,8 @@ namespace Aicup2020
                 }
             }
         }
-        void DrawMemories()
+        void DrawMemoryEnemies()
         {
-            for (int x = 0; x < mapSize; x++)
-            {
-                for (int y = 0; y < mapSize; y++)
-                {
-                    if (currentVisibleMap[x][y] == false)
-                    {
-                        if (resourceMemoryMap[x][y] > 0)
-                        {
-                            DrawQuad(x+0.1f, y+0.1f, x+0.9f, y+0.9f, colorGreen);
-                        }
-                    }
-                }
-            }
-
             foreach(var en in enemiesById)
             {
                 if (properties[en.Value.EntityType].CanMove)
@@ -2061,7 +2091,22 @@ namespace Aicup2020
                 }
             }
         }
-
+        void DrawMemoryResources()
+        {
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    if (currentVisibleMap[x][y] == false)
+                    {
+                        if (resourceMemoryMap[x][y] > 0)
+                        {
+                            DrawQuad(x + 0.1f, y + 0.1f, x + 0.9f, y + 0.9f, colorGreen);
+                        }
+                    }
+                }
+            }
+        }
         void GenerateDesires()
         {
             prevDesires.Clear();
@@ -5128,14 +5173,6 @@ namespace Aicup2020
             }
         }
 
-        int Abs(int p)
-        {
-            if (p >= 0)
-                return p;
-            else
-                return -p;
-
-        }
         Vec2Int FindPositionFromOurCorner(EntityType entityType)
         {
             int buildingSize = properties[entityType].Size;
@@ -6156,7 +6193,18 @@ namespace Aicup2020
             //theoreticaly same population using
             //unitCount = currentMyEntityCount[EntityType.BuilderUnit] + currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit];
         }
+        static int Min(int a, int b)
+        {
+            return a < b ? a : b;
+        }
+        static int Abs(int p)
+        {
+            if (p >= 0)
+                return p;
+            else
+                return -p;
 
+        }
         public void DrawLineOnce(float x1, float y1, float x2, float y2, Color color1, Color color2)
         {
             if (debugOptions[(int)DebugOptions.canDrawGetAction])
@@ -6185,12 +6233,12 @@ namespace Aicup2020
             _debugInterface.Send(new DebugCommand.Add(lines));
         }
 
-        Color colorWhite = new Color(1, 1, 1, 1);
-        Color colorMagenta = new Color(1, 0, 1, 1);
-        Color colorRed = new Color(1, 0, 0, 1);
-        Color colorBlack = new Color(0, 0, 0, 1);
-        Color colorGreen = new Color(0, 1, 0, 1);
-        Color colorBlue = new Color(0, 0, 1, 1);
+        static Color colorWhite = new Color(1, 1, 1, 1);
+        static Color colorMagenta = new Color(1, 0, 1, 1);
+        static Color colorRed = new Color(1, 0, 0, 1);
+        static Color colorBlack = new Color(0, 0, 0, 1);
+        static Color colorGreen = new Color(0, 1, 0, 1);
+        static Color colorBlue = new Color(0, 0, 1, 1);
         public void DebugUpdate(PlayerView playerView, DebugInterface debugInterface)
         {
             if (debugOptions[(int)DebugOptions.canDrawDebugUpdate] == true)
