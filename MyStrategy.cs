@@ -5545,7 +5545,7 @@ namespace Aicup2020
         }
         void AddEntityViewToCurrentVisibleMap(EntityType entityType, int sx, int sy)
         {
-            int sightRange = properties[entityType].SightRange;
+            int sightRange = properties[entityType].SightRange + 1;
             int size = properties[entityType].Size;
 
             int sxRight = sx + size - 1;
