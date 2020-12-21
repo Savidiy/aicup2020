@@ -44,7 +44,7 @@ namespace Aicup2020
             canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat,
             drawOnceVisibleMap, drawRangedBasePotencPlace,
             drawInteresMap, drawMemoryResources, drawMemoryEnemies,
-            drawPotencAttackOverMy, drawPotencAttackAll,
+            drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind,
             drawOptAttack,
             canDrawDebugUpdate, allOptionsCount
         }
@@ -496,7 +496,7 @@ namespace Aicup2020
             }
             public void CalcMin()
             {
-                min = Min( Min( Min(dist5low, dist6), dist7), dist8);
+                min = MinWithoutZero( MinWithoutZero( MinWithoutZero(dist5low, dist6), dist7), dist8);
             }
             public bool TryDraw()
             {
@@ -941,6 +941,8 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackOverMy] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackAll] = true;
+            debugOptions[(int)DebugOptions.drawPotencAttackMove] = true;
+            debugOptions[(int)DebugOptions.drawPotencAttackPathfind] = false;
             debugOptions[(int)DebugOptions.drawRangedBasePotencPlace] = true;
             debugOptions[(int)DebugOptions.drawOptAttack] = true;
 
@@ -1698,7 +1700,11 @@ namespace Aicup2020
                 {
                     int x2 = entityMemories[myRangerId].myEntity.Position.X;
                     int y2 = entityMemories[myRangerId].myEntity.Position.Y;
-                    int dist = Abs(x1 - x2) + Abs(y1 - y2);
+                    int dist1 = Abs(x1 - x2) + Abs(y1 - y2);
+                    int dist2 = Abs(x1 + 1 - x2) + Abs(y1 - y2);
+                    int dist3 = Abs(x1 - x2) + Abs(y1 + 1 - y2);
+                    int dist4 = Abs(x1 + 1 - x2) + Abs(y1 + 1 - y2);
+                    int dist = Min(Min(Min(dist1, dist2),dist3),dist4);
                     if (dist <= 5) enemy.Value.dist5low++;
                     else if (dist == 6) enemy.Value.dist6++;
                     else if (dist == 7) enemy.Value.dist7++;
@@ -1713,26 +1719,26 @@ namespace Aicup2020
             {
                 int attackRange = 6;
                 if (enemy.Value.dist5low > 0) attackRange = 5;
-                else if (enemy.Value.dist6 > 4) attackRange = 5;
+                else if (enemy.Value.dist6 >= 4) attackRange = 5;
 
                 int sx = enemiesById[enemy.Key].Position.X;
                 int sy = enemiesById[enemy.Key].Position.Y;
                 int size = properties[EntityType.Turret].Size;
                 int sxRight = sx + size - 1;
                 int syUp = sy + size - 1;
-                for (int k = attackRange; k >= 5; k--)
+                for (int k = attackRange; k >= 1; k--)
                 {
-                    for (int cc = 0; cc <= attackRange; cc++)
+                    for (int cc = 0; cc < k; cc++)
                     {
-                        potencAttackMap.AddCell(sx - attackRange + cc, sy - cc, attackRange, k == attackRange);//left-down
-                        potencAttackMap.AddCell(sx - cc, syUp + attackRange - cc, attackRange, k == attackRange);//left-up
-                        potencAttackMap.AddCell(sxRight + attackRange - cc, syUp + cc, attackRange, k == attackRange);//right-up
-                        potencAttackMap.AddCell(sxRight + cc, sy - attackRange + cc, attackRange, k == attackRange);//right-down
+                        potencAttackMap.AddCell(sx - k + cc, sy - cc, k, k == attackRange);//left-down
+                        potencAttackMap.AddCell(sx - cc, syUp + k - cc, k, k == attackRange);//left-up
+                        potencAttackMap.AddCell(sxRight + k - cc, syUp + cc, k, k == attackRange);//right-up
+                        potencAttackMap.AddCell(sxRight + cc, sy - k + cc, k, k == attackRange);//right-down
                     }
-                    potencAttackMap.AddCell(sx - attackRange, syUp, attackRange, k == attackRange);//left
-                    potencAttackMap.AddCell(sxRight, syUp + attackRange, attackRange, k == attackRange);//up
-                    potencAttackMap.AddCell(sxRight + attackRange, sy, attackRange, k == attackRange);//right
-                    potencAttackMap.AddCell(sx, sy - attackRange, attackRange, k == attackRange);//down 
+                    potencAttackMap.AddCell(sx - k, syUp, k, k == attackRange);//left
+                    potencAttackMap.AddCell(sxRight, syUp + k, k, k == attackRange);//up
+                    potencAttackMap.AddCell(sxRight + k, sy, k, k == attackRange);//right
+                    potencAttackMap.AddCell(sx, sy - k, k, k == attackRange);//down 
                 }
             }
             /// если вокруг лучника есть мои на 5, то маяк на 5
@@ -1751,7 +1757,7 @@ namespace Aicup2020
                 int size = properties[EntityType.RangedUnit].Size;
                 int sxRight = sx + size - 1;
                 int syUp = sy + size - 1;
-                for (int k = attackRange; k >= 5; k--)
+                for (int k = attackRange; k >= 1; k--)
                 {
                     for (int cc = 0; cc < k; cc++)
                     {
@@ -2929,13 +2935,16 @@ namespace Aicup2020
                                 // remove my ranger, he do that he can
                                 deleteKeys.Add(i.Key);
                                 // create order
+                                int x = entityMemories[i.Key].myEntity.Position.X;
+                                int y = entityMemories[i.Key].myEntity.Position.Y;
+                                nextPositionMyUnitsMap[x][y] = i.Key;
                                 entityMemories[i.Key].OrderAttack(i.Value[0]._me._id, null, true);
                                 // draw attack line
                                 if (debugOptions[(int)DebugOptions.drawOptAttack])
                                 {
                                     DrawLineOnce(
-                                        entityMemories[i.Key].myEntity.Position.X + 0.3f,
-                                        entityMemories[i.Key].myEntity.Position.Y + 0.5f,
+                                        x + 0.3f,
+                                        y + 0.5f,
                                         i.Value[0]._me._x + 0.3f,
                                         i.Value[0]._me._y + 0.5f,
                                         colorBlack,
@@ -3107,6 +3116,9 @@ namespace Aicup2020
                             // fire all
                             foreach (var id in attackers)
                             {
+                                int x = entityMemories[id].myEntity.Position.X;
+                                int y = entityMemories[id].myEntity.Position.Y;
+                                nextPositionMyUnitsMap[x][y] = id;
                                 entityMemories[id].OrderAttack(enemyMelees[targets[0]]._me._id, null, true);
                                 if (debugOptions[(int)DebugOptions.drawOptAttack])
                                 {
@@ -3131,6 +3143,9 @@ namespace Aicup2020
                                 }
                                 else // fire another
                                 {
+                                    int x = entityMemories[id].myEntity.Position.X;
+                                    int y = entityMemories[id].myEntity.Position.Y;
+                                    nextPositionMyUnitsMap[x][y] = id;
                                     entityMemories[id].OrderAttack(enemyMelees[targets[0]]._me._id, null, true);
                                     enemyMelees[targets[0]]._me._health -= damageR;
                                     if (debugOptions[(int)DebugOptions.drawOptAttack])
@@ -3171,12 +3186,16 @@ namespace Aicup2020
                         for (int kk = 0; kk < sizeA; kk++)
                         {
                             int enemyId = targets[attackVariants[index][kk]];
-                            entityMemories[attackers[kk]].OrderAttack(enemyId, null, true);
+                            int myUnitId = attackers[kk];
+                            int x = entityMemories[myUnitId].myEntity.Position.X;
+                            int y = entityMemories[myUnitId].myEntity.Position.Y;
+                            nextPositionMyUnitsMap[x][y] = myUnitId;
+                            entityMemories[myUnitId].OrderAttack(enemyId, null, true);
                             if (debugOptions[(int)DebugOptions.drawOptAttack])
                             {
                                 DrawLineOnce(
-                                    entityMemories[attackers[kk]].myEntity.Position.X + 0.3f,
-                                    entityMemories[attackers[kk]].myEntity.Position.Y + 0.5f,
+                                    x + 0.3f,
+                                    y + 0.5f,
                                     enemiesById[enemyId].Position.X + 0.3f,
                                     enemiesById[enemyId].Position.Y + 0.5f,
                                     colorMagenta,
@@ -3252,10 +3271,290 @@ namespace Aicup2020
 
             #endregion
 
-            #region определяем движение остальных стрелков
-
+            #region определяем движение остальных стрелков бе приказа
+            OptimizeNearRangersMove(4); // двигаются те кто близок к врагу
+            // стреляют те кому не надо двигаться
+            // двигаются остальные войны
             #endregion
 
+        }
+        void OptimizeNearRangersMove(int distance)
+        {
+            
+            CellWI[,] pathMap = new CellWI[mapSize, mapSize];
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    pathMap[x, y] = new CellWI();
+                }
+            }
+            #region стартовые значения
+            //стартовое значение, которое будем уменьшать
+            int startWeight = mapSize * mapSize;
+            int minWeight = startWeight - distance;
+            int WInside = -1;
+            int WBuilding = -2;
+            int WEnemy = -3;
+            int WResource = -4;
+            int WDanger = -5;
+            int WWarrior = -6;
+            int WNextPosition = -7;
+            int WDeniedUnit = -8;
+            int WUnvisibleCell = -9;
+
+            const int IBuilding = 1;
+            const int IResource = 2;
+            const int IMovedUnit = 3;
+            const int INextPosition = 4;
+            const int IFreeUnit = 5;
+            const int IPushedUnit = 6;
+            const int IOptimized = 7;
+            const int IEnemy = 8;
+            const int IWait = 9;
+            const int IOnPosition = 10;
+            #endregion
+
+            #region определяем стартовые клетки
+            //добавляем стартовые клетки поиска там где PotencAttack > 0
+            List<int> myRangers = new List<int>();
+            List<XYWeight> findCells = new List<XYWeight>();
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    if (potencAttackMap[x, y].min > 0)
+                    {
+                        findCells.Add(new XYWeight(x, y, startWeight)); //  ищем от тех что стоит на границе
+                        pathMap[x, y].weight = startWeight;
+                        int id = cellWithIdAny[x][y];
+                        if (id >= 0)// occupied cell
+                        {
+                            if (entityMemories.ContainsKey(id))
+                            {
+                                if (entityMemories[id].optimized == false)
+                                {
+                                    EntityType type = entityMemories[id].myEntity.EntityType;
+                                    if (type == EntityType.RangedUnit)
+                                    {
+                                        //myRangers.Add(id);
+                                        ////canContinue = false; // поиск проходит сквозь этого парня
+                                        ////pathMap[nx, ny].weight = WDeniedUnit;
+                                        pathMap[x, y].index = IOnPosition;
+                                        nextPositionMyUnitsMap[x][y] = id;
+                                        bool[] availableTargetsType = FindAvailableTargetType(x, y, properties[type].Size, properties[type].Attack.Value.AttackRange);
+                                        EntityType[] targetTypes;
+                                        if (availableTargetsType[(int)EntityType.RangedUnit] == true)
+                                            targetTypes = new EntityType[] { EntityType.RangedUnit };
+                                        else if (availableTargetsType[(int)EntityType.MeleeUnit] == true)
+                                            targetTypes = new EntityType[] { EntityType.RangedUnit, EntityType.MeleeUnit };
+                                        else if (availableTargetsType[(int)EntityType.BuilderUnit] == true)
+                                            targetTypes = new EntityType[] { EntityType.RangedUnit, EntityType.MeleeUnit, EntityType.BuilderUnit };
+                                        else
+                                            targetTypes = new EntityType[] { };
+
+                                        AutoAttack autoAttack = new AutoAttack(0, targetTypes);
+                                        entityMemories[id].OrderAttack(null, autoAttack, true);
+                                    }
+                                    else
+                                    {
+                                        if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+                                        {
+                                            //canContinue = false;
+                                            //pathMap[nx, ny].weight = WBuilding;
+                                            pathMap[x, y].index = IBuilding;
+                                        }
+                                        else
+                                        {
+                                            //canContinue = false;
+                                            pathMap[x, y].index = IFreeUnit;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    pathMap[x, y].index = IOptimized;
+                                }
+                            }
+                            else if (enemiesById.ContainsKey(id))// enemy 
+                            {
+                                //canContinue = false;
+                                //pathMap[nx, ny].weight = WDanger;
+                                pathMap[x, y].index = IEnemy;
+                            }
+                            else // it is resource
+                            {
+                                //canContinue = false;
+                                //pathMap[nx, ny].weight = WResource;
+                                pathMap[x, y].index = IResource;
+                            }
+                        }
+                    }
+
+
+                }
+            }
+            #endregion
+
+            // начинаем искать свободных строителей
+            for (int iter = 0; iter < findCells.Count; iter++)
+            {
+                int fx = findCells[iter].x;
+                int fy = findCells[iter].y;
+                int fw = findCells[iter].weight;
+                int fi = findCells[iter].index;
+
+                if (fw > minWeight)
+                {
+                    for (int jj = 0; jj < 4; jj++)
+                    {
+                        int nx = fx;
+                        int ny = fy;
+                        if (jj == 0) nx--;
+                        if (jj == 1) ny--;
+                        if (jj == 2) nx++;
+                        if (jj == 3) ny++;
+
+                        if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
+                        {
+                            if (pathMap[nx, ny].weight == 0)
+                            {
+                                bool canContinue = true;
+
+                                //if (potencAttackMap[nx, ny].min < 0) // опасная клетка // выстаскимваем из опасной зоны юнитов (когда они не атакуют
+                                //{
+                                //    canContinue = false;
+                                //    pathMap[nx, ny].weight = WDanger;
+                                //}
+                                //else 
+                                if (nextPositionMyUnitsMap[nx][ny] > 0) // проверка пустой позиции на следующий ход
+                                {
+                                    //canContinue = false; // проходим поиском сквозь движущиеся объекты
+                                    //pathMap[nx, ny].weight = WNextPosition;
+                                    pathMap[nx, ny].index = INextPosition;
+                                }
+                                else if (onceVisibleMap[nx][ny] == 0)
+                                {
+                                    canContinue = false;
+                                    pathMap[nx, ny].weight = WUnvisibleCell;
+                                }
+
+                                if (canContinue == true)
+                                {
+                                    int id = cellWithIdAny[nx][ny];
+                                    if (id >= 0)// occupied cell
+                                    {
+                                        if (entityMemories.ContainsKey(id))
+                                        {
+                                            if (entityMemories[id].optimized == false)
+                                            {
+                                                if (entityMemories[id].myEntity.EntityType == EntityType.RangedUnit)
+                                                {
+                                                    //myRangers.Add(id);
+                                                    bool canMove = false;
+                                                    switch (pathMap[fx,fy].index)
+                                                    {
+                                                        case IMovedUnit:
+                                                        case IFreeUnit:
+                                                        case 0:
+                                                            canMove = true;
+                                                            break;
+                                                        case IResource:
+                                                        case IOnPosition:
+                                                        case IBuilding:
+                                                        case INextPosition:
+                                                        case IOptimized:
+                                                        case IEnemy:
+                                                        case IPushedUnit:
+                                                        case IWait:
+                                                            canMove = false;
+                                                            break;
+                                                        default:
+                                                            throw new System.Exception("непонятный индекс");
+                                                    }
+
+                                                    if (canMove)
+                                                    {
+                                                        if (debugOptions[(int)DebugOptions.drawPotencAttackMove])
+                                                        {
+                                                            DrawLineOnce(nx + 0.6f, ny + 0.6f, fx + 0.6f, fy + 0.6f, colorMagenta, colorRed);
+                                                        }
+
+                                                        //canContinue = false; // поиск проходит сквозь этого парня
+                                                        //pathMap[nx, ny].weight = WDeniedUnit;
+                                                        pathMap[nx, ny].index = IMovedUnit;
+                                                        nextPositionMyUnitsMap[fx][fy] = id;
+                                                        fw--;
+                                                        entityMemories[id].OrderMove(new Vec2Int(fx, fy), true, false, true);
+                                                        break;
+                                                    }
+                                                    else
+                                                    {
+                                                        pathMap[nx, ny].index = IWait;
+                                                        canContinue = false;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+                                                    {
+                                                        //canContinue = false;
+                                                        //pathMap[nx, ny].weight = WBuilding;
+                                                        pathMap[nx, ny].index = IBuilding;
+                                                    }
+                                                    else
+                                                    {
+                                                        //canContinue = false;
+                                                        pathMap[nx, ny].index = IFreeUnit;
+                                                    }
+                                                }
+                                            }
+                                            else
+                                            {
+                                                pathMap[nx, ny].index = IOptimized;
+                                            }
+                                        }
+                                        else if (enemiesById.ContainsKey(id))// enemy 
+                                        {
+                                            //canContinue = false;
+                                            //pathMap[nx, ny].weight = WDanger;
+                                            pathMap[nx, ny].index = IEnemy;
+                                        }
+                                        else // it is resource
+                                        {
+                                            //canContinue = false;
+                                            //pathMap[nx, ny].weight = WResource;
+                                            pathMap[nx, ny].index = IResource;
+                                        }
+                                    }
+                                }
+
+                                if (canContinue == true) // empty, safe cell or through free unit
+                                {
+                                    //add weight and findCell
+                                    pathMap[nx, ny].weight = fw - 1;
+                                    //pathMap[nx, ny].index = fi;
+                                    if (fw > minWeight)
+                                    {
+                                        findCells.Add(new XYWeight(nx, ny, fw - 1, fi));
+
+                                        if (debugOptions[(int)DebugOptions.drawPotencAttackPathfind])
+                                        {
+                                            DrawLineOnce(nx + 0.5f, ny + 0.5f, fx + 0.5f, fy + 0.5f, colorBlack, colorBlack);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                        }
+                    }
+                    if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawPotencAttackPathfind])
+                    {
+                        _debugInterface.Send(new DebugCommand.Flush());
+                    }
+                }
+            }
         }
         /// <summary>
         /// Определяет самые эффективные способы распределения целей, чтобы поразить максимум целей
@@ -3624,6 +3923,9 @@ namespace Aicup2020
                     canFindNext = false;
                     foreach (var id in tryRetreatEntitiesId)
                     {
+                        int x = entityMemories[id].myEntity.Position.X;
+                        int y = entityMemories[id].myEntity.Position.Y;
+                        nextPositionMyUnitsMap[x][y] = id;
                         entityMemories[id].OrderAttack(null,
                             new AutoAttack(
                             properties[entityMemories[id].myEntity.EntityType].Attack.Value.AttackRange,
@@ -6193,6 +6495,14 @@ namespace Aicup2020
             //theoreticaly same population using
             //unitCount = currentMyEntityCount[EntityType.BuilderUnit] + currentMyEntityCount[EntityType.MeleeUnit] + currentMyEntityCount[EntityType.RangedUnit];
         }
+        static int MinWithoutZero(int a, int b)
+        {
+            if (a == 0)
+                return b;
+            if (b == 0)
+                return a;
+            return a < b ? a : b;
+        }
         static int Min(int a, int b)
         {
             return a < b ? a : b;
@@ -6515,7 +6825,14 @@ namespace Aicup2020
             moveBreakThrough = breakThrough;
             moveFindClosestPosition = findClosestPosition;
         }
-
+        public void OrderMove(Vec2Int moveP, bool breakThrough, bool findClosestPosition, bool opt)
+        {
+            order = EntityOrders.move;
+            optimized = opt;
+            movePos = moveP;
+            moveBreakThrough = breakThrough;
+            moveFindClosestPosition = findClosestPosition;
+        }
         public void OrderAttack(int? tarId, AutoAttack? autoAt, bool opt)
         {
             order = EntityOrders.attack;
