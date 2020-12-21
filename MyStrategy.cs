@@ -974,7 +974,7 @@ namespace Aicup2020
                     currentVisibleMap[x] = new bool[mapSize];
             }
             // zero enemies dictionary
-            enemiesById.Clear();
+            //enemiesById.Clear();
             // zero enemy danger cells
             for (var x = 0; x < mapSize; x++)
             {
@@ -1067,12 +1067,15 @@ namespace Aicup2020
                 }
                 else // it's enemy
                 {
-                    enemiesById.Add(e.Id, e);
+                    if (enemiesById.ContainsKey(e.Id))
+                        enemiesById[e.Id] = e;
+                    else 
+                        enemiesById.Add(e.Id, e);
                     AddEnemyDangerCells(e.Position.X, e.Position.Y, e.EntityType);
                 }
             }
-
-            //remove died entity
+            #region удаляем мертвые сущности
+            //remove my died entity
             foreach (var m in entityMemories)
             {
                 if (m.Value.checkedNow == false)
@@ -1081,6 +1084,26 @@ namespace Aicup2020
                     entityMemories.Remove(m.Key);
                 }
             }
+
+            //remove enemy died entity          
+            List<int> deleteIds = new List<int>();
+            foreach (var en in enemiesById)
+            {
+                int x = en.Value.Position.X;
+                int y = en.Value.Position.Y;
+                if (currentVisibleMap[x][y] == true)
+                {
+                    if (cellWithIdAny[x][y] != en.Key)
+                    {
+                        deleteIds.Add(en.Key);
+                    }
+                }
+            }
+            foreach(int id in deleteIds)
+            {
+                enemiesById.Remove(id);
+            }
+            #endregion
 
             //statistics
             if (_playerView.CurrentTick == 0)
