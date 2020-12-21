@@ -43,7 +43,7 @@ namespace Aicup2020
         {
             canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat,
             drawOnceVisibleMap, drawRangedBasePotencPlace,
-            drawInteresMap,
+            drawInteresMap, drawMemories,
             drawPotencAttack, drawOptAttack,
             canDrawDebugUpdate, allOptionsCount
         }
@@ -693,8 +693,6 @@ namespace Aicup2020
         Dictionary<int, EntityAction> actions = new Dictionary<int, EntityAction>();
         #endregion
 
-
-
         struct DebugLine
         {
             public float _x1;
@@ -862,7 +860,11 @@ namespace Aicup2020
                 {
                     DrawInteresMap();
                 }
-                    _debugInterface.Send(new DebugCommand.Flush());
+                if (debugOptions[(int)DebugOptions.drawMemories] == true)
+                {
+                    DrawMemories();
+                }
+                _debugInterface.Send(new DebugCommand.Flush());
             }
 
             return new Action(actions);
@@ -875,7 +877,8 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawRetreat] = true;
             debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
             debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
-            debugOptions[(int)DebugOptions.drawInteresMap] = true;            
+            debugOptions[(int)DebugOptions.drawInteresMap] = false;
+            debugOptions[(int)DebugOptions.drawMemories] = true;
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
@@ -1984,6 +1987,33 @@ namespace Aicup2020
                     DrawLineOnce(quad.X1, quad.Y2 + 1, quad.X2 + 1, quad.Y2 + 1, colorBlack, colorBlack);
                     DrawLineOnce(quad.X2 + 1, quad.Y1, quad.X2 + 1, quad.Y2 + 1, colorBlack, colorBlack);
 
+                }
+            }
+        }
+        void DrawMemories()
+        {
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    if (currentVisibleMap[x][y] == false)
+                    {
+                        if (resourceMemoryMap[x][y] > 0)
+                        {
+                            DrawQuad(x+0.1f, y+0.1f, x+0.9f, y+0.9f, colorGreen);
+                        }
+                    }
+                }
+            }
+
+            foreach(var en in enemiesById)
+            {
+                if (properties[en.Value.EntityType].CanMove)
+                {
+                    if (currentVisibleMap[en.Value.Position.X][en.Value.Position.Y] == false)
+                    {
+                        DrawQuad(en.Value.Position.X + 0.1f, en.Value.Position.Y + 0.1f, en.Value.Position.X + 0.9f, en.Value.Position.Y + 0.9f, colorRed);
+                    }
                 }
             }
         }
@@ -6094,6 +6124,21 @@ namespace Aicup2020
                 DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
                 _debugInterface.Send(new DebugCommand.Add(lines));
             }
+        }
+        public void DrawQuad(float x1, float y1, float x2, float y2, Color color)
+        {
+            ColoredVertex[] vertices = new ColoredVertex[] {
+                    new ColoredVertex(new Vec2Float(x1,y1), new Vec2Float(), color),
+                    new ColoredVertex(new Vec2Float(x1,y2), new Vec2Float(), color),
+                    new ColoredVertex(new Vec2Float(x1,y2), new Vec2Float(), color),
+                    new ColoredVertex(new Vec2Float(x2,y2), new Vec2Float(), color),
+                    new ColoredVertex(new Vec2Float(x2,y2), new Vec2Float(), color),
+                    new ColoredVertex(new Vec2Float(x2,y1), new Vec2Float(), color),
+                    new ColoredVertex(new Vec2Float(x2,y1), new Vec2Float(), color),
+                    new ColoredVertex(new Vec2Float(x1,y1), new Vec2Float(), color),
+                };
+            DebugData.Primitives lines = new DebugData.Primitives(vertices, PrimitiveType.Lines);
+            _debugInterface.Send(new DebugCommand.Add(lines));
         }
 
         Color colorWhite = new Color(1, 1, 1, 1);
