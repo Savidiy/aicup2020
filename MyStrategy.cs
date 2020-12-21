@@ -1014,22 +1014,6 @@ namespace Aicup2020
                         AddEntityViewToCurrentVisibleMap(e.EntityType, e.Position.X, e.Position.Y);
 
                         howMuchResourcesCollectLastTurn += properties[e.EntityType].InitialCost + currentMyEntityCount[e.EntityType] - 1;
-
-                        //check my builder units
-                        //if (properties[em.myEntity.EntityType].CanMove == false)
-                        //{
-                        //    for (int i = 0; i < intentions.Count; i++)
-                        //    {
-                        //        if (intentions[i].intentionType == IntentionType.IntentionCreateHouse)
-                        //        {
-                        //            if (intentions[i].targetPosition.X == em.myEntity.Position.X && intentions[i].targetPosition.Y == em.myEntity.Position.Y)
-                        //            {
-                        //                intentions[i].targetId = em.myEntity.Id;
-                        //                break;
-                        //            }
-                        //        }
-                        //    }
-                        //}
                     }
                     // добаввляем раненых в списки лечения
                     if (e.Health < properties[e.EntityType].MaxHealth)
@@ -1042,7 +1026,44 @@ namespace Aicup2020
                 }
                 else if (e.PlayerId == null)// it s resource
                 {
-                    resourceMemoryMap[e.Position.X][e.Position.Y] = currentTick+1;
+                    int x = e.Position.X;
+                    int y = e.Position.Y;
+
+                    resourceMemoryMap[x][y] = currentTick + 1;
+
+                    if (fogOfWar)
+                    {
+                        if (isFinal) // final
+                        {
+                            int nx = mapSize - 1 - x; // diagonal
+                            int ny = mapSize - 1 - y;
+                            if (onceVisibleMap[nx][ny] == 0)
+                            {
+                                resourceMemoryMap[nx][ny] = currentTick + 1;
+                            }
+                        } else // round 2
+                        {
+                            int nx = mapSize - 1 - x; // diagonal
+                            int ny = mapSize - 1 - y;
+                            if (onceVisibleMap[nx][ny] == 0)
+                            {
+                                resourceMemoryMap[nx][ny] = currentTick + 1;
+                            }
+                            nx = y; // Up corner
+                            ny = mapSize - 1 - x;
+                            if (onceVisibleMap[nx][ny] == 0)
+                            {
+                                resourceMemoryMap[nx][ny] = currentTick + 1;
+                            }
+                            nx = mapSize - 1 - y; // right corner
+                            ny = x;
+                            if (onceVisibleMap[nx][ny] == 0)
+                            {
+                                resourceMemoryMap[nx][ny] = currentTick + 1;
+                            }
+                        }
+                    }
+
                 }
                 else // it's enemy
                 {
