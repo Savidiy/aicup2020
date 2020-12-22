@@ -2367,8 +2367,8 @@ namespace Aicup2020
                                         count++;
                                 }
                                 if ((populationMax <= 20 && count == 0)
-                                    || (populationMax <= 40 && count <= 0)
-                                    || (populationMax <= 60 && count <= 1)
+                                    || (populationMax > 20 && populationMax <= 40 && count <= 1)
+                                    || (populationMax > 40 && populationMax <= 60 && count <= 2)
                                     || (populationMax > 60 && count <= 2))
                                 {
                                     myResources -= newCost;
