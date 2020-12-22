@@ -2201,7 +2201,7 @@ namespace Aicup2020
             #endregion
 
             #region Выбираем какого юнита строить
-            if (needMakeRangedBase == false)
+            //if (needMakeRangedBase == false)
             {
                 int countEnemiesOnMyTerritory = 0;
                 int myTerritoryX = mapSize / 2;
