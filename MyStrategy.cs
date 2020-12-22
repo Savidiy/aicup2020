@@ -2369,7 +2369,7 @@ namespace Aicup2020
                                 if ((populationMax <= 20 && count == 0)
                                     || (populationMax <= 40 && count <= 0)
                                     || (populationMax <= 60 && count <= 1)
-                                    || (count <= 2))
+                                    || (populationMax > 60 && count <= 2))
                                 {
                                     myResources -= newCost;
                                     plans.Add(PlanType.PlanCreateHouses);
