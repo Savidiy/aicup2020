@@ -2145,7 +2145,7 @@ namespace Aicup2020
                     opponentHasResourcesForRangersBase = true;
                 }
 
-                if (_playerView.CurrentTick > 200 || opponentHasResourcesForRangersBase)
+                if (_playerView.CurrentTick > 200 || opponentHasResourcesForRangersBase && _playerView.CurrentTick > 150)
                 {
                     for (int x = 0; x < mapSize; x++)
                     {
