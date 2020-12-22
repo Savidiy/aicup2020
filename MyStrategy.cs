@@ -633,7 +633,8 @@ namespace Aicup2020
         int buildTurretThenResourcesOver = 720;
         Vec2Int rangedBasePotencPlace1;
         Vec2Int rangedBasePotencPlace2;
-        
+
+        const float ratioRangedToBuilder = 0.4f; // соотношение лучников к строителям: 10 строителей на 4 лучников
 
         //int builderCountForStartBuilding = 3; // количество ближайших свободных строителей которое ищется при начале строительства
         //float startBuildingFindDistanceFromHealth = 0.4f; // дистанция поиска строителей как процент здоровья 
@@ -2114,6 +2115,7 @@ namespace Aicup2020
                 }
             }
         }
+
         void GenerateDesires()
         {
             prevDesires.Clear();
@@ -2247,7 +2249,7 @@ namespace Aicup2020
                         }
                         else
                         {
-                            if (currentMyEntityCount[EntityType.BuilderUnit] < currentMyEntityCount[EntityType.RangedUnit] * 2)
+                            if (currentMyEntityCount[EntityType.BuilderUnit] * ratioRangedToBuilder < currentMyEntityCount[EntityType.RangedUnit])
                                 desires.Add(DesireType.WantCreateBuilders);
                             else
                                 desires.Add(DesireType.WantCreateRangers);
