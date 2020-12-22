@@ -3325,9 +3325,10 @@ namespace Aicup2020
                 for (int y = 0; y < mapSize; y++)
                 {
                     if (potencAttackMap[x, y].min > 0)
-                    {
-                        findCells.Add(new XYWeight(x, y, startWeight)); //  ищем от тех что стоит на границе
+                    {                        
+                        bool canContinue = true;
                         pathMap[x, y].weight = startWeight;
+
                         int id = cellWithIdAny[x][y];
                         if (id >= 0)// occupied cell
                         {
@@ -3361,8 +3362,8 @@ namespace Aicup2020
                                     {
                                         if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
                                         {
-                                            //canContinue = false;
-                                            //pathMap[nx, ny].weight = WBuilding;
+                                            canContinue = false;
+                                            pathMap[x, y].weight = WBuilding;
                                             pathMap[x, y].index = IBuilding;
                                         }
                                         else
@@ -3389,6 +3390,11 @@ namespace Aicup2020
                                 //pathMap[nx, ny].weight = WResource;
                                 pathMap[x, y].index = IResource;
                             }
+                        }
+
+                        if (canContinue == true)
+                        {
+                            findCells.Add(new XYWeight(x, y, startWeight)); //  ищем от тех что стоит на границе
                         }
                     }
 
