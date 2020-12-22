@@ -1673,7 +1673,8 @@ namespace Aicup2020
                 }
                 else if (entityType == EntityType.Turret)
                 {
-                    enemyTurretDistByID.Add(p.Key, new PotencAttackCell());
+                    if (p.Value.Active)
+                        enemyTurretDistByID.Add(p.Key, new PotencAttackCell());
                 }
             }
             // считаем для каждого врага на каком к нему расстоянии находятся лучники
