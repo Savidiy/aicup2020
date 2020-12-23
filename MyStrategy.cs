@@ -46,7 +46,7 @@ namespace Aicup2020
             drawInteresMap, drawMemoryResources, drawMemoryEnemies,
             drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind,
             drawOptAttack,
-            drawOrderStatistics,
+            drawOrderStatistics, drawDeadCellMap,
             canDrawDebugUpdate, allOptionsCount
         }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
@@ -57,12 +57,12 @@ namespace Aicup2020
 
         System.Random random = new System.Random();
 
-        int[][] cellWithIdOnlyBuilding;
-        int[][] cellWithIdAny;
-        int[][] nextPositionMyUnitsMap;
+        static int[][] cellWithIdOnlyBuilding;
+        static int[][] cellWithIdAny;
+        static int[][] nextPositionMyUnitsMap;
         int[][] onceVisibleMap;
         bool[][] currentVisibleMap;
-        int[][] resourceMemoryMap;
+        static int[][] resourceMemoryMap;
         int[][] resourcePotentialField;
         const int RPFmyBuildingWeight = -10;
         const int RPFdangerCellWeight = -6;
@@ -456,6 +456,103 @@ namespace Aicup2020
         //List<Vec2Int> preSetHousePositions;
         //bool preSetHousePlacingComplete = false;
 
+        class DeadEndMap
+        {
+            int _mapSize;
+            int[,] _map;
+
+            public DeadEndMap(int mapSize)
+            {
+                _mapSize = mapSize;
+                _map = new int[_mapSize, _mapSize];
+            }
+
+            public void Reset()
+            {
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _map[x, y] = 0;
+                    }
+                }
+            }
+
+            public int this[int x , int y]
+            {
+                get {
+                    if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                        return _map[x, y];
+                    else
+                        throw new System.Exception("Неверный индекс массива");
+                }                
+            }
+            public void Increment(int x, int y, int value = 1)
+            {
+                if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                    _map[x, y] += value;                
+            }
+            public void Emit(int x, int y, int value)
+            {
+                int sx = x;
+                int sy = y;
+                int flag = 3;   //  /2  \3
+                int dx = 0;     //  \1  /0
+                int dy = 0; // with my cell
+                //int flag = 0;   //  /2  \3
+                //int dx = 1;     //  \1  /0
+                //int dy = 0; // without my cell
+                for (int step = 0; step <= value;)
+                {
+                    //рисуем
+                    int nx = sx + dx;
+                    int ny = sy + dy;
+
+                    if (nx >= 0 && nx < _mapSize && ny >= 0 && ny < _mapSize)
+                        _map[nx, ny] += value - step;
+
+                    //двигаем цель
+                    if (flag == 0)
+                    {
+                        dx--;
+                        dy--;
+                        if (dx == 0) flag = 1;
+                    }
+                    else if (flag == 1)
+                    {
+                        dx--;
+                        dy++;
+                        if (dy == 0) flag = 2;
+                    }
+                    else if (flag == 2)
+                    {
+                        dx++;
+                        dy++;
+                        if (dx == 0) flag = 3;
+                    }
+                    else if (flag == 3)
+                    {
+                        dx++;
+                        dy--;
+                        if (dy == 0)
+                        {
+                            flag = 0;
+                            dx++;
+                            step++;
+                        }
+                        else if (dy < 0)// first shift from 0,0
+                        {
+                            dx = 1;
+                            dy = 0;
+                            flag = 0;
+                            step++;
+                        }
+                    }
+                }
+            }
+        }
+        DeadEndMap deadEndMap;
+
         struct EnemyDangerCell
         {
             public byte rangersWarning; // могут подойти в следующий ход
@@ -800,6 +897,7 @@ namespace Aicup2020
             CountNumberOfEntitiesAndMap();
             CheckAliveAndDieEntities();
             CheckDeadResourceOnCurrentVisibleMap();
+            GenerateDeadEndMap();
             GenerateResourcePotentialField();
             GenerateBuildBarrierMap();
             GeneratePotencAttackMap();
@@ -921,6 +1019,10 @@ namespace Aicup2020
                 {
                     DrawMemoryResources();
                 }
+                if (debugOptions[(int)DebugOptions.drawDeadCellMap] == true)
+                {
+                    DrawDeadCellMap();
+                }
                 
                 _debugInterface.Send(new DebugCommand.Flush());
             }
@@ -939,6 +1041,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawMemoryResources] = false;
             debugOptions[(int)DebugOptions.drawMemoryEnemies] = true;
             debugOptions[(int)DebugOptions.drawOrderStatistics] = true;
+            debugOptions[(int)DebugOptions.drawDeadCellMap] = false;
 
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
@@ -988,6 +1091,7 @@ namespace Aicup2020
                 // auto zeroing all when created
             }
 
+            deadEndMap = new DeadEndMap(mapSize);
             potencAttackMap = new PotencAttackMap(mapSize);
             buildBarrierMap = new BuildBarrierMap(mapSize);
             interesMap = new InteresMap(mapSize);
@@ -1205,6 +1309,51 @@ namespace Aicup2020
                     {
                         if (resourceMemoryMap[x][y] > 0 && resourceMemoryMap[x][y] <= currentTick)
                             resourceMemoryMap[x][y] = 0;
+                    }
+                }
+            }
+        }
+        void GenerateDeadEndMap()
+        {
+            deadEndMap.Reset();
+
+            int defaultEmit = 3;
+            //граница
+            for (int i = 0; i < mapSize; i++)
+            {
+                deadEndMap.Emit(i, 0, defaultEmit);
+                deadEndMap.Emit(0, i, defaultEmit);
+                deadEndMap.Emit(i, mapSize - 1, defaultEmit);
+                deadEndMap.Emit(mapSize - 1, i, defaultEmit);
+            }
+            //здания и ресурсы
+            foreach(var en in _playerView.Entities)
+            {
+                if (properties[ en.EntityType].CanMove == false)
+                {
+                    int x = en.Position.X;
+                    int y = en.Position.Y;
+                    int size = properties[en.EntityType].Size;
+                    if (size == 1)
+                    {
+                        deadEndMap.Emit(x, y, defaultEmit);
+                    }
+                    else
+                    {
+                        for (int i = 0; i < size; i++) // emit outside
+                        {
+                            deadEndMap.Emit(x - 1, y + i, defaultEmit);
+                            deadEndMap.Emit(x + i, y - 1, defaultEmit);
+                            deadEndMap.Emit(x + size, y + i, defaultEmit);
+                            deadEndMap.Emit(x + i, y + size, defaultEmit);
+                        }
+                        //for (int i = 1; i < size; i++) // emit inside
+                        //{
+                        //    deadEndMap.Emit(x, y + i, defaultEmit);
+                        //    deadEndMap.Emit(x + i - 1, y, defaultEmit);
+                        //    deadEndMap.Emit(x + size - 1, y + size - 1 - i, defaultEmit);
+                        //    deadEndMap.Emit(x + i, y + size - 1, defaultEmit);
+                        //}
                     }
                 }
             }
@@ -1891,7 +2040,10 @@ namespace Aicup2020
                     int sy = p.Value.myEntity.Position.Y;
                     int flag = 3;   //  /2  \3
                     int dx = 0;     //  \1  /0
-                    int dy = 0;
+                    int dy = 0; // with my cell
+                    //int flag = 0;   //  /2  \3
+                    //int dx = 1;     //  \1  /0
+                    //int dy = 0; // without my cell
                     for (int step = 0; step <= dist;)
                     {
                         //рисуем
@@ -3772,6 +3924,24 @@ namespace Aicup2020
                 _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, value2.ToString(), 0, textSize)));
             other1 -= value1;
             other2 -= value2;
+        }
+        void DrawDeadCellMap()
+        {
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    if (cellWithIdOnlyBuilding[x][y] == -1)
+                    {
+                        int value = deadEndMap[x, y];
+                        if (value > 0)
+                        {
+                            ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y+0.2f), new Vec2Float(0, 0), colorRed);
+                            _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, value.ToString(), 0.5f, 16)));
+                        }
+                    }
+                }
+            }
         }
         /// <summary>
         /// Определяет самые эффективные способы распределения целей, чтобы поразить максимум целей
