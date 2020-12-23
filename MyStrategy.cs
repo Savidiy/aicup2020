@@ -46,6 +46,7 @@ namespace Aicup2020
             drawInteresMap, drawMemoryResources, drawMemoryEnemies,
             drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind,
             drawOptAttack,
+            drawOrderStatistics,
             canDrawDebugUpdate, allOptionsCount
         }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
@@ -937,6 +938,8 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawInteresMap] = false;
             debugOptions[(int)DebugOptions.drawMemoryResources] = false;
             debugOptions[(int)DebugOptions.drawMemoryEnemies] = true;
+            debugOptions[(int)DebugOptions.drawOrderStatistics] = true;
+
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
@@ -2761,16 +2764,27 @@ namespace Aicup2020
                 }
             }
         }
+         
         void OptimizeOrders()
         {
-            OptimizeOrderToAttackRM(); // оптимизируем приказы на атаку воинов
+            DrawOrderStatisticInit();
+            DrawOrderStatistic("start");
+            OptimizeOrderToDirectAttackRM(); // оптимизируем приказы на атаку воинов
+            DrawOrderStatistic("DirAtt");
+            OptimizeNearRangersMove(4); // двигаются те кто близок к врагу
+            DrawOrderStatistic("NrRngMv");
+            OptimizeWarriorsMove();
+            DrawOrderStatistic("WrrMv");
             // OptimizeOrderToHealWarriors(); // оптимизируем приказы на лечение воинов
             OptimizeOrderToRetreat(); // оптимизируем отступление
+            DrawOrderStatistic("Retreat");
 
             OptimizeOrderToRepairNew(); // ремонтируем новые здания
+            DrawOrderStatistic("RepNew");
             OptimizeOrderToBuildNew(); // строим новые здания
+            DrawOrderStatistic("BldNew");
             OptimizeOrderToRepairOld(); // ремонтируем старые здания
-
+            DrawOrderStatistic("RepOld");
 
         }
 
@@ -2819,7 +2833,7 @@ namespace Aicup2020
                 set { _targetsMyUnitsById[i] = value; }
             }
         }
-        void OptimizeOrderToAttackRM()
+        void OptimizeOrderToDirectAttackRM()
         {
             int damageR = properties[EntityType.RangedUnit].Attack.Value.Damage;
             int damageM = properties[EntityType.MeleeUnit].Attack.Value.Damage;
@@ -3273,13 +3287,6 @@ namespace Aicup2020
 
 
             #endregion
-
-            #region определяем движение остальных стрелков бе приказа
-            OptimizeNearRangersMove(4); // двигаются те кто близок к врагу
-            // стреляют те кому не надо двигаться
-            // двигаются остальные войны
-            #endregion
-
         }
         void OptimizeNearRangersMove(int distance)
         {
@@ -3564,6 +3571,207 @@ namespace Aicup2020
                     }
                 }
             }
+        }
+        void OptimizeWarriorsMove()
+        {
+
+        }
+
+        float drawOrderStatisticX;
+        float drawOrderStatisticY;
+        const float drawOrderStatisticStepX = 30f;
+        const float drawOrderStatisticStepY = 16f;
+        const float drawOrderStatisticStartX = 50f;
+        const float drawOrderStatisticStartY = 90f;
+        EntityOrders[] debugBuilderOrdersArray = new EntityOrders[] {
+            EntityOrders.buildNow, EntityOrders.buildGo, EntityOrders.repairGo, EntityOrders.tryRetreat, EntityOrders.canRetreat,
+            EntityOrders.attack, EntityOrders.attackAndMove, EntityOrders.collect, EntityOrders.move, EntityOrders.cancelAll };
+        EntityOrders[] debugRangerOrdersArray = new EntityOrders[] {
+            EntityOrders.tryRetreat, EntityOrders.canRetreat,
+            EntityOrders.attack, EntityOrders.attackAndMove, EntityOrders.collect, EntityOrders.move, EntityOrders.cancelAll };
+        void DrawOrderStatisticInit()
+        {
+            if (debugOptions[(int)DebugOptions.canDrawGetAction] == true && debugOptions[(int)DebugOptions.drawOrderStatistics] == true)
+            {
+                drawOrderStatisticX = drawOrderStatisticStartX;
+                drawOrderStatisticY = _debugInterface.GetState().WindowSize.Y - drawOrderStatisticStartY;
+
+                float x = drawOrderStatisticX;
+                float y = drawOrderStatisticY;
+                int textSize = 16;
+                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(x, y), colorGreen), "Builders", 1f, textSize)));
+                foreach (var ord in debugBuilderOrdersArray)
+                {
+                    x += drawOrderStatisticStepX;
+                    string text = "";
+                    switch (ord)
+                    {
+                        case EntityOrders.attack: text = "At"; break;
+                        case EntityOrders.attackAndMove: text = "AtMv"; break;
+                        case EntityOrders.buildGo: text = "bldG"; break;
+                        case EntityOrders.buildNow: text = "bldN"; break;
+                        case EntityOrders.cancelAll: text = "cAll"; break;
+                        case EntityOrders.canRetreat: text = "canR"; break;
+                        case EntityOrders.collect: text = "coll"; break;
+                        case EntityOrders.move: text = "move"; break;
+                        case EntityOrders.none: text = "none"; break;
+                        case EntityOrders.repairGo: text = "rprG"; break;
+                        case EntityOrders.spawnUnit: text = "spUn"; break;
+                        case EntityOrders.tryRetreat: text = "tryR"; break;
+                    }
+
+                    ColoredVertex position = new ColoredVertex(null, new Vec2Float(x, y), colorWhite);
+                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, text, 0.5f, textSize)));
+                }
+                x += drawOrderStatisticStepX;
+                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(x, y), colorWhite), "other", 0.5f, textSize)));
+
+                x += drawOrderStatisticStepX;
+                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(x, y), colorRed), "Rngr", 0.5f, textSize)));
+                foreach (var ord in debugRangerOrdersArray)
+                {
+                    x += drawOrderStatisticStepX;
+                    string text = "";
+                    switch (ord)
+                    {
+                        case EntityOrders.attack: text = "At"; break;
+                        case EntityOrders.attackAndMove: text = "AtMv"; break;
+                        case EntityOrders.buildGo: text = "bldG"; break;
+                        case EntityOrders.buildNow: text = "bldN"; break;
+                        case EntityOrders.cancelAll: text = "cAll"; break;
+                        case EntityOrders.canRetreat: text = "canR"; break;
+                        case EntityOrders.collect: text = "coll"; break;
+                        case EntityOrders.move: text = "move"; break;
+                        case EntityOrders.none: text = "none"; break;
+                        case EntityOrders.repairGo: text = "rprG"; break;
+                        case EntityOrders.spawnUnit: text = "spUn"; break;
+                        case EntityOrders.tryRetreat: text = "tryR"; break;
+                    }
+
+                    ColoredVertex position = new ColoredVertex(null, new Vec2Float(x, y), colorWhite);
+                    _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, text, 0.5f, textSize)));
+                }
+                x += drawOrderStatisticStepX;
+                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(new ColoredVertex(null, new Vec2Float(x, y), colorWhite), "other", 0.5f, textSize)));
+
+                drawOrderStatisticY -= drawOrderStatisticStepY;
+            }
+        }
+        void DrawOrderStatistic(string text)
+        {
+            if (debugOptions[(int)DebugOptions.canDrawGetAction] == true && debugOptions[(int)DebugOptions.drawOrderStatistics] == true)
+            {
+                Dictionary<EntityOrders, int> orderStatBuildersNo = new Dictionary<EntityOrders, int>();
+                Dictionary<EntityOrders, int> orderStatBuildersOpt = new Dictionary<EntityOrders, int>();
+                Dictionary<EntityOrders, int> orderStatRangersNo = new Dictionary<EntityOrders, int>();
+                Dictionary<EntityOrders, int> orderStatRangersOpt = new Dictionary<EntityOrders, int>();
+                // collect statistics
+                foreach (var en in entityMemories)
+                {
+                    bool correct = false;
+                    Dictionary<EntityOrders, int> orderStat = null;
+                    if (en.Value.optimized)
+                    {
+                        if (en.Value.myEntity.EntityType == EntityType.BuilderUnit)
+                        {
+                            correct = true;
+                            orderStat = orderStatBuildersOpt;
+                        }
+                        else if (en.Value.myEntity.EntityType == EntityType.RangedUnit)
+                        {
+                            correct = true;
+                            orderStat = orderStatRangersOpt;
+                        }
+                    }
+                    else
+                    {
+                        if (en.Value.myEntity.EntityType == EntityType.BuilderUnit)
+                        {
+                            correct = true;
+                            orderStat = orderStatBuildersNo;
+                        }
+                        else if (en.Value.myEntity.EntityType == EntityType.RangedUnit)
+                        {
+                            correct = true;
+                            orderStat = orderStatRangersNo;
+                        }
+                    }
+
+                    if (correct)
+                    {
+                        if (orderStat.ContainsKey(en.Value.order))
+                        {
+                            orderStat[en.Value.order]++;
+                        }
+                        else
+                        {
+                            orderStat.Add(en.Value.order, 1);
+                        }
+                    }
+                }
+
+                float x = drawOrderStatisticX;
+                float y = drawOrderStatisticY;
+                int textSize = 16;
+                // draw ticket
+                ColoredVertex position = new ColoredVertex(null, new Vec2Float(x, y), colorWhite);
+                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, text, 1f, textSize)));
+                #region draw statistics builders
+
+                int otherNo = 0;
+                int otherOpt = 0;
+                foreach (var or in orderStatBuildersNo)
+                    otherNo += or.Value;
+                foreach (var or in orderStatBuildersOpt)
+                    otherOpt += or.Value;
+                // { none, spawnUnit, buildNow, buildGo, repairGo, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll }
+
+                //float dx = 30f;
+                foreach (var order in debugBuilderOrdersArray)
+                {
+                    int valueNo = orderStatBuildersNo.ContainsKey(order) ? orderStatBuildersNo[order] : 0;
+                    int valueOpt = orderStatBuildersOpt.ContainsKey(order) ? orderStatBuildersOpt[order] : 0;
+                    DrawStatPair(ref x, y, valueNo, valueOpt, ref otherNo, ref otherOpt, textSize);
+                }                   
+
+                DrawStatPair(ref x, y, otherNo, otherOpt, ref otherNo, ref otherOpt, textSize);
+                #endregion
+
+                #region draw statistics rangers
+                x += drawOrderStatisticStepX;
+                otherNo = 0;
+                otherOpt = 0;
+                foreach (var or in orderStatRangersNo)
+                    otherNo += or.Value;
+                foreach (var or in orderStatRangersOpt)
+                    otherOpt += or.Value;
+
+                //float dx = 30f;
+                foreach (var order in debugRangerOrdersArray)
+                {
+                    int valueNo = orderStatRangersNo.ContainsKey(order) ? orderStatRangersNo[order] : 0;
+                    int valueOpt = orderStatRangersOpt.ContainsKey(order) ? orderStatRangersOpt[order] : 0;
+                    DrawStatPair(ref x, y, valueNo, valueOpt, ref otherNo, ref otherOpt, textSize);
+                }
+
+                DrawStatPair(ref x, y, otherNo, otherOpt, ref otherNo, ref otherOpt, textSize);
+                #endregion
+
+                drawOrderStatisticY -= drawOrderStatisticStepY;
+                _debugInterface.Send(new DebugCommand.Flush());
+            }
+        }
+        void DrawStatPair(ref float x, float y, int value1, int value2, ref int other1, ref int other2, int textSize)
+        {
+            x += drawOrderStatisticStepX;
+            ColoredVertex position = new ColoredVertex(null, new Vec2Float(x, y), colorRed);
+            if (value1 != 0)
+                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, value1.ToString(), 1f, textSize)));
+            position.Color = colorGreen; // = new ColoredVertex(null, new Vec2Float(x, y), colorGreen);
+            if (value2 != 0)
+                _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, value2.ToString(), 0, textSize)));
+            other1 -= value1;
+            other2 -= value2;
         }
         /// <summary>
         /// Определяет самые эффективные способы распределения целей, чтобы поразить максимум целей
@@ -6751,6 +6959,7 @@ namespace Aicup2020
 
                 //ColoredVertex position = new ColoredVertex(new Vec2Float(10, 10), new Vec2Float(0, 0), colorGreen);
                 //    debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, "Ghbdtn", 0, 16)));
+
                 //    ColoredVertex[] vertices = new ColoredVertex[] {
                 //        new ColoredVertex(new Vec2Float(7,7), new Vec2Float(), colorRed),
                 //        new ColoredVertex(new Vec2Float(17,7), new Vec2Float(), colorRed),
