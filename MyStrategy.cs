@@ -3652,11 +3652,6 @@ namespace Aicup2020
                             }
                             if (enemiesById.ContainsKey(enemyId))
                             {
-                                if (isDead)
-                                {
-                                    DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
-                                    enemiesById.Remove(enemyId);
-                                }
                                 if (debugOptions[(int)DebugOptions.drawOptAttack])
                                 {
                                     DrawLineOnce(
@@ -3666,6 +3661,11 @@ namespace Aicup2020
                                         enemiesById[enemyId].Position.Y + 0.5f,
                                         colorMagenta,
                                         colorMagenta);
+                                }
+                                if (isDead)
+                                {
+                                    DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
+                                    enemiesById.Remove(enemyId);
                                 }
                             }
                         }
