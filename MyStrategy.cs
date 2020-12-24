@@ -45,7 +45,7 @@ namespace Aicup2020
             drawOnceVisibleMap, drawRangedBasePotencPlace,
             drawInteresMap, drawMemoryResources, drawMemoryEnemies,
             drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind, drawPotencTarget5Map,
-            drawOptAttack, drawPlanedKill,
+            drawOptAttack, drawPlanedKill, drawOptRangerMove, drawOptRangerPathfind,
             drawOrderStatistics, drawDeadCellMap,
             canDrawDebugUpdate, allOptionsCount
         }
@@ -946,7 +946,7 @@ namespace Aicup2020
             WantCreateHouses, WantCreateRangerBase, WantCreateTurret,
             WantRepairBuildings,
             WantCollectResources, WantRetreatBuilders,
-            WantTurretAttacks, WantAllWarriorsAttack
+            WantTurretAttacks, WantAllMeleesAttack
         };
         List<DesireType> desires = new List<DesireType>();
         List<DesireType> prevDesires = new List<DesireType>();
@@ -957,7 +957,7 @@ namespace Aicup2020
             PlanCreateHouses, PlanCreateRangerBase, PlanCreateTurret,
             PlanRepairNewBuildings, PlanRepairOldBuildings,
             PlanExtractResources, PlanRetreatBuilders,
-            PlanTurretAttacks, PlanAllWarriorsAttack
+            PlanTurretAttacks, PlanAllMeleesAttack
         }
         List<PlanType> plans = new List<PlanType>();
         List<PlanType> prevPlans = new List<PlanType>();
@@ -1219,6 +1219,8 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawOrderStatistics] = true;
             debugOptions[(int)DebugOptions.drawDeadCellMap] = false;
             debugOptions[(int)DebugOptions.drawPlanedKill] = true;
+            debugOptions[(int)DebugOptions.drawOptRangerMove] = true;
+            debugOptions[(int)DebugOptions.drawOptRangerPathfind] = true;
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
@@ -2665,7 +2667,7 @@ namespace Aicup2020
             desires.Add(DesireType.WantCollectResources);
 
             desires.Add(DesireType.WantTurretAttacks);
-            desires.Add(DesireType.WantAllWarriorsAttack);
+            desires.Add(DesireType.WantAllMeleesAttack);
 
             if (needRepairBuildingIdList.Count > 0)
                 desires.Add(DesireType.WantRepairBuildings);
@@ -2832,12 +2834,12 @@ namespace Aicup2020
                         }
                         break;
                     #endregion
-                    case DesireType.WantAllWarriorsAttack:
+                    case DesireType.WantAllMeleesAttack:
                         #region хочу чтобы все войны атаковали
                         //i have warrior
-                        if ((currentMyEntityCount[EntityType.RangedUnit] + currentMyEntityCount[EntityType.MeleeUnit]) > 0)
+                        if (currentMyEntityCount[EntityType.MeleeUnit] > 0)
                         {
-                            plans.Add(PlanType.PlanAllWarriorsAttack);
+                            plans.Add(PlanType.PlanAllMeleesAttack);
                         }
                         break;
                     #endregion
@@ -2966,9 +2968,8 @@ namespace Aicup2020
                     case PlanType.PlanTurretAttacks:
                         intentions.Add(new Intention(IntentionType.IntentionTurretAttacks, basicEntityIdGroups[EntityType.Turret]));
                         break;
-                    case PlanType.PlanAllWarriorsAttack:
-                        intentions.Add(new Intention(IntentionType.IntentionAllWarriorsAttack, basicEntityIdGroups[EntityType.MeleeUnit]));
-                        intentions.Add(new Intention(IntentionType.IntentionAllWarriorsAttack, basicEntityIdGroups[EntityType.RangedUnit]));
+                    case PlanType.PlanAllMeleesAttack:
+                        intentions.Add(new Intention(IntentionType.IntentionAllWarriorsAttack, basicEntityIdGroups[EntityType.MeleeUnit]));                        
                         break;
                     default:
                         throw new System.Exception("неучтенный план");
@@ -3546,8 +3547,11 @@ namespace Aicup2020
                                 enemyMelees[targets[0]]._me._health -= damageR;
                                 if (enemyMelees[targets[0]]._me._health <= 0)
                                 {
-                                    DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
-                                    enemiesById.Remove(enemyId);
+                                    if (enemiesById.ContainsKey(enemyId))
+                                    {
+                                        DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
+                                        enemiesById.Remove(enemyId);
+                                    }
                                 }
 
                             }
@@ -4304,7 +4308,255 @@ namespace Aicup2020
         void OptimizeWarriorsMove()
         {
 
+            #region стартовые значения
+            CellWI[,] pathMap = new CellWI[mapSize, mapSize];
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    pathMap[x, y] = new CellWI();
+                }
+            }
 
+            //стартовое значение, которое будем уменьшать
+            int startWeight = mapSize * mapSize;
+            //int minWeight = startWeight - maxHealth;
+            // 
+            //const  int WInside = -1;
+            const int WmyBuilding = -2;
+            const int WEnemy = 3; // поиск проходит сквозь вражеских юнитов и здания
+            const int WResource = -4;
+            //const int WDanger = -5;
+            const int WmyUnit = -6;
+            const int WNextPosition = 7; // поиск проходит сквозь мои позиции пути, но туда нельзя стать
+            //const int WoptimizedUnit = 8;
+            //const int WUnvisibleCell = -9;
+
+            List<EntityType> validTargetTypes = new List<EntityType>();
+            validTargetTypes.Add(EntityType.BuilderUnit);
+            validTargetTypes.Add(EntityType.RangedUnit);
+            validTargetTypes.Add(EntityType.MeleeUnit);
+            //validTargetTypes.Add(EntityType.Turret);
+            validTargetTypes.Add(EntityType.House);
+            validTargetTypes.Add(EntityType.BuilderBase);
+            validTargetTypes.Add(EntityType.MeleeBase);
+            validTargetTypes.Add(EntityType.RangedBase);
+            //validTargetTypes.Add(EntityType.Wall);
+            //validTargetTypes.Add(EntityType.Resource);
+            #endregion
+
+            #region определяем стартовые клетки
+            List<XYWeight> findCells = new List<XYWeight>();
+            for (int x = 0; x < mapSize; x++) // обозначаем все клетки с которых можно атаковать противника
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    int sum = 0;
+                    foreach (var t in validTargetTypes)
+                        sum += potencTarget5Map[x, y][t];
+                    pathMap[x, y].index = sum;
+                }
+            }
+
+            for (int x = 0; x < mapSize; x++) // ищем граничные клетки, чтобы от них начать поиск
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    if (pathMap[x, y].index > 0)
+                    {
+                        if (cellWithIdOnlyBuilding[x][y] == -1) // Это не здание
+                        {
+                            int sumFreeCells = 0;
+                            for (int h = 0; h < 4; h++)
+                            {
+                                int fx = x;
+                                int fy = y;
+                                if (h == 0) fx++;
+                                else if (h == 1) fx--;
+                                else if (h == 2) fy++;
+                                else if (h == 3) fy--;
+                                if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize)
+                                {
+                                    if (pathMap[fx, fy].index == 0)
+                                        sumFreeCells++;
+                                }
+                            }
+
+                            if (sumFreeCells > 0) // у этой клетки есть сосед без атаки, надо отсюда начинать поиск
+                            {
+                                findCells.Add(new XYWeight(x, y, startWeight));
+                                pathMap[x, y].weight = startWeight;
+                                if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawOptRangerPathfind])
+                                {
+                                    DrawCenterCellText(x, y, colorRed, 0, 16);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            #endregion
+
+            // идем в угол противника если нет целей
+            if (findCells.Count == 0)
+            {
+                if (isFinal)
+                {
+                    findCells.Add(new XYWeight(73, 73, startWeight));
+                }
+                else if (fogOfWar)
+                {
+                    if (_playerView.CurrentTick < 500)
+                        findCells.Add(new XYWeight(73, 7, startWeight));
+                    else if (_playerView.CurrentTick < 750)
+                        findCells.Add(new XYWeight(73, 73, startWeight));
+                    else findCells.Add(new XYWeight(7, 73, startWeight));
+                }
+            }
+
+            int debugStep = startWeight;
+            // начинаем искать людей
+            for (int iter = 0; iter < findCells.Count; iter++)
+            {
+                int fx = findCells[iter].x;
+                int fy = findCells[iter].y;
+                int fw = findCells[iter].weight;
+                int fi = findCells[iter].index;
+
+                for (int jj = 0; jj < 4; jj++)
+                {
+                    int nx = fx;
+                    int ny = fy;
+                    if (jj == 0) nx--;
+                    if (jj == 1) ny--;
+                    if (jj == 2) nx++;
+                    if (jj == 3) ny++;
+
+                    if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
+                    {
+                        if (pathMap[nx, ny].weight >= 0 && pathMap[nx, ny].weight < fw - 2)
+                        {
+                            bool canContinue = true;
+
+                            //var dCell = enemyDangerCells[nx][ny];
+                            //if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0) // проверка опасной зоны
+                            //{
+                            //    canContinue = false;
+                            //    pathMap[nx, ny].weight = WDanger;
+                            //}
+                            //else if (dCell.meleesWarning + dCell.rangersWarning > 0)
+                            //{
+                            //    canContinue = false;
+                            //    pathMap[nx, ny].weight = WDanger;
+                            //}
+                            //else 
+                            if (nextPositionMyUnitsMap[nx][ny] > 0) // проверка пустой позиции на следующий ход
+                            {
+                                //canContinue = false;
+                                pathMap[nx, ny].weight = WNextPosition;
+                            } else if(resourceMemoryMap[nx][ny] > 0) // не проходит поиск через ресурсы
+                            {
+                                canContinue = false;
+                                pathMap[nx, ny].weight = WResource;
+                            }
+                            //else if (onceVisibleMap[nx][ny] == 0)
+                            //{
+                            //    canContinue = false;
+                            //    pathMap[nx, ny].weight = WUnvisibleCell;
+                            //}
+
+                            if (canContinue == true)
+                            {
+                                int id = cellWithIdAny[nx][ny];
+                                if (id >= 0)// occupied cell
+                                {
+                                    if (entityMemories.ContainsKey(id))
+                                    {
+                                        if (entityMemories[id].myEntity.EntityType == EntityType.RangedUnit)
+                                        {
+                                            if (entityMemories[id].optimized == false)
+                                            {
+                                                //canContinue = false; поиск распространяется свкозь моих
+                                                
+                                                //pathMap[nx, ny].weight = WoptimizedUnit;
+                                                if (nextPositionMyUnitsMap[fx][fy] <= 0) // принимабющая клетка пустая, можно в нее идти
+                                                {
+                                                    if (debugOptions[(int)DebugOptions.drawOptRangerMove])
+                                                    {
+                                                        DrawLineOnce(nx + 0.45f, ny + 0.45f, fx + 0.45f, fy + 0.45f, colorGreen, colorGreen);
+                                                    }
+                                                    nextPositionMyUnitsMap[fx][fy] = id;
+                                                    entityMemories[id].OrderMove(new Vec2Int(fx, fy), false, false, true);
+                                                } else
+                                                {
+                                                    canContinue = false;
+                                                }
+                                            }
+                                            // все оптимизированные юниты придаставлены в NextPosition
+                                            //else
+                                            //{
+                                            //    canContinue = false;
+                                            //    pathMap[nx, ny].weight = WoptimizedUnit;
+                                            //}
+
+                                        }
+                                        else
+                                        {
+                                            if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
+                                            {
+                                                canContinue = false;
+                                                pathMap[nx, ny].weight = WmyBuilding;
+                                            }
+                                            // ищем сквозь моих юнитов
+                                            //else
+                                            //{
+                                            //    canContinue = false;
+                                            //    pathMap[nx, ny].weight = WmyUnit;
+                                            //}
+                                        }
+                                    }
+                                    else if (enemiesById.ContainsKey(id))// enemy 
+                                    {
+                                        //canContinue = false;
+                                        //pathMap[nx, ny].weight = WDanger;
+                                    }
+                                    // наличие ресурса проверено ранее по карте памяти ресурсов
+                                    //else // it is resource
+                                    //{
+                                    //    canContinue = false;
+                                    //    pathMap[nx, ny].weight = WResource;
+                                    //}
+                                }
+                            }
+
+                            if (canContinue == true) // empty, safe cell or through free unit
+                            {
+                                //add weight and findCell
+                                pathMap[nx, ny].weight = fw - 1;
+                                //pathMap[nx, ny].index = fi;
+                               
+                                findCells.Add(new XYWeight(nx, ny, fw - 1, fi));
+                                if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawOptRangerPathfind])
+                                {
+                                    DrawCenterCellText(nx, ny, colorRed, startWeight - fw + 1, 16);
+                                    //DrawLineOnce(nx + 0.5f, ny + 0.5f, fx + 0.5f, fy + 0.5f, colorMagenta, colorMagenta);
+                                }
+                         
+                            }
+                        }                        
+                        //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                    }
+                }
+                if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawOptRangerPathfind])
+                {
+                    if (debugStep != fw)
+                    {
+                        debugStep = fw;
+                        _debugInterface.Send(new DebugCommand.Flush());
+                        ;
+                    }                    
+                }
+            }
         }
         #region Order statistics
         float drawOrderStatisticX;
