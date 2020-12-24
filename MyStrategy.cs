@@ -68,6 +68,7 @@ namespace Aicup2020
         const int RPFdangerCellWeight = -6;
         const int RPFenemyEntityWeight = -2;
         const int RPFdeniedBuilderWeight = 1;
+        const int RPFdeniedUnitWeight = -1;
         const int RPFwarningCellWeight = 2;
         class BuildMapCell
         {
@@ -563,6 +564,7 @@ namespace Aicup2020
             public bool CanAttackBuilder { get; private set; }
             public bool CanAttackResource { get; private set; }
             public bool CanAttackWall { get; private set; }
+            public int Sum { get; private set; }
 
             public PotencTargetCell()
             {
@@ -582,6 +584,7 @@ namespace Aicup2020
                 CanAttackTurret = false;
                 CanAttackWall = false;
                 CanAttackWarriors = false;
+                Sum = 0;
             }
             public int this[EntityType type]
             {
@@ -609,6 +612,8 @@ namespace Aicup2020
                     CanAttackBuilder = true; // 9/10
                 if (availableTargetTypes[(int)EntityType.Wall] > 0)
                     CanAttackWall = true; // 10/10
+                foreach (var c in availableTargetTypes)
+                    Sum += c;
             }
         }
         class PotencTarget5Map
@@ -1070,7 +1075,7 @@ namespace Aicup2020
             CheckAliveAndDieEntities();
             CheckDeadResourceOnCurrentVisibleMap();
             GenerateDeadEndMap();
-            GenerateResourcePotentialField();
+            
             GenerateBuildBarrierMap();
             GeneratePotencAttackMap();
             GeneratePotencTargetMap();
@@ -1218,9 +1223,9 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawMemoryEnemies] = true;
             debugOptions[(int)DebugOptions.drawOrderStatistics] = true;
             debugOptions[(int)DebugOptions.drawDeadCellMap] = false;
-            debugOptions[(int)DebugOptions.drawPlanedKill] = true;
+            debugOptions[(int)DebugOptions.drawPlanedKill] = false;
             debugOptions[(int)DebugOptions.drawOptRangerMove] = true;
-            debugOptions[(int)DebugOptions.drawOptRangerPathfind] = true;
+            debugOptions[(int)DebugOptions.drawOptRangerPathfind] = false;
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
@@ -1587,6 +1592,10 @@ namespace Aicup2020
                                 canContinueField = false;
                                 resourcePotentialField[nx][ny] = RPFwarningCellWeight;
                                 //findCells.Add(new XYWeight(nx, ny, RPFwarningCellWeight));
+                            } else if (nextPositionMyUnitsMap[nx][ny] > 0)
+                            {
+                                canContinueField = false;
+                                resourcePotentialField[nx][ny] = RPFdeniedUnitWeight;
                             }
 
                             // проверка занятой клетки
@@ -2123,7 +2132,7 @@ namespace Aicup2020
                 for (int y = 0; y < mapSize; y++)
                 {
                     int textSize = 16;
-                    if (potencTarget5Map[x, y].CanAttackWarriors == true)                    
+                    if (potencTarget5Map[x, y].CanAttackWarriors == true)
                         DrawCenterCellText(x, y, colorRed, "w", textSize);
                     else if (potencTarget5Map[x, y].CanAttackTurret == true)
                         DrawCenterCellText(x, y, colorRed, "t", textSize);
@@ -2137,6 +2146,16 @@ namespace Aicup2020
                         DrawCenterCellText(x, y, colorWhite, "R", textSize);
                     else if (potencTarget5Map[x, y].CanAttackWall == true)
                         DrawCenterCellText(x, y, colorBlack, "H", textSize);
+
+
+                    //if (potencTarget5Map[x, y][EntityType.BuilderBase] > 0)
+                    //    DrawCenterCellText(x, y, colorRed, potencTarget5Map[x, y][EntityType.BuilderBase], textSize);
+                    //if (potencTarget5Map[x, y][EntityType.RangedBase] > 0)
+                    //    DrawCenterCellText(x, y, colorRed, potencTarget5Map[x, y][EntityType.RangedBase], textSize);
+                    //if (potencTarget5Map[x, y][EntityType.MeleeBase] > 0)
+                    //    DrawCenterCellText(x, y, colorRed, potencTarget5Map[x, y][EntityType.MeleeBase], textSize);
+
+
                 }
             }
         }
@@ -3130,7 +3149,7 @@ namespace Aicup2020
                     case IntentionType.IntentionRetreatBuilders:
                         foreach (int id in ni.targetGroup.members)
                         {
-                            entityMemories[id].OrderTryRetreat();
+                            entityMemories[id].OrderTryRetreat(false);
                             //OrderRetreatBuilderFromEnemy(id);
                         }
                         break;
@@ -3154,13 +3173,15 @@ namespace Aicup2020
             DrawOrderStatistic("DirAtt");
             OptimizeNearRangersMove(4); // двигаются те кто близок к врагу
             DrawOrderStatistic("NrRngMv");
-            OptimizeSafeRangerAttack(); // атакуем безопасные цели: строителей, здания
-            DrawOrderStatistic("SafeAtt");
             OptimizeWarriorsMove();
             DrawOrderStatistic("WrrMv");
+            OptimizeSafeRangerAttack(); // атакуем безопасные цели: строителей, здания
+            DrawOrderStatistic("SafeAtt");
             // OptimizeOrderToHealWarriors(); // оптимизируем приказы на лечение воинов
             OptimizeOrderToRetreat(); // оптимизируем отступление
             DrawOrderStatistic("Retreat");
+
+            GenerateResourcePotentialField();
 
             OptimizeOrderToRepairNew(); // ремонтируем новые здания
             DrawOrderStatistic("RepNew");
@@ -3562,7 +3583,7 @@ namespace Aicup2020
                             {
                                 if (myRangers[id][0]._targetsMyUnitsById[id]._dist <= 2)// retreat nearest
                                 {
-                                    entityMemories[id].OrderTryRetreat();
+                                    entityMemories[id].OrderTryRetreat(true);
                                 }
                                 else // fire another
                                 {
@@ -3703,7 +3724,7 @@ namespace Aicup2020
         }
         void OptimizeNearRangersMove(int distance)
         {
-            
+            List<int> pushedUnitId = new List<int>();
             CellWI[,] pathMap = new CellWI[mapSize, mapSize];
             for (int x = 0; x < mapSize; x++)
             {
@@ -3825,7 +3846,7 @@ namespace Aicup2020
             }
             #endregion
 
-            // начинаем искать свободных строителей
+            // начинаем искать 
             for (int iter = 0; iter < findCells.Count; iter++)
             {
                 int fx = findCells[iter].x;
@@ -3915,6 +3936,13 @@ namespace Aicup2020
                                                         nextPositionMyUnitsMap[fx][fy] = id;
                                                         fw--;
                                                         entityMemories[id].OrderMove(new Vec2Int(fx, fy), true, false, true);
+                                                        int pushId = cellWithIdAny[fx][fy];
+                                                        if (pushId > 0) // в принимающей клетке, кто-то есть
+                                                        {
+                                                            if (entityMemories.ContainsKey(pushId))
+                                                                if (entityMemories[pushId].optimized == false)
+                                                                    pushedUnitId.Add(pushId);
+                                                        }
                                                         break;
                                                     }
                                                     else
@@ -3934,7 +3962,7 @@ namespace Aicup2020
                                                     else
                                                     {
                                                         //canContinue = false;
-                                                        pathMap[nx, ny].index = IFreeUnit;
+                                                        pathMap[nx, ny].index = IFreeUnit;                                                        
                                                     }
                                                 }
                                             }
@@ -3984,10 +4012,70 @@ namespace Aicup2020
                     }
                 }
             }
+
+            for (int i = 0; i < pushedUnitId.Count; i++)
+            {
+                int id = pushedUnitId[i];
+                if (entityMemories.ContainsKey(id))
+                {
+                    if (true)//entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
+                    {
+                        List<Vec2Int> pushCell = new List<Vec2Int>();
+                        int sx = entityMemories[id].myEntity.Position.X;
+                        int sy = entityMemories[id].myEntity.Position.Y;
+                        for (int jj = 0; jj < 4; jj++)
+                        {
+                            int nx = sx;
+                            int ny = sy;
+                            if (jj == 0) nx--;
+                            if (jj == 1) ny--;
+                            if (jj == 2) nx++;
+                            if (jj == 3) ny++;
+
+                            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                            {
+                                if (nextPositionMyUnitsMap[nx][ny] <= 0)
+                                {
+                                    if (cellWithIdOnlyBuilding[nx][ny] <= 0)
+                                    {
+                                        pushCell.Add(new Vec2Int(nx, ny));
+                                    }
+                                }
+                            }
+                        }
+
+                        if (pushCell.Count > 0)
+                        {
+                            Vec2Int moveTo = pushCell[random.Next(pushCell.Count)];
+                            entityMemories[id].OrderPushed(moveTo, false, false, true);
+                            nextPositionMyUnitsMap[moveTo.X][moveTo.Y] = id;
+                            if (debugOptions[(int)DebugOptions.drawOptRangerMove])
+                            {
+                                DrawLineOnce(sx + 0.55f, sy + 0.55f, moveTo.X + 0.55f, moveTo.Y + 0.55f, colorWhite, colorWhite);
+                            }
+
+                            int pushId = cellWithIdAny[moveTo.X][moveTo.Y];
+                            if (pushId > 0) // в принимающей клетке, кто-то есть
+                            {
+                                if (entityMemories.ContainsKey(pushId))
+                                    if (entityMemories[pushId].optimized == false)
+                                        pushedUnitId.Add(pushId);
+                            }
+                        }
+                        else
+                        {
+                            ;//бывает такое
+                        }
+
+                    }
+                }
+
+            }
         }
         void OptimizeSafeRangerAttack()
         {
             int damageR = properties[EntityType.RangedUnit].Attack.Value.Damage;
+            int rangerSize = properties[EntityType.RangedUnit].Size;
             List<int> baseSelectMyRangersId = new List<int>();
             foreach (var en in entityMemories)
             {
@@ -4055,7 +4143,9 @@ namespace Aicup2020
                     {
                         int x2 = enemiesById[en.Key].Position.X;
                         int y2 = enemiesById[en.Key].Position.Y;
-                        int dist = Abs(x1 - x2) + Abs(y1 - y2);
+                        //int dist = Abs(x1 - x2) + Abs(y1 - y2);//!!! неправильно считааем дистанцию!
+                        
+                        int dist = Distance(x1, y1, rangerSize, x2, y2, properties[enemiesById[en.Key].EntityType].Size); // 1 
                         if (dist <= 5)
                         {
                             my.Value.Add(en.Value);
@@ -4309,6 +4399,7 @@ namespace Aicup2020
         {
 
             #region стартовые значения
+            List<int> pushedUnitId = new List<int>();
             CellWI[,] pathMap = new CellWI[mapSize, mapSize];
             for (int x = 0; x < mapSize; x++)
             {
@@ -4377,8 +4468,9 @@ namespace Aicup2020
                                 else if (h == 3) fy--;
                                 if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize)
                                 {
-                                    if (pathMap[fx, fy].index == 0)
-                                        sumFreeCells++;
+                                    if (cellWithIdOnlyBuilding[fx][fy] == -1)
+                                        if (pathMap[fx, fy].index == 0)
+                                            sumFreeCells++;
                                 }
                             }
 
@@ -4434,7 +4526,7 @@ namespace Aicup2020
 
                     if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
                     {
-                        if (pathMap[nx, ny].weight >= 0 && pathMap[nx, ny].weight < fw - 2)
+                        if (pathMap[nx, ny].index == 0 && pathMap[nx, ny].weight >= 0 && pathMap[nx, ny].weight < fw - 2)
                         {
                             bool canContinue = true;
 
@@ -4481,12 +4573,19 @@ namespace Aicup2020
                                                 //pathMap[nx, ny].weight = WoptimizedUnit;
                                                 if (nextPositionMyUnitsMap[fx][fy] <= 0) // принимабющая клетка пустая, можно в нее идти
                                                 {
-                                                    if (debugOptions[(int)DebugOptions.drawOptRangerMove])
+                                                    if ( debugOptions[(int)DebugOptions.drawOptRangerMove])
                                                     {
                                                         DrawLineOnce(nx + 0.45f, ny + 0.45f, fx + 0.45f, fy + 0.45f, colorGreen, colorGreen);
                                                     }
                                                     nextPositionMyUnitsMap[fx][fy] = id;
                                                     entityMemories[id].OrderMove(new Vec2Int(fx, fy), false, false, true);
+                                                    int pushId = cellWithIdAny[fx][fy];
+                                                    if (pushId > 0) // в принимающей клетке, кто-то есть
+                                                    {
+                                                        if (entityMemories.ContainsKey(pushId))
+                                                            if (entityMemories[pushId].optimized == false)
+                                                                pushedUnitId.Add(pushId);
+                                                    }
                                                 } else
                                                 {
                                                     canContinue = false;
@@ -4547,15 +4646,73 @@ namespace Aicup2020
                         //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
                     }
                 }
-                if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawOptRangerPathfind])
+                //if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawOptRangerPathfind])
+                //{
+                //    if (debugStep != fw)
+                //    {
+                //        debugStep = fw;
+                //        _debugInterface.Send(new DebugCommand.Flush());
+                //        ;
+                //    }                    
+                //}
+            }
+
+            for (int i = 0; i < pushedUnitId.Count; i++)
+            {
+                int id = pushedUnitId[i];
+                if (entityMemories.ContainsKey(id))
                 {
-                    if (debugStep != fw)
+                    if (true)//entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
                     {
-                        debugStep = fw;
-                        _debugInterface.Send(new DebugCommand.Flush());
-                        ;
-                    }                    
+                        List<Vec2Int> pushCell = new List<Vec2Int>();
+                        int sx = entityMemories[id].myEntity.Position.X;
+                        int sy = entityMemories[id].myEntity.Position.Y;
+                        for (int jj = 0; jj < 4; jj++)
+                        {
+                            int nx = sx;
+                            int ny = sy;
+                            if (jj == 0) nx--;
+                            if (jj == 1) ny--;
+                            if (jj == 2) nx++;
+                            if (jj == 3) ny++;
+
+                            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
+                            {
+                                if (nextPositionMyUnitsMap[nx][ny] <= 0)
+                                {
+                                    if(cellWithIdOnlyBuilding[nx][ny] <= 0)
+                                    {
+                                        pushCell.Add(new Vec2Int(nx, ny));
+                                    }
+                                }
+                            }
+                        }
+
+                        if (pushCell.Count > 0)
+                        {
+                            Vec2Int moveTo = pushCell[random.Next(pushCell.Count)];
+                            entityMemories[id].OrderPushed(moveTo, false, false, true);
+                            nextPositionMyUnitsMap[moveTo.X][moveTo.Y] = id;
+                            if (debugOptions[(int)DebugOptions.drawOptRangerMove])
+                            {
+                                DrawLineOnce(sx + 0.55f, sy + 0.55f, moveTo.X + 0.55f, moveTo.Y + 0.55f, colorWhite, colorWhite);
+                            }
+
+                            int pushId = cellWithIdAny[moveTo.X][moveTo.Y];
+                            if (pushId > 0) // в принимающей клетке, кто-то есть
+                            {
+                                if (entityMemories.ContainsKey(pushId))
+                                    if (entityMemories[pushId].optimized == false)
+                                        pushedUnitId.Add(pushId);
+                            }
+                        } else
+                        {
+                            ;
+                        }
+
+                    }
                 }
+
             }
         }
         #region Order statistics
@@ -4567,10 +4724,10 @@ namespace Aicup2020
         const float drawOrderStatisticStartY = 90f;
         EntityOrders[] debugBuilderOrdersArray = new EntityOrders[] {
             EntityOrders.buildNow, EntityOrders.buildGo, EntityOrders.repairGo, EntityOrders.tryRetreat, EntityOrders.canRetreat,
-            EntityOrders.attack, EntityOrders.attackAndMove, EntityOrders.collect, EntityOrders.move, EntityOrders.cancelAll };
+            EntityOrders.attack, EntityOrders.attackAndMove, EntityOrders.collect, EntityOrders.move, EntityOrders.pushed };
         EntityOrders[] debugRangerOrdersArray = new EntityOrders[] {
-            EntityOrders.tryRetreat, EntityOrders.canRetreat,
-            EntityOrders.attack, EntityOrders.attackAndMove, EntityOrders.collect, EntityOrders.move, EntityOrders.cancelAll };
+            EntityOrders.none, EntityOrders.tryRetreat, EntityOrders.canRetreat,
+            EntityOrders.attack, EntityOrders.attackAndMove, EntityOrders.collect, EntityOrders.move, EntityOrders.pushed };
         void DrawOrderStatisticInit()
         {
             if (debugOptions[(int)DebugOptions.canDrawGetAction] == true && debugOptions[(int)DebugOptions.drawOrderStatistics] == true)
@@ -4596,6 +4753,7 @@ namespace Aicup2020
                         case EntityOrders.canRetreat: text = "canR"; break;
                         case EntityOrders.collect: text = "coll"; break;
                         case EntityOrders.move: text = "move"; break;
+                        case EntityOrders.pushed: text = "pshd"; break;
                         case EntityOrders.none: text = "none"; break;
                         case EntityOrders.repairGo: text = "rprG"; break;
                         case EntityOrders.spawnUnit: text = "spUn"; break;
@@ -4625,6 +4783,7 @@ namespace Aicup2020
                         case EntityOrders.collect: text = "coll"; break;
                         case EntityOrders.move: text = "move"; break;
                         case EntityOrders.none: text = "none"; break;
+                        case EntityOrders.pushed: text = "pshd"; break;
                         case EntityOrders.repairGo: text = "rprG"; break;
                         case EntityOrders.spawnUnit: text = "spUn"; break;
                         case EntityOrders.tryRetreat: text = "tryR"; break;
@@ -5936,6 +6095,7 @@ namespace Aicup2020
                     case EntityOrders.collect:
                     case EntityOrders.tryRetreat:
                     case EntityOrders.canRetreat:
+                    case EntityOrders.pushed:
                     case EntityOrders.move:
                         moveAction.BreakThrough = em.Value.moveBreakThrough;
                         moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
@@ -6286,6 +6446,31 @@ namespace Aicup2020
             }
         }
 
+        int Distance(int x1, int y1, int size1, int x2, int y2, int size2)
+        {
+            if (size1 == 1 && size2 == 1)
+            {
+                return Abs(x1 - x2) + Abs(y1 - y2);
+            }
+            else
+            {
+                int x1right = x1 + size1 - 1;
+                int y1up = y1 + size1 - 1;
+                int x2right = x2 + size2 - 1;
+                int y2up = y2 + size2 - 1;
+
+                int dx = 0;
+                if (x1right < x2) dx = Abs(x1right - x2);
+                else if (x2right < x1) dx = Abs(x2right - x1);
+
+                int dy = 0;
+                if (y1up < y2) dy = Abs(y1up - y2);
+                else if (y2up < y1) dy = Abs(y2up - y1);
+
+                return dx + dy;
+            }
+        }
+
         Vec2Int FindPositionFromOurCorner(EntityType entityType)
         {
             int buildingSize = properties[entityType].Size;
@@ -6317,6 +6502,7 @@ namespace Aicup2020
                         case EntityOrders.repairGo:
                         case EntityOrders.tryRetreat:
                         case EntityOrders.canRetreat:
+                        case EntityOrders.pushed:
                             break;
                         case EntityOrders.cancelAll:
                         case EntityOrders.collect:
@@ -7515,7 +7701,7 @@ namespace Aicup2020
 
     }
     
-    enum EntityOrders { none, spawnUnit, buildNow, buildGo, repairGo, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll }
+    enum EntityOrders { none, spawnUnit, buildNow, buildGo, repairGo, pushed, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll }
     class EntityMemory
     {
         public Group group { get; private set; }
@@ -7569,10 +7755,10 @@ namespace Aicup2020
             checkedNow = true;
             myEntity = entity;
         }
-        public void OrderTryRetreat()
+        public void OrderTryRetreat(bool opt)
         {
             order = EntityOrders.tryRetreat;
-            optimized = false;
+            optimized = opt;
         }
         public void OrderCanRetreat(Vec2Int moveP, bool breakThrough, bool findClosestPosition, bool opt)
         {
@@ -7585,6 +7771,13 @@ namespace Aicup2020
         public void OrderMove(Vec2Int moveP, bool breakThrough, bool findClosestPosition, bool opt)
         {
             order = EntityOrders.move;
+            optimized = opt;
+            movePos = moveP;
+            moveBreakThrough = breakThrough;
+        }
+        public void OrderPushed(Vec2Int moveP, bool breakThrough, bool findClosestPosition, bool opt)
+        {
+            order = EntityOrders.pushed;
             optimized = opt;
             movePos = moveP;
             moveBreakThrough = breakThrough;
