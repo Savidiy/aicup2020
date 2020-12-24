@@ -45,7 +45,7 @@ namespace Aicup2020
             drawOnceVisibleMap, drawRangedBasePotencPlace,
             drawInteresMap, drawMemoryResources, drawMemoryEnemies,
             drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind, drawPotencTarget5Map,
-            drawOptAttack,
+            drawOptAttack, drawPlanedKill,
             drawOrderStatistics, drawDeadCellMap,
             canDrawDebugUpdate, allOptionsCount
         }
@@ -1197,6 +1197,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawMemoryEnemies] = true;
             debugOptions[(int)DebugOptions.drawOrderStatistics] = true;
             debugOptions[(int)DebugOptions.drawDeadCellMap] = false;
+            debugOptions[(int)DebugOptions.drawPlanedKill] = true;
 
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
@@ -1205,7 +1206,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawPotencAttackAll] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackMove] = true;
             debugOptions[(int)DebugOptions.drawPotencAttackPathfind] = false;
-            debugOptions[(int)DebugOptions.drawPotencTarget5Map] = true;
+            debugOptions[(int)DebugOptions.drawPotencTarget5Map] = false;
             debugOptions[(int)DebugOptions.drawRangedBasePotencPlace] = true;
             debugOptions[(int)DebugOptions.drawOptAttack] = true;
 
@@ -2137,6 +2138,11 @@ namespace Aicup2020
         void DrawCenterCellText(int x, int y, Color color, int textInt, int textSize)
         {
             DrawCenterCellText(x, y, color, textInt.ToString(), textSize);
+        }
+        void DrawCenterCellTextSafe(int x, int y, Color color, string text, int textSize, DebugOptions option)
+        {
+            if (debugOptions[(int)DebugOptions.canDrawGetAction] == true && debugOptions[(int)option] == true)
+                DrawCenterCellText(x, y, color, text, textSize);            
         }
 
         void SelectRangedBasePotencPlace()
@@ -3139,6 +3145,8 @@ namespace Aicup2020
             DrawOrderStatistic("DirAtt");
             OptimizeNearRangersMove(4); // двигаются те кто близок к врагу
             DrawOrderStatistic("NrRngMv");
+            OptimizeSafeRangerAttack(); // атакуем безопасные цели: строителей, здания
+            DrawOrderStatistic("SafeAtt");
             OptimizeWarriorsMove();
             DrawOrderStatistic("WrrMv");
             // OptimizeOrderToHealWarriors(); // оптимизируем приказы на лечение воинов
@@ -3320,8 +3328,9 @@ namespace Aicup2020
                                 // create order
                                 int x = entityMemories[i.Key].myEntity.Position.X;
                                 int y = entityMemories[i.Key].myEntity.Position.Y;
-                                nextPositionMyUnitsMap[x][y] = i.Key;
-                                entityMemories[i.Key].OrderAttack(i.Value[0]._me._id, null, true);
+                                nextPositionMyUnitsMap[x][y] = i.Key; // stop on position
+                                int enemyId = i.Value[0]._me._id;
+                                entityMemories[i.Key].OrderAttack(enemyId, null, true);
                                 // draw attack line
                                 if (debugOptions[(int)DebugOptions.drawOptAttack])
                                 {
@@ -3334,18 +3343,30 @@ namespace Aicup2020
                                         colorBlack);
                                 }
                                 // damage health
-                                if (enemyMelees.ContainsKey(i.Value[0]._me._id))
+                                if (enemyMelees.ContainsKey(enemyId))
                                 {
-                                    enemyMelees[i.Value[0]._me._id]._me._health -= damageR;
-                                    if (enemyMelees[i.Value[0]._me._id]._me._health <= 0)
+                                    enemyMelees[enemyId]._me._health -= damageR;
+                                    if (enemyMelees[enemyId]._me._health <= 0)
+                                    {
                                         wasKilled = true;
+                                    }
                                 }
                                 else
-                                if (enemyRangers.ContainsKey(i.Value[0]._me._id))
+                                if (enemyRangers.ContainsKey(enemyId))
                                 {
-                                    enemyRangers[i.Value[0]._me._id]._me._health -= damageR;
-                                    if (enemyRangers[i.Value[0]._me._id]._me._health <= 0)
+                                    enemyRangers[enemyId]._me._health -= damageR;
+                                    if (enemyRangers[enemyId]._me._health <= 0)
+                                    {
                                         wasKilled = true;
+                                    }
+                                }
+                                if (wasKilled)
+                                {
+                                    if (enemiesById.ContainsKey(enemyId))
+                                    {
+                                        DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
+                                        enemiesById.Remove(enemyId);
+                                    }
                                 }
                             }
                         }
@@ -3502,7 +3523,8 @@ namespace Aicup2020
                                 int x = entityMemories[id].myEntity.Position.X;
                                 int y = entityMemories[id].myEntity.Position.Y;
                                 nextPositionMyUnitsMap[x][y] = id;
-                                entityMemories[id].OrderAttack(enemyMelees[targets[0]]._me._id, null, true);
+                                int enemyId = enemyMelees[targets[0]]._me._id;
+                                entityMemories[id].OrderAttack(enemyId, null, true);
                                 if (debugOptions[(int)DebugOptions.drawOptAttack])
                                 {
                                     DrawLineOnce(
@@ -3514,6 +3536,12 @@ namespace Aicup2020
                                         colorMagenta);
                                 }
                                 enemyMelees[targets[0]]._me._health -= damageR;
+                                if (enemyMelees[targets[0]]._me._health <= 0)
+                                {
+                                    DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
+                                    enemiesById.Remove(enemyId);
+                                }
+
                             }
                         }
                         else
@@ -3584,14 +3612,24 @@ namespace Aicup2020
                                     colorMagenta,
                                     colorMagenta);
                             }
+                            bool isDead = false;
                             if (enemyMelees.ContainsKey(enemyId))
                             {
                                 enemyMelees[enemyId]._me._health -= damageR;
+                                if (enemyMelees[enemyId]._me._health <= 0)
+                                    isDead = true;
 
                             }
                             else if (enemyRangers.ContainsKey(enemyId))
                             {
                                 enemyRangers[enemyId]._me._health -= damageR;
+                                if (enemyRangers[enemyId]._me._health <= 0)
+                                    isDead = true;
+                            }
+                            if (isDead)
+                            {
+                                DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
+                                enemiesById.Remove(enemyId);
                             }
                         }
                     }
@@ -3649,9 +3687,6 @@ namespace Aicup2020
                 }
 
             }
-
-
-
             #endregion
         }
         void OptimizeNearRangersMove(int distance)
@@ -3938,8 +3973,302 @@ namespace Aicup2020
                 }
             }
         }
+        void OptimizeSafeRangerAttack()
+        {
+            int damageR = properties[EntityType.RangedUnit].Attack.Value.Damage;
+            #region составляем список наших стрелков
+            Dictionary<int, List<EnemyToOpt>> myRangers = new Dictionary<int, List<EnemyToOpt>>();
+            EntityType enemyType = EntityType.BuilderUnit;
+            foreach (var en in entityMemories)
+            {
+                if (en.Value.myEntity.EntityType == EntityType.RangedUnit)
+                {
+                    if (en.Value.optimized == false)
+                    {
+                        int x = en.Value.myEntity.Position.X;
+                        int y = en.Value.myEntity.Position.Y;
+                        int value = potencTarget5Map[x, y][enemyType];
+                        if (value > 0)
+                            myRangers.Add(en.Key, new List<EnemyToOpt>());
+                    }
+                }
+            }
+            #endregion
+            #region составляем список врагов Строителей
+            Dictionary<int, EnemyToOpt> enemyBuilders = new Dictionary<int, EnemyToOpt>();
+            foreach (var en in enemiesById)
+            {
+                if (en.Value.EntityType == enemyType)
+                {
+                    // enemyRangersId.Add(en.Key);
+                    enemyBuilders.Add(en.Key, new EnemyToOpt(en.Key, en.Value.EntityType, en.Value.Health, en.Value.Position.X, en.Value.Position.Y));
+                }
+            }
+            #endregion
+
+            #region собираем пары всех кто на дистанции до 5 включительно
+            foreach (var my in myRangers)
+            {
+                int x1 = entityMemories[my.Key].myEntity.Position.X;
+                int y1 = entityMemories[my.Key].myEntity.Position.Y;
+
+                foreach (var en in enemyBuilders)
+                {
+                    int x2 = enemiesById[en.Key].Position.X;
+                    int y2 = enemiesById[en.Key].Position.Y;
+                    int dist = Abs(x1 - x2) + Abs(y1 - y2);
+                    if (dist <= 5)
+                    {
+                        my.Value.Add(en.Value);
+                        en.Value._me._dist = dist;
+                        en.Value.Add(new Target(my.Key, enemyType, entityMemories[my.Key].myEntity.Health, x1, y1, dist));
+                    }
+                }
+            }
+            #endregion
+            #region чистим списки кто остался с пустыми парами
+            List<int> deleteKeys = new List<int>();
+            foreach (var i in myRangers)
+            {
+                if (i.Value.Count == 0)
+                    deleteKeys.Add(i.Key);
+            }
+            foreach (var i in deleteKeys)
+            {
+                myRangers.Remove(i);
+            }
+            deleteKeys.Clear();
+            foreach (var i in enemyBuilders)
+            {
+                if (i.Value.Count == 0)
+                    deleteKeys.Add(i.Key);
+            }
+            foreach (var i in deleteKeys)
+            {
+                enemyBuilders.Remove(i);
+            }
+            #endregion
+
+            #region определяем действия тех, кто может стрелять только в одну цель
+            bool wasKilled;
+            do
+            {
+                wasKilled = false;
+                deleteKeys.Clear();
+                foreach (var i in myRangers)
+                {
+                    if (i.Value.Count == 1)
+                    {
+                        EnemyToOpt target = i.Value[0];
+
+                        if (target._me._health > 0)
+                        {
+                            // remove my ranger, he do that he can
+                            deleteKeys.Add(i.Key);
+                            // create order
+                            int x = entityMemories[i.Key].myEntity.Position.X;
+                            int y = entityMemories[i.Key].myEntity.Position.Y;
+                            nextPositionMyUnitsMap[x][y] = i.Key; // stop on position
+                            int enemyId = target._me._id;
+                            entityMemories[i.Key].OrderAttack(enemyId, null, true);
+                            // draw attack line
+                            if (debugOptions[(int)DebugOptions.drawOptAttack])
+                            {
+                                DrawLineOnce(
+                                    x + 0.3f,
+                                    y + 0.5f,
+                                    i.Value[0]._me._x + 0.3f,
+                                    i.Value[0]._me._y + 0.5f,
+                                    colorBlack,
+                                    colorBlack);
+                            }
+                            // damage health
+                            if (enemyBuilders.ContainsKey(enemyId))
+                            {
+                                enemyBuilders[enemyId]._me._health -= damageR;
+                                if (enemyBuilders[enemyId]._me._health <= 0)
+                                {
+                                    wasKilled = true;
+                                    if (enemiesById.ContainsKey(enemyId))
+                                    {
+                                        DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
+                                        enemiesById.Remove(enemyId);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                foreach (var i in deleteKeys) // убираем отстрелявшихся таких парней
+                {
+                    myRangers.Remove(i);
+                }                
+                if (wasKilled)//теперь вычеркиваем убитых и еще раз проверяем на наличие одной цели
+                {
+                    deleteKeys.Clear();
+                    foreach (var i in enemyBuilders)
+                    {
+                        if (i.Value._me._health <= 0)
+                        {
+                            deleteKeys.Add(i.Key);
+                            foreach (var k in i.Value._targetsMyUnitsById)
+                            {
+                                if (myRangers.ContainsKey(k.Key))
+                                {
+                                    if (myRangers[k.Key].Contains(i.Value))
+                                        myRangers[k.Key].Remove(i.Value);
+                                }
+                            }
+                        }
+                    }
+                    foreach (var id in deleteKeys)
+                    {
+                        enemyBuilders.Remove(id);
+                    }
+                }
+            } while (wasKilled == true);
+            #endregion
+
+            #region максимизируем количество убийств
+            //собираем первую группу
+            if (myRangers.Count > 0)
+            {
+                List<int> attackers = new List<int>();
+                List<int> targets = new List<int>();
+                var num = myRangers.GetEnumerator();
+                num.MoveNext();
+                attackers.Add(num.Current.Key); // добавляем первого из оставшихся стрелков и смотрим с кем он связан
+                bool wasAdded;
+                int a = 0;
+                int t = 0;
+                // собираем группу стрелков и целей, которые могут стрелять друг в друга
+                do
+                {
+                    wasAdded = false;
+                    for (; a < attackers.Count; a++)
+                    {
+                        foreach (var en in myRangers[attackers[a]])
+                        {
+                            if (targets.Contains(en._me._id) == false)
+                            {
+                                targets.Add(en._me._id);
+                                wasAdded = true;
+                            }
+                        }
+                    }
+                    for (; t < targets.Count; t++)
+                    {
+                        if (enemyBuilders.ContainsKey(targets[t]))
+                        {
+                            foreach (var me in enemyBuilders[targets[t]]._targetsMyUnitsById)
+                            {
+                                if (myRangers.ContainsKey(me.Key) == true && attackers.Contains(me.Key) == false)
+                                {
+                                    attackers.Add(me.Key);
+                                    wasAdded = true;
+                                }
+                            }
+                        }
+                    }
+                } while (wasAdded == true);
+                // получили группу
+                int sizeA = attackers.Count;
+                int sizeT = targets.Count;
+                bool[,] arrayPair = new bool[sizeA, sizeT];
+                for (int att = 0; att < sizeA; att++)
+                {
+                    for (int tar = 0; tar < sizeT; tar++)
+                    {
+                        arrayPair[att, tar] = false;
+                    }
+                }
+                for (int i = 0; i < attackers.Count; i++)
+                {
+                    foreach (var en in myRangers[attackers[i]])
+                    {
+                        arrayPair[i, targets.IndexOf(en._me._id)] = true;
+                    }
+                }
+                int[] targetsHealth = new int[sizeT];
+                for (int i = 0; i < sizeT; i++)
+                {
+                    targetsHealth[i] = System.Convert.ToInt32(System.Math.Ceiling(((float)enemyBuilders[targets[i]]._me._health) / ((float)damageR)));
+                }
+
+                // вариант 2 врагов больше
+                List<int[]> attackVariants;// = new List<int[]>();
+
+                attackVariants = CalcMaxKillFromArray(sizeA, sizeT, arrayPair, targetsHealth);
+
+                //отдаем приказы по любому варианту
+                if (attackVariants.Count > 0)
+                {
+                    int index = 0; // выбираем первый варинат
+                                   // исполняем вариант
+                    for (int kk = 0; kk < sizeA; kk++)
+                    {
+                        int enemyId = targets[attackVariants[index][kk]];
+
+                        int myUnitId = attackers[kk];
+                        int x = entityMemories[myUnitId].myEntity.Position.X;
+                        int y = entityMemories[myUnitId].myEntity.Position.Y;
+                        nextPositionMyUnitsMap[x][y] = myUnitId;
+                        entityMemories[myUnitId].OrderAttack(enemyId, null, true);
+                        if (debugOptions[(int)DebugOptions.drawOptAttack])
+                        {
+                            DrawLineOnce(
+                                x + 0.3f,
+                                y + 0.5f,
+                                enemiesById[enemyId].Position.X + 0.3f,
+                                enemiesById[enemyId].Position.Y + 0.5f,
+                                colorMagenta,
+                                colorMagenta);
+                        }                        
+                        enemyBuilders[enemyId]._me._health -= damageR;
+                        if (enemyBuilders[enemyId]._me._health <= 0)
+                        {
+                            DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
+                            enemiesById.Remove(enemyId);
+                        }
+                    }
+                }
+                else
+                {
+                    // очищаем список, так как ничего не придумалось
+                    ;
+                }
+                // очищаем список атаковавших
+                foreach (var id in attackers)
+                {
+                    myRangers.Remove(id);
+                }
+                // очищаем список врагов
+                deleteKeys.Clear();
+                foreach (var i in enemyBuilders)
+                {
+                    if (i.Value._me._health <= 0)
+                    {
+                        deleteKeys.Add(i.Key);
+                        foreach (var k in i.Value._targetsMyUnitsById)
+                        {
+                            if (myRangers.ContainsKey(k.Key))
+                            {
+                                if (myRangers[k.Key].Contains(i.Value))
+                                    myRangers[k.Key].Remove(i.Value);
+                            }
+                        }
+                    }
+                }
+                foreach (var id in deleteKeys)
+                {
+                    enemyBuilders.Remove(id);
+                }
+            }
+            #endregion
+        }
         void OptimizeWarriorsMove()
         {
+
 
         }
         #region Order statistics
