@@ -3635,16 +3635,7 @@ namespace Aicup2020
                             int y = entityMemories[myUnitId].myEntity.Position.Y;
                             nextPositionMyUnitsMap[x][y] = myUnitId;
                             entityMemories[myUnitId].OrderAttack(enemyId, null, true);
-                            if (debugOptions[(int)DebugOptions.drawOptAttack])
-                            {
-                                DrawLineOnce(
-                                    x + 0.3f,
-                                    y + 0.5f,
-                                    enemiesById[enemyId].Position.X + 0.3f,
-                                    enemiesById[enemyId].Position.Y + 0.5f,
-                                    colorMagenta,
-                                    colorMagenta);
-                            }
+                            
                             bool isDead = false;
                             if (enemyMelees.ContainsKey(enemyId))
                             {
@@ -3659,10 +3650,23 @@ namespace Aicup2020
                                 if (enemyRangers[enemyId]._me._health <= 0)
                                     isDead = true;
                             }
-                            if (isDead)
+                            if (enemiesById.ContainsKey(enemyId))
                             {
-                                DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
-                                enemiesById.Remove(enemyId);
+                                if (isDead)
+                                {
+                                    DrawCenterCellTextSafe(enemiesById[enemyId].Position.X, enemiesById[enemyId].Position.Y, colorRed, "X", 16, DebugOptions.drawPlanedKill);
+                                    enemiesById.Remove(enemyId);
+                                }
+                                if (debugOptions[(int)DebugOptions.drawOptAttack])
+                                {
+                                    DrawLineOnce(
+                                        x + 0.3f,
+                                        y + 0.5f,
+                                        enemiesById[enemyId].Position.X + 0.3f,
+                                        enemiesById[enemyId].Position.Y + 0.5f,
+                                        colorMagenta,
+                                        colorMagenta);
+                                }
                             }
                         }
                     }
