@@ -8,7 +8,7 @@ namespace Aicup2020
         Dictionary<int, EntityMemory> entityMemories = new Dictionary<int, EntityMemory>();
 
         #region Служебные переменные
-        EntityType[] entityTypesArray = { EntityType.BuilderUnit, EntityType.RangedUnit, EntityType.MeleeUnit,
+        static EntityType[] entityTypesArray = new EntityType[]{ EntityType.BuilderUnit, EntityType.RangedUnit, EntityType.MeleeUnit,
             EntityType.Turret, EntityType.House, EntityType.BuilderBase, EntityType.MeleeBase, EntityType.RangedBase, EntityType.Wall,
             EntityType.Resource };
 
@@ -44,7 +44,7 @@ namespace Aicup2020
             canDrawGetAction, drawBuildBarrierMap, drawBuildAndRepairOrder, drawBuildAndRepairPath, drawRetreat,
             drawOnceVisibleMap, drawRangedBasePotencPlace,
             drawInteresMap, drawMemoryResources, drawMemoryEnemies,
-            drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind,
+            drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind, drawPotencTarget5Map,
             drawOptAttack,
             drawOrderStatistics, drawDeadCellMap,
             canDrawDebugUpdate, allOptionsCount
@@ -53,7 +53,7 @@ namespace Aicup2020
 
         PlayerView _playerView;
         DebugInterface _debugInterface;
-        public IDictionary<EntityType, EntityProperties> properties;
+        static IDictionary<EntityType, EntityProperties> properties;
 
         System.Random random = new System.Random();
 
@@ -553,6 +553,157 @@ namespace Aicup2020
         }
         DeadEndMap deadEndMap;
 
+        class PotencTargetCell
+        {
+            int[] availableTargetTypes;
+            public bool CanAttackWarriors { get; private set; }
+            public bool CanAttackTurret { get; private set; }
+            public bool CanAttackBase { get; private set; }
+            public bool CanAttackHouse { get; private set; }
+            public bool CanAttackBuilder { get; private set; }
+            public bool CanAttackResource { get; private set; }
+            public bool CanAttackWall { get; private set; }
+
+            public PotencTargetCell()
+            {
+                availableTargetTypes = new int[entityTypesArray.Length];
+                Reset();
+            }
+            public void Reset()
+            {
+                for (int i = 0; i < availableTargetTypes.Length; i++)
+                {
+                    availableTargetTypes[i] = 0;
+                }
+                CanAttackBase = false;
+                CanAttackBuilder = false;
+                CanAttackHouse = false;
+                CanAttackResource = false;
+                CanAttackTurret = false;
+                CanAttackWall = false;
+                CanAttackWarriors = false;
+            }
+            public int this[EntityType type]
+            {
+                get {return availableTargetTypes[(int)type] ; }
+                set { availableTargetTypes[(int)type] = value; }
+            }
+            public void Check()
+            {
+                if (availableTargetTypes[(int)EntityType.BuilderBase] > 0
+                    || availableTargetTypes[(int)EntityType.RangedBase] > 0
+                    || availableTargetTypes[(int)EntityType.MeleeBase] > 0)
+                    CanAttackBase = true; // 3/10
+
+                if (availableTargetTypes[(int)EntityType.MeleeUnit] > 0
+                    || availableTargetTypes[(int)EntityType.RangedUnit] > 0)
+                    CanAttackWarriors = true; // 5/10
+
+                if (availableTargetTypes[(int)EntityType.Resource] > 0)
+                    CanAttackResource = true; // 6/10
+                if (availableTargetTypes[(int)EntityType.House] > 0)
+                    CanAttackHouse = true; // 7/10
+                if (availableTargetTypes[(int)EntityType.Turret] > 0)
+                    CanAttackTurret = true; // 8/10
+                if (availableTargetTypes[(int)EntityType.BuilderUnit] > 0)
+                    CanAttackBuilder = true; // 9/10
+                if (availableTargetTypes[(int)EntityType.Wall] > 0)
+                    CanAttackWall = true; // 10/10
+            }
+        }
+        class PotencTarget5Map
+        {
+            PotencTargetCell[,] _potencTargetMap;
+            int _mapSize;
+
+            public PotencTarget5Map(int mapS)
+            {
+                _mapSize = mapS;
+                _potencTargetMap = new PotencTargetCell[_mapSize, _mapSize];
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _potencTargetMap[x, y] = new PotencTargetCell();
+                    }
+                }
+            }
+            public PotencTargetCell this[int x, int y]
+            {
+                get
+                {
+                    if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                        return _potencTargetMap[x, y];
+                    else
+                        throw new System.Exception("Недопустимое значение индекса массива");
+                }
+            }
+
+            public void Reset()
+            {
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _potencTargetMap[x, y].Reset();
+                    }
+                }
+            }
+            public void Emit(int sx, int sy, EntityType entityType, int dist)
+            {
+                int size = properties[entityType].Size;
+                dist += 1; // начинаем отсчет от своей клетки
+                int sxRight = sx + size - 1;
+                int syUp = sy + size - 1;
+                for (int si = 0; si < size; si++)
+                {
+                    //my base
+                    for (int siy = 0; siy < size; siy++)
+                    {
+                        //SetSafe(sx + si, sy + siy, entityType);
+                    }
+
+                    //straight
+                    for (int di = 1; di < dist; di++)
+                    {
+                        IncrementSafe(sx - di, sy + si, entityType);// left
+                        IncrementSafe(sx + si, sy - di, entityType);// down
+                        IncrementSafe(sxRight + di, sy + si, entityType);// right
+                        IncrementSafe(sx + si, syUp + di, entityType);// up
+                    }
+                }
+                //diagonal
+                for (int aa = 1; aa < dist - 1; aa++)
+                {
+                    for (int bb = 1; bb < dist - aa; bb++)
+                    {
+                        IncrementSafe(sx - aa, sy - bb, entityType);//left-down
+                        IncrementSafe(sx - aa, syUp + bb, entityType);//left-up
+                        IncrementSafe(sxRight + aa, syUp + bb, entityType);//right-up
+                        IncrementSafe(sxRight + aa, sy - bb, entityType);//right-down
+                    }
+                }
+            }
+            public void IncrementSafe(int x, int y, EntityType entityType, int value = 1)
+            {
+                if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
+                {
+                    _potencTargetMap[x, y][entityType] += value;
+                }
+            }
+            public void CheckAll()
+            {
+                for (int x = 0; x < _mapSize; x++)
+                {
+                    for (int y = 0; y < _mapSize; y++)
+                    {
+                        _potencTargetMap[x, y].Check();
+                    }
+                }
+            }
+        }
+        PotencTarget5Map potencTarget5Map;
+
         struct EnemyDangerCell
         {
             public byte rangersWarning; // могут подойти в следующий ход
@@ -631,7 +782,7 @@ namespace Aicup2020
                     if (x >= 0 && x < _mapSize && y >= 0 && y < _mapSize)
                         return _potencAttackMap[x, y];
                     else
-                        return null;
+                        throw new System.Exception("Недопустимое значение индекса массива"); ;
                 }
             }
             public void Reset()
@@ -901,6 +1052,7 @@ namespace Aicup2020
             GenerateResourcePotentialField();
             GenerateBuildBarrierMap();
             GeneratePotencAttackMap();
+            GeneratePotencTargetMap();
             SelectRangedBasePotencPlace();
             UpdateInteresMap();
 
@@ -1023,7 +1175,10 @@ namespace Aicup2020
                 {
                     DrawDeadCellMap();
                 }
-                
+                if (debugOptions[(int)DebugOptions.drawPotencTarget5Map] == true)
+                {
+                    DrawPotencTarget5Map();
+                }
                 _debugInterface.Send(new DebugCommand.Flush());
             }
 
@@ -1050,6 +1205,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawPotencAttackAll] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackMove] = true;
             debugOptions[(int)DebugOptions.drawPotencAttackPathfind] = false;
+            debugOptions[(int)DebugOptions.drawPotencTarget5Map] = true;
             debugOptions[(int)DebugOptions.drawRangedBasePotencPlace] = true;
             debugOptions[(int)DebugOptions.drawOptAttack] = true;
 
@@ -1095,6 +1251,7 @@ namespace Aicup2020
             potencAttackMap = new PotencAttackMap(mapSize);
             buildBarrierMap = new BuildBarrierMap(mapSize);
             interesMap = new InteresMap(mapSize);
+            potencTarget5Map = new PotencTarget5Map(mapSize);
             #endregion
 
             if (!fogOfWar)
@@ -1108,14 +1265,6 @@ namespace Aicup2020
                     }
                 }
             }
-
-            //preSetHousePositions = new List<Vec2Int>();
-            //preSetHousePositions.Add(new Vec2Int(2, 2));
-            //preSetHousePositions.Add(new Vec2Int(5, 2));
-            //preSetHousePositions.Add(new Vec2Int(8, 2));
-            //preSetHousePositions.Add(new Vec2Int(2, 5));
-            //preSetHousePositions.Add(new Vec2Int(2, 8));
-
 
             //prepare current and previous entity counter
             foreach (var ent in entityTypesArray)
@@ -1925,6 +2074,71 @@ namespace Aicup2020
             }
             potencAttackMap.CalcMin();
         }
+        void GeneratePotencTargetMap()
+        {
+            potencTarget5Map.Reset();
+
+            foreach(var en in _playerView.Entities)
+            {
+                if (en.PlayerId == null) // resources
+                {
+                    potencTarget5Map.Emit(en.Position.X, en.Position.Y, EntityType.Resource, 5);
+
+                } else if (en.PlayerId != myId) // enemies
+                {
+                    switch (en.EntityType)
+                    {
+                        case EntityType.BuilderBase: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 5); break;
+                        case EntityType.BuilderUnit: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 5); break;
+                        case EntityType.House: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 2); break;
+                        case EntityType.MeleeBase: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 5); break;
+                        case EntityType.MeleeUnit: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 5); break;
+                        case EntityType.RangedBase: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 5); break;
+                        case EntityType.RangedUnit: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 5); break;
+                        case EntityType.Resource: break;
+                        case EntityType.Turret: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 5); break;
+                        case EntityType.Wall: potencTarget5Map.Emit(en.Position.X, en.Position.Y, en.EntityType, 1); break;
+
+                    }
+                }
+            }
+
+            potencTarget5Map.CheckAll();
+        }
+        void DrawPotencTarget5Map()
+        {
+            for (int x = 0; x < mapSize; x++)
+            {
+                for (int y = 0; y < mapSize; y++)
+                {
+                    int textSize = 16;
+                    if (potencTarget5Map[x, y].CanAttackWarriors == true)                    
+                        DrawCenterCellText(x, y, colorRed, "w", textSize);
+                    else if (potencTarget5Map[x, y].CanAttackTurret == true)
+                        DrawCenterCellText(x, y, colorRed, "t", textSize);
+                    else if (potencTarget5Map[x, y].CanAttackBuilder == true)
+                        DrawCenterCellText(x, y, colorBlue, "b", textSize);
+                    else if (potencTarget5Map[x, y].CanAttackBase == true)
+                        DrawCenterCellText(x, y, colorGreen, "S", textSize);
+                    else if (potencTarget5Map[x, y].CanAttackHouse == true)
+                        DrawCenterCellText(x, y, colorGreen, "H", textSize);
+                    else if (potencTarget5Map[x, y].CanAttackResource == true)
+                        DrawCenterCellText(x, y, colorWhite, "R", textSize);
+                    else if (potencTarget5Map[x, y].CanAttackWall == true)
+                        DrawCenterCellText(x, y, colorBlack, "H", textSize);
+                }
+            }
+        }
+        void DrawCenterCellText(int x, int y, Color color, string text, int textSize)
+        {
+            ColoredVertex position = new ColoredVertex(new Vec2Float(x + 0.5f, y + 0.2f), new Vec2Float(0, 0), color);            
+            _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(position, text, 0.5f, textSize)));
+        }
+        void DrawCenterCellText(int x, int y, Color color, int textInt, int textSize)
+        {
+            DrawCenterCellText(x, y, color, textInt.ToString(), textSize);
+        }
+
         void SelectRangedBasePotencPlace()
         {
             bool place1find = false; // место где уже можно ставить базу
@@ -3464,7 +3678,7 @@ namespace Aicup2020
             int WNextPosition = -7;
             int WDeniedUnit = -8;
             int WUnvisibleCell = -9;
-
+            
             const int IBuilding = 1;
             const int IResource = 2;
             const int IMovedUnit = 3;
@@ -3728,7 +3942,7 @@ namespace Aicup2020
         {
 
         }
-
+        #region Order statistics
         float drawOrderStatisticX;
         float drawOrderStatisticY;
         const float drawOrderStatisticStepX = 30f;
@@ -3925,6 +4139,7 @@ namespace Aicup2020
             other1 -= value1;
             other2 -= value2;
         }
+        #endregion
         void DrawDeadCellMap()
         {
             for (int x = 0; x < mapSize; x++)
@@ -5217,34 +5432,7 @@ namespace Aicup2020
 
             //actions.Add(id, new EntityAction(moveAction, null, null, null));
         }
-        //void OrderStartCreateBuilding(int id, Vec2Int posBuild, Vec2Int movePos, EntityType type)
-        //{
-        //    entityMemories[id].order = EntityOrders.buildNow;
-        //    entityMemories[id].movePos = movePos;// new Vec2Int(posBuild.X + properties[type].Size / 2, posBuild.Y + properties[type].Size);
-        //    entityMemories[id].moveBreakThrough = false;
-        //    entityMemories[id].moveFindClosestPosition = true;
-
-        //    entityMemories[id].targetEntityType = type;
-        //    entityMemories[id].targetPos = posBuild;     
-        //}
-        //void OrderRepairBuilding(int id, int targetId)
-        //{
-
-        //    entityMemories[id].order = EntityOrders.repairGo;
-        //    entityMemories[id].movePos = entityMemories[targetId].myEntity.Position;
-        //    entityMemories[id].moveBreakThrough = false;
-        //    entityMemories[id].moveFindClosestPosition = true;
-        //    entityMemories[id].targetId = targetId;
-
-        //    ////repair
-        //    //MoveAction moveAction = new MoveAction();
-        //    //moveAction.BreakThrough = false;
-        //    //moveAction.FindClosestPosition = true;
-        //    //moveAction.Target = entityMemories[targetId].myEntity.Position;
-
-        //    //RepairAction repairAction = new RepairAction(targetId);
-        //    //actions.Add(id, new EntityAction(moveAction, null, null, repairAction));                                
-        //}
+        
         void OrderRetreatBuilderFromEnemy(int id)
         {
             int ex = entityMemories[id].myEntity.Position.X;
@@ -5415,387 +5603,7 @@ namespace Aicup2020
 
             //actions.Add(id, new EntityAction(moveAction, null, attackAction, null));
         }
-
-        //int[,] FindPathMapForBuild(int sx, int sy, EntityType type)
-        //{
-        //    int[,] pathMap = new int[mapSize, mapSize];
-        //    bool canBuildHere = true;
-
-        //    int size = properties[type].Size;
-        //    int buildPoints = properties[type].MaxHealth;
-
-        //    //стартовое значение, которое будем уменьшать
-        //    int startWeight = mapSize * mapSize;
-        //    int minWeight = startWeight - buildPoints;
-        //    int WInside = 2;
-        //    int WBuilding = -1;
-        //    int WEnemy = -2;
-        //    int WResource = -3;
-        //    int WDanger = -10;
-
-        //    List<int> borderMansId = new List<int>();
-        //    //добавляем стартовые клетки поиска вокруг места строительства + юнитов на границе + отмечаем непроходимые клетки (здания, ресурсы, враги)
-        //    List<XYWeight> findCells = new List<XYWeight>();
-        //    for (int m = 0; m < size; m++)
-        //    {
-        //        for (int h = 0; h < 4; h++)
-        //        {
-        //            int fx = sx;
-        //            int fy = sy;
-        //            if (h == 0){
-        //                fx = sx + m;
-        //                fy = sy + size;
-        //            } else if (h == 1)
-        //            {
-        //                fx = sx + m;
-        //                fy = sy - 1;
-        //            } else if (h == 2)
-        //            {
-        //                fx = sx - 1;
-        //                fy = sy + m;
-        //            } else if (h == 3)
-        //            {
-        //                fx = sx + size;
-        //                fy = sy + m;
-        //            }
-        //            if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize) {
-        //                int id = cellWithIdAny[fx][fy];
-        //                if (id >= 0)
-        //                {
-        //                    if (entityMemories.ContainsKey(id))
-        //                    {
-        //                        if (properties[entityMemories[id].myEntity.EntityType].CanMove)// только юниты, здания здесь не нужны
-        //                        { 
-        //                            findCells.Add(new XYWeight(fx, fy, startWeight));
-        //                            pathMap[fx, fy] = startWeight;
-        //                            borderMansId.Add(id); // учитываем тех кто стоит на границе места строительства в том числе Могут быть войны
-        //                        } else
-        //                        {
-        //                            pathMap[fx, fy] = WBuilding;
-        //                        }
-        //                    } else if (enemiesById.ContainsKey(id))
-        //                    {
-        //                        pathMap[fx, fy] = WEnemy;
-        //                    } else
-        //                    {
-        //                        pathMap[fx, fy] = WResource;
-        //                    }       
-        //                } else
-        //                {
-        //                    findCells.Add(new XYWeight(fx, fy, startWeight));
-        //                    pathMap[fx, fy] = startWeight;
-        //                }
-        //            }
-        //        }
-        //    }
-
-        //    // определяем сколько юнитов нам мешают строить здание 
-        //    // это могут быть только строители - нельзя начинать строить там где стоят войны, 
-        //    // но они могут быть на границе с местом строительства
-        //    List<int> insidersId = new List<int>();
-        //    for (int cx = sx; cx < sx + size; cx++)
-        //    {
-        //        for ( int cy = sy; cy < sy+size; cy++)
-        //        {
-        //            pathMap[cx, cy] = WInside;
-        //            if (cellWithIdAny[cx][cy] >= 0)
-        //            { 
-        //                // учитываем тех кто стоит внутри места строительства, 
-        //                // !!!!!! считаем что войнов, зданий и врагов тут не может быть, по рпавилам выбора места строительства, только строители
-        //                insidersId.Add(cellWithIdAny[cx][cy]);
-        //            }
-        //        }
-        //    }
-
-        //    // объединяем стартовые ячейки в группы, у каждой группы соседей теперь должен быть одинаковый индекс (порядок номеров не важен, могут быть пропуски)
-        //    int lastIndex = 1; // 0 используется у пустых групп
-        //    for (int iter = 0; iter < findCells.Count; iter++)
-        //    {
-        //        int myIndex = findCells[iter].index;
-        //        if (myIndex == 0)
-        //        {
-        //            myIndex = lastIndex;
-        //            lastIndex++;
-        //        }
-
-        //        // ищем всех соседей и проверяем их индекс
-        //        int mx = findCells[iter].x;
-        //        int my = findCells[iter].y;
-        //        for (int i = iter + 1; i < findCells.Count; i++)
-        //        {
-        //            int dist = Abs(mx - findCells[i].x) + Abs(my - findCells[i].y);
-
-        //            if (dist == 1)// это мой сосед
-        //            {
-        //                if (findCells[i].index == 0)
-        //                {
-        //                    findCells[i].index = myIndex;
-        //                } else
-        //                {
-        //                    // это старший брат, надо взять его индекс себе и всем кому уже присвоили мой индекс
-        //                    int newIndex = findCells[i].index;
-        //                    for (int n = 0; n < findCells.Count; n++)
-        //                    {
-        //                        if (findCells[n].index == myIndex)
-        //                        {
-        //                            findCells[n].index = newIndex;
-        //                        }
-        //                    }
-        //                    myIndex = newIndex;
-        //                }
-        //            }
-        //        }
-        //    }         
-
-        //    // counter
-        //    int startCellCount = findCells.Count;
-        //    int startInsidersCount = insidersId.Count;
-        //    int startBorderMansCount = borderMansId.Count;
-        //    List<int> outsidersId = new List<int>();
-        //    if (startInsidersCount > 0) // надо выгонять внутренних парней
-        //    {
-        //        if (startInsidersCount + startBorderMansCount > startCellCount) // надо выталкивать людей наружу, им не хватает места внутри
-        //        {
-        //            // значит здесь строить нельзя
-        //            canBuildHere = false;
-        //            #region закомментированный код
-        //            //int diff = startInsidersCount + startBorderMansCount - startCellCount; //количество юнитов, которым не хватает места
-        //            //bool stop = false;
-        //            //int currentWeight = startWeight;
-        //            //// проводим расширение зоны поиска НАРУЖУ, пока не найдем достаточное количество клеток или не упремся в то что все не поместятся
-        //            //while(stop == false)
-        //            //{
-        //            //    for (int i = 0; i < findCells.Count; i++)
-        //            //    {
-        //            //        if (findCells[i].weight < currentWeight) // перешли к следующей группе удаленности от старта, надо провеирть хватает ли места
-        //            //        {
-        //            //            if (startInsidersCount + startBorderMansCount + outsidersId.Count >= i)
-        //            //            { // у нас достаточно клеток, чтобы вместить в себя всех
-        //            //                stop = true;
-        //            //                break;
-        //            //            } else
-        //            //            { // у нас недостаточно клеток, значит проводим новую волну поиска
-        //            //                currentWeight = findCells[i].weight;
-        //            //            }
-        //            //        } else // делаем поиск по соседям
-        //            //        {
-        //            //            int tx = findCells[i].x;
-        //            //            int ty = findCells[i].y;
-        //            //            int tw = findCells[i].weight;
-        //            //            int ti = findCells[i].index;
-
-        //            //            // проверяем есть ли в нас тут тот кого надо попросить подвинуться
-        //            //            if (tw != startWeight) // не проверяемстартовые клетки, тамошние учтены в bordersMansId
-        //            //            {
-        //            //                int hereId = cellWithIdAny[tx][ty];
-        //            //                if (hereId >= 0)
-        //            //                {
-        //            //                    if (entityMemories.ContainsKey(hereId))
-        //            //                    {
-        //            //                        if (properties[entityMemories[hereId].myEntity.EntityType].CanMove)
-        //            //                        {
-        //            //                            outsidersId.Add(hereId);
-        //            //                        }
-        //            //                    }
-        //            //                }
-        //            //            }
-
-        //            //            // проверяем соседние клетки
-        //            //            for (int jj = 0; jj < 4; jj++)
-        //            //            {
-        //            //                int nx = tx;
-        //            //                int ny = ty;
-        //            //                if (jj == 0) nx--;
-        //            //                if (jj == 1) ny--;
-        //            //                if (jj == 2) nx++;
-        //            //                if (jj == 3) ny++;
-
-        //            //                if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
-        //            //                {
-        //            //                    if (pathMap[nx,ny] == 0) // поиск наружу, поэтому в WInside мы не смотрим
-        //            //                    {
-        //            //                        bool canContinue = true;
-
-        //            //                        // проверка опасной зоны - не ищем в опасных клетках
-        //            //                        var dCell = enemyDangerCells[nx][ny];
-        //            //                        if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
-        //            //                        {
-        //            //                            canContinue = false;
-        //            //                            pathMap[nx, ny] = WDanger;
-        //            //                        }
-        //            //                        else if (dCell.meleesWarning + dCell.rangersWarning > 0)
-        //            //                        {
-        //            //                            canContinue = false;
-        //            //                            pathMap[nx, ny] = WDanger;
-        //            //                        }
-
-        //            //                        // проверка занятой клетки
-        //            //                        if (canContinue == true)
-        //            //                        {
-        //            //                            int id = cellWithIdAny[nx][ny];
-        //            //                            if (id >= 0)// occupied cell
-        //            //                            {
-        //            //                                if (entityMemories.ContainsKey(id))
-        //            //                                {
-        //            //                                    if (properties[ entityMemories[id].myEntity.EntityType].CanMove == true)// это юнит?
-        //            //                                    {
-        //            //                                        ; // все нормально клетку поиска добавят
-        //            //                                    }
-        //            //                                    else
-        //            //                                    {//is my building                                                            
-        //            //                                        canContinue = false;
-        //            //                                        pathMap[nx, ny] = WBuilding;
-        //            //                                    }
-        //            //                                }
-        //            //                                else if (enemiesById.ContainsKey(id)) // enemy 
-        //            //                                {
-        //            //                                    canContinue = false;
-        //            //                                    pathMap[nx, ny] = WEnemy;
-        //            //                                } else // resource
-        //            //                                {
-        //            //                                    canContinue = false;
-        //            //                                    pathMap[nx, ny] = WResource;
-        //            //                                }
-        //            //                            }
-        //            //                        }
-
-        //            //                        if (canContinue == true) // empty, safe cell or through free unit
-        //            //                        {
-        //            //                            //add weight and findCell
-        //            //                            if (tw > minWeight)
-        //            //                            {
-        //            //                                pathMap[nx, ny] = tw - 1;
-        //            //                                findCells.Add(new XYWeight(nx, ny, tw - 1, ti));
-        //            //                            }
-        //            //                        }
-        //            //                    }
-        //            //                    //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
-        //            //                }
-        //            //            }
-        //            //        }
-        //            //    }
-        //            //    if (stop == false)// мы проверили все клетки, последняя проверка и если клеток не хватает, то строить здесь нельзя.
-        //            //    {
-
-        //            //        needFindOutsiders = false;
-
-
-        //            //        stop = true;
-        //            //    }
-        //            //}
-        //            #endregion
-        //        }
-        //        else // места внутренним парням хватит
-        //        {
-
-
-        //        }
-        //    }
-
-        //    if (canBuildHere == true)
-        //    {
-        //        if (startInsidersCount + startBorderMansCount < startCellCount) // надо звать строителей снаружи на границу здания - если клеток не хватает, то нет смысла 
-        //        {
-        //            // на каждом новом парне считаем стоит ли продолжать дальше или найдено достаточно людей
-
-        //            // объединяем в группы стартовые ячейки
-
-        //            // ищем путь до строителей - надеемся что строители существуют=) - строим путь по карте воспоминаний, а не видимости
-
-
-        //        }
-        //    }
-
-
-
-
-        //    while (findCells.Count > 0)
-        //    {
-        //        int bx = findCells[0].x;
-        //        int by = findCells[0].y;
-        //        int w = findCells[0].weight;
-
-        //        for (int jj = 0; jj < 4; jj++)
-        //        {
-        //            int nx = bx;
-        //            int ny = by;
-        //            if (jj == 0) nx--;
-        //            if (jj == 1) ny--;
-        //            if (jj == 2) nx++;
-        //            if (jj == 3) ny++;
-
-        //            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize)
-        //            {
-        //                if (resourcePotentialField[nx][ny] == 0)
-        //                {
-        //                    bool canContinueField = true;
-
-        //                    // проверка опасной зоны
-        //                    var dCell = enemyDangerCells[nx][ny];
-        //                    if (dCell.meleesAim + dCell.rangersAim + dCell.turretsAim > 0)
-        //                    {
-        //                        canContinueField = false;
-        //                        resourcePotentialField[nx][ny] = RPFdangerCellWeight;
-        //                    }
-        //                    else if (dCell.meleesWarning + dCell.rangersWarning > 0)
-        //                    {
-        //                        canContinueField = false;
-        //                        resourcePotentialField[nx][ny] = RPFwarningCellWeight;
-        //                        //findCells.Add(new XYWeight(nx, ny, RPFwarningCellWeight));
-        //                    }
-
-        //                    // проверка занятой клетки
-        //                    if (canContinueField == true)
-        //                    {
-        //                        int id = cellWithIdAny[nx][ny];
-        //                        if (id >= 0)// occupied cell
-        //                        {
-        //                            if (entityMemories.ContainsKey(id))
-        //                            {
-        //                                if (entityMemories[id].myEntity.EntityType == EntityType.BuilderUnit)
-        //                                {
-        //                                    if (w == startWeight)//check my builder на соседней клетке с ресурсомs
-        //                                    {
-        //                                        canContinueField = false;
-        //                                        resourcePotentialField[nx][ny] = RPFdeniedBuilderWeight;
-        //                                    }
-        //                                }
-        //                                else
-        //                                {
-        //                                    if (properties[entityMemories[id].myEntity.EntityType].CanMove == false)//is my building
-        //                                    {
-        //                                        canContinueField = false;
-        //                                        resourcePotentialField[nx][ny] = RPFmyBuildingWeight;
-        //                                    }
-        //                                }
-        //                            }
-        //                            else // enemy 
-        //                            {
-        //                                if (enemiesById.ContainsKey(id))
-        //                                {
-        //                                    canContinueField = false;
-        //                                    resourcePotentialField[nx][ny] = RPFenemyEntityWeight;
-        //                                }
-        //                            }
-        //                        }
-        //                    }
-
-        //                    if (canContinueField == true) // empty, safe cell or through free unit
-        //                    {
-        //                        //add weight and findCell
-        //                        resourcePotentialField[nx][ny] = w - 1;
-        //                        if (w > minWeight)
-        //                            findCells.Add(new XYWeight(nx, ny, w - 1));
-        //                    }
-        //                }
-        //                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
-        //            }
-        //        }
-        //        //findCells.RemoveAt(0);
-        //    }
-
-        //    return pathMap;
-        //}
+               
         bool[] FindAvailableTargetType(int sx, int sy, int size, int range)
         {
             bool[] availableType = new bool[entityTypesArray.Length];
@@ -6758,61 +6566,6 @@ namespace Aicup2020
             return false;
         }
 
-        //void TrySelectFreeBuilderForBuild(EntityType buildingType)
-        //{
-        //    int buildingSize = properties[buildingType].Size;
-        //    foreach(var id in basicEntityIdGroups[EntityType.BuilderUnit].members)
-        //    {
-        //        Vec2Int pos = entityMemories[id].myEntity.Position;
-        //        bool posFinded = false;
-
-        //        //left 
-        //        int x = pos.X - buildingSize;
-        //        int y = pos.Y;
-        //        if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
-        //        {
-        //            posFinded = true;
-        //        }
-        //        else
-        //        {
-        //            //down
-        //            x = pos.X;
-        //            y = pos.Y - buildingSize;
-        //            if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
-        //            {
-        //                posFinded = true;
-        //            }
-        //            else
-        //            {
-        //                //right
-        //                x = pos.X+1;
-        //                y = pos.Y;
-        //                if (TryFindSpawnPlace(ref x, ref y, buildingSize, false))
-        //                {
-        //                    posFinded = true;
-        //                }
-        //                else
-        //                {
-        //                    //up
-        //                    x = pos.X;
-        //                    y = pos.Y + 1;
-        //                    if (TryFindSpawnPlace(ref x, ref y, buildingSize, true))
-        //                    {
-        //                        posFinded = true;
-        //                    }
-        //                }
-        //            }
-        //        }
-        //        if (posFinded)
-        //        {
-        //            entityMemories[id].SetGroup(groupHouseBuilders);                    
-        //            entityMemories[id].SetTargetPos(new Vec2Int(x, y));
-        //            entityMemories[id].SetMovePos(entityMemories[id].myEntity.Position);
-        //            entityMemories[id].SetTargetEntityType(EntityType.House);
-        //            break;
-        //        }
-        //    }
-        //}
         void CountNumberOfEntitiesAndMap()
         {            
             //clear map
