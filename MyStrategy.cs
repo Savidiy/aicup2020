@@ -1225,7 +1225,7 @@ namespace Aicup2020
             #region draw debug settings
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
-            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
+            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = true;
             debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
             debugOptions[(int)DebugOptions.drawInteresMap] = false;
             debugOptions[(int)DebugOptions.drawMemoryResources] = false;
@@ -1785,7 +1785,12 @@ namespace Aicup2020
                 for (int i = 0; i <= size; i++)
                 {
                     buildBarrierMap.BlockCell(sx + size, sy + i, BuildBarrierMap.BlockVariant.MyBuilding); // right
-                    buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up                  
+                    buildBarrierMap.BlockCell(sx + i, sy + size, BuildBarrierMap.BlockVariant.MyBuilding); // up    
+                }
+                for (int i = 0; i <= size; i++)
+                {
+                    buildBarrierMap[sx + size, sy + i].s5noBaseOrWarriorBarrier = true;                        
+                    buildBarrierMap[sx + i, sy + size].s5noBaseOrWarriorBarrier = true;
                 }
             }
             entityType = EntityType.RangedBase;
@@ -1919,6 +1924,7 @@ namespace Aicup2020
                 buildBarrierMap[i, 0].s5noBaseOrWarriorBarrier = false;
             }
             #endregion
+
 
             #region uncheck fog of war
             if (fogOfWar)
@@ -2206,7 +2212,7 @@ namespace Aicup2020
             if (basicEntityIdGroups[EntityType.RangedBase].members.Count == 0)
             {
                 int buildingSize = properties[EntityType.RangedBase].Size;
-                int place2radius = 15;
+                int place2radius = 20;
                 int minCountResources = 25;
 
                 int sx = 15;
@@ -2237,6 +2243,9 @@ namespace Aicup2020
                         {
                             if (onceVisibleMap[nx][ny] > 0)
                             {
+                                if (nx == 6 && ny == 10)
+                                    ;
+
                                 if (buildBarrierMap[nx, ny].s5noBaseOrWarriorBarrier == true
                                     && buildBarrierMap[nx, ny].s5noEnemiesBarrier == true
                                     && buildBarrierMap[nx, ny].s5noUnvisivleBarrier == true)
@@ -2247,6 +2256,7 @@ namespace Aicup2020
                                         place2find = true;
                                         rangedBasePotencPlace2 = new Vec2Int(nx, ny);
                                     }
+                                    DrawCenterCellTextSafe(nx, ny, colorGreen, "+", 16, DebugOptions.drawRangedBasePotencPlace);
                                 }
                             }
                         }
