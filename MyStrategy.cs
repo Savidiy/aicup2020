@@ -2610,40 +2610,42 @@ namespace Aicup2020
             bool needMakeRangedBase = false;
             if (basicEntityIdGroups[EntityType.RangedBase].members.Count == 0)
             {
-
-                int maxEnemyResources = 0;
-                foreach (var pl in _playerView.Players)
+                if (currentMyEntityCount[EntityType.House] > 4)
                 {
-                    if (pl.Id != myId)
+                    int maxEnemyResources = 0;
+                    foreach (var pl in _playerView.Players)
                     {
-                        if (pl.Resource > maxEnemyResources)
+                        if (pl.Id != myId)
                         {
-                            maxEnemyResources = pl.Resource;
-                        }
-                    }
-                }
-                if (maxEnemyResources > 300)
-                {
-                    opponentHasResourcesForRangersBase = true;
-                }
-
-                if (_playerView.CurrentTick > 200 || opponentHasResourcesForRangersBase && _playerView.CurrentTick > 150)
-                {
-                    for (int x = 0; x < mapSize; x++)
-                    {
-                        for (int y = 0; y < mapSize; y++)
-                        {
-                            if (buildBarrierMap[x, y].CanBuildAfter(5))
+                            if (pl.Resource > maxEnemyResources)
                             {
-                                desires.Add(DesireType.WantCreateRangerBase);
-                                needMakeRangedBase = true;
-                                break;
+                                maxEnemyResources = pl.Resource;
                             }
                         }
-                        if (needMakeRangedBase == true)
-                            break;
+                    }
+                    if (maxEnemyResources > 300)
+                    {
+                        opponentHasResourcesForRangersBase = true;
                     }
 
+                    if (_playerView.CurrentTick > 200 || opponentHasResourcesForRangersBase && _playerView.CurrentTick > 150)
+                    {
+                        for (int x = 0; x < mapSize; x++)
+                        {
+                            for (int y = 0; y < mapSize; y++)
+                            {
+                                if (buildBarrierMap[x, y].CanBuildAfter(5))
+                                {
+                                    desires.Add(DesireType.WantCreateRangerBase);
+                                    needMakeRangedBase = true;
+                                    break;
+                                }
+                            }
+                            if (needMakeRangedBase == true)
+                                break;
+                        }
+
+                    }
                 }
             }
             else
@@ -2754,8 +2756,9 @@ namespace Aicup2020
 
             if (myResources > buildTurretThenResourcesOver)
             {
-                if (basicEntityIdGroups[EntityType.House].members.Count > basicEntityIdGroups[EntityType.Turret].members.Count)
-                    desires.Add(DesireType.WantCreateTurret);
+                if (populationUsing > 30)
+                    if (basicEntityIdGroups[EntityType.House].members.Count > basicEntityIdGroups[EntityType.Turret].members.Count)
+                        desires.Add(DesireType.WantCreateTurret);
             }
 
             #endregion
@@ -6720,6 +6723,10 @@ namespace Aicup2020
                     by = rangedBasePotencPlace2.Y;
                     if (x >= bx - 1 - buildingSize && x < bx + 6 && y >= by - 1 - buildingSize && y < by + 6)
                         blocked = true;
+
+                    if (CheckNewBuildRouteBlock(x, y, buildingSize))
+                        blocked = true;
+
                     if (blocked == false)
                     {
                         // есть ли рядом строители?
@@ -6806,6 +6813,19 @@ namespace Aicup2020
                 return defaultValue;
             }
         }
+
+        /// <summary>
+        /// Если мы построим здесь здание, то сможем дойти до него от базы? Или оно заблокирует дорогу
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="buildingSize"></param>
+        /// <returns>true если путь будет заблокирован</returns>
+        bool CheckNewBuildRouteBlock(int x, int y, int buildingSize)
+        {
+            return false;
+        }
+
 
         Vec2Int FindPositionForRangedBase()
         {
