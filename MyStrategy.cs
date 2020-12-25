@@ -1912,6 +1912,14 @@ namespace Aicup2020
             }
             #endregion
 
+            #region блокировать строительство базы рейнджеров в левом углу
+            for (int i = 0; i < 12; i++)
+            {
+                buildBarrierMap[0, i].s5noBaseOrWarriorBarrier = false;
+                buildBarrierMap[i, 0].s5noBaseOrWarriorBarrier = false;
+            }
+            #endregion
+
             #region uncheck fog of war
             if (fogOfWar)
             {
