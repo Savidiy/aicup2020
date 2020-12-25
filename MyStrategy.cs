@@ -3249,6 +3249,8 @@ namespace Aicup2020
             DrawOrderStatistic("BldNew");
             OptimizeOrderToRepairOld(); // ремонтируем старые здания
             DrawOrderStatistic("RepOld");
+            OptAttackBlindRangers(); // атакуем сквозь ресурсы теми рейнджерами, кто не получил приказа
+            DrawOrderStatistic("MvAtRng");
 
         }
 
@@ -4788,10 +4790,10 @@ namespace Aicup2020
         const float drawOrderStatisticStartY = 90f;
         EntityOrders[] debugBuilderOrdersArray = new EntityOrders[] {
             EntityOrders.buildNow, EntityOrders.buildGo, EntityOrders.repairGo, EntityOrders.tryRetreat, EntityOrders.canRetreat,
-            EntityOrders.attack, EntityOrders.attackAndMove, EntityOrders.collect, EntityOrders.move, EntityOrders.pushed };
+            EntityOrders.attack, EntityOrders.moveAndAttack, EntityOrders.collect, EntityOrders.move, EntityOrders.pushed };
         EntityOrders[] debugRangerOrdersArray = new EntityOrders[] {
             EntityOrders.none, EntityOrders.tryRetreat, EntityOrders.canRetreat,
-            EntityOrders.attack, EntityOrders.attackAndMove, EntityOrders.collect, EntityOrders.move, EntityOrders.pushed };
+            EntityOrders.attack, EntityOrders.moveAndAttack, EntityOrders.collect, EntityOrders.move, EntityOrders.pushed };
         void DrawOrderStatisticInit()
         {
             if (debugOptions[(int)DebugOptions.canDrawGetAction] == true && debugOptions[(int)DebugOptions.drawOrderStatistics] == true)
@@ -4810,7 +4812,7 @@ namespace Aicup2020
                     switch (ord)
                     {
                         case EntityOrders.attack: text = "At"; break;
-                        case EntityOrders.attackAndMove: text = "AtMv"; break;
+                        case EntityOrders.moveAndAttack: text = "AtMv"; break;
                         case EntityOrders.buildGo: text = "bldG"; break;
                         case EntityOrders.buildNow: text = "bldN"; break;
                         case EntityOrders.cancelAll: text = "cAll"; break;
@@ -4839,7 +4841,7 @@ namespace Aicup2020
                     switch (ord)
                     {
                         case EntityOrders.attack: text = "At"; break;
-                        case EntityOrders.attackAndMove: text = "AtMv"; break;
+                        case EntityOrders.moveAndAttack: text = "AtMv"; break;
                         case EntityOrders.buildGo: text = "bldG"; break;
                         case EntityOrders.buildNow: text = "bldN"; break;
                         case EntityOrders.cancelAll: text = "cAll"; break;
@@ -5559,6 +5561,24 @@ namespace Aicup2020
                 }
             }
         }
+        void OptAttackBlindRangers()
+        {
+            foreach(var en in entityMemories)
+            {
+                if (en.Value.optimized == false && en.Value.myEntity.EntityType == EntityType.RangedUnit)
+                {
+                    en.Value.OrderMoveAndAttack(
+                        FindNearestEnemy(en.Value.myEntity.Position.X, en.Value.myEntity.Position.Y),
+                        true,
+                        true,
+                        null,
+                        new AutoAttack(properties[en.Value.myEntity.EntityType].SightRange, new EntityType[] { }),
+                        true
+                        );                        
+                }
+            }
+        }
+
         bool FindBuildersToBuildOrRepair(Intention intention)
         {
             bool deleteIntention = false;
@@ -6171,7 +6191,7 @@ namespace Aicup2020
                         attackAction.AutoAttack = em.Value.autoAttack;
                         actions.Add(em.Key, new EntityAction(null, null, attackAction, null));
                         break;
-                    case EntityOrders.attackAndMove:
+                    case EntityOrders.moveAndAttack:
                         moveAction.BreakThrough = em.Value.moveBreakThrough;
                         moveAction.FindClosestPosition = em.Value.moveFindClosestPosition;
                         moveAction.Target = em.Value.movePos;
@@ -6426,7 +6446,7 @@ namespace Aicup2020
         void OrderAttackNearbyEnemy(int id, EntityType[] entityTypes)
         {
 
-            entityMemories[id].order = EntityOrders.attackAndMove;
+            entityMemories[id].order = EntityOrders.moveAndAttack;
             entityMemories[id].moveBreakThrough = true;
             entityMemories[id].moveFindClosestPosition = true;
             entityMemories[id].movePos = FindNearestEnemy(entityMemories[id].myEntity.Position.X, entityMemories[id].myEntity.Position.Y);
@@ -6561,7 +6581,7 @@ namespace Aicup2020
                     switch (en.Value.prevOrder)
                     {
                         case EntityOrders.attack:
-                        case EntityOrders.attackAndMove:
+                        case EntityOrders.moveAndAttack:
                         case EntityOrders.buildNow:
                         case EntityOrders.repairGo:
                         case EntityOrders.tryRetreat:
@@ -7767,7 +7787,7 @@ namespace Aicup2020
 
     }
     
-    enum EntityOrders { none, spawnUnit, buildNow, buildGo, repairGo, pushed, tryRetreat, canRetreat, attack, attackAndMove, collect, move, cancelAll }
+    enum EntityOrders { none, spawnUnit, buildNow, buildGo, repairGo, pushed, tryRetreat, canRetreat, attack, moveAndAttack, collect, move, cancelAll }
     class EntityMemory
     {
         public Group group { get; private set; }
@@ -7852,6 +7872,18 @@ namespace Aicup2020
         public void OrderAttack(int? tarId, AutoAttack? autoAt, bool opt)
         {
             order = EntityOrders.attack;
+            targetId = tarId;
+            autoAttack = autoAt;
+            optimized = opt;
+        }
+        public void OrderMoveAndAttack(Vec2Int moveP, bool breakThrough, bool findClosestPosition, int? tarId, AutoAttack? autoAt, bool opt)
+        {
+            order = EntityOrders.moveAndAttack;
+
+            movePos = moveP;
+            moveBreakThrough = breakThrough;
+            moveFindClosestPosition = findClosestPosition;
+
             targetId = tarId;
             autoAttack = autoAt;
             optimized = opt;
