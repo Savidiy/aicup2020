@@ -2206,7 +2206,7 @@ namespace Aicup2020
             if (basicEntityIdGroups[EntityType.RangedBase].members.Count == 0)
             {
                 int buildingSize = properties[EntityType.RangedBase].Size;
-                int place2radius = 7;
+                int place2radius = 15;
                 int minCountResources = 25;
 
                 int sx = 15;
