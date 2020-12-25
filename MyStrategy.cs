@@ -6717,14 +6717,11 @@ namespace Aicup2020
                     bool blocked = false;
                     int bx = rangedBasePotencPlace1.X;
                     int by = rangedBasePotencPlace1.Y;
-                    if (x >= bx - 1 - buildingSize && x < bx + 6 && y >= by - 1 - buildingSize && y < by + 6)
+                    if (x >= bx - buildingSize && x < bx + 6 && y >= by - buildingSize && y < by + 6)
                         blocked = true;
                     bx = rangedBasePotencPlace2.X;
                     by = rangedBasePotencPlace2.Y;
-                    if (x >= bx - 1 - buildingSize && x < bx + 6 && y >= by - 1 - buildingSize && y < by + 6)
-                        blocked = true;
-
-                    if (CheckNewBuildRouteBlock(x, y, buildingSize))
+                    if (x >= bx - buildingSize && x < bx + 6 && y >= by - buildingSize && y < by + 6)
                         blocked = true;
 
                     if (blocked == false)
@@ -6746,18 +6743,21 @@ namespace Aicup2020
 
                         if (dist > findDistToBuilder)
                         {
-                            findX = x;
-                            findY = y;
-                            findDistToBuilder = dist;
-                            if (dist == startWeight) // на соседней клетке строитель
+                            if (CheckNewBuildRouteBlock(x, y, buildingSize) == false)
                             {
-                                break; // можно не искать дальше
-                            }
-                            else
-                            {
-                                int newValue = line + startWeight - dist + buildingSize; // ограничиваем поиск за крайем карты
-                                if (newValue < maxLine)
-                                    maxLine = newValue; // ищем еще несколько линий и хватит
+                                findX = x;
+                                findY = y;
+                                findDistToBuilder = dist;
+                                if (dist == startWeight) // на соседней клетке строитель
+                                {
+                                    break; // можно не искать дальше
+                                }
+                                else
+                                {
+                                    int newValue = line + startWeight - dist + buildingSize; // ограничиваем поиск за крайем карты
+                                    if (newValue < maxLine)
+                                        maxLine = newValue; // ищем еще несколько линий и хватит
+                                }
                             }
                         }
                     }
@@ -6823,6 +6823,8 @@ namespace Aicup2020
         /// <returns>true если путь будет заблокирован</returns>
         bool CheckNewBuildRouteBlock(int x, int y, int buildingSize)
         {
+
+
             return false;
         }
 
