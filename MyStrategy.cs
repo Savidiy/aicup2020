@@ -46,8 +46,8 @@ namespace Aicup2020
             drawInteresMap, drawMemoryResources, drawMemoryEnemies,
             drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind, drawPotencTarget5Map,
             drawOptAttack, drawPlanedKill, drawOptRangerMove, drawOptRangerPathfind,
-            drawOrderStatistics, drawDeadCellMap,
-            drawDeadStatistic,
+            drawOrderStatistics, drawDeadCellMap, drawBuildBlockPathMap,
+            drawDeadStatistic, 
             canDrawDebugUpdate, allOptionsCount
         }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
@@ -1236,6 +1236,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawOptRangerMove] = true;
             debugOptions[(int)DebugOptions.drawOptRangerPathfind] = false;
             debugOptions[(int)DebugOptions.drawDeadStatistic] = true;
+            debugOptions[(int)DebugOptions.drawBuildBlockPathMap] = true;
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
@@ -6821,11 +6822,216 @@ namespace Aicup2020
         /// <param name="y"></param>
         /// <param name="buildingSize"></param>
         /// <returns>true если путь будет заблокирован</returns>
-        bool CheckNewBuildRouteBlock(int x, int y, int buildingSize)
+        bool CheckNewBuildRouteBlock(int sx, int sy, int buildingSize)
         {
+            EntityType baseType = EntityType.BuilderBase;
+            if (basicEntityIdGroups[baseType].members.Count > 0)
+            {
+                int baseId = basicEntityIdGroups[baseType].members[0];
+                int baseSize = properties[baseType].Size;
+                var mem = entityMemories[baseId];
+                if (mem.myEntity.Active)
+                {
+                    #region стартовые значения
+                    CellWI[,] pathMap = new CellWI[mapSize, mapSize];
+                    for (int x = 0; x < mapSize; x++)
+                    {
+                        for (int y = 0; y < mapSize; y++)
+                        {
+                            pathMap[x, y] = new CellWI();
+                        }
+                    }
 
+                    //стартовое значение, которое будем уменьшать
+                    int startWeight = mapSize * mapSize;
+                    //int minWeight = startWeight - maxHealth;
+                    //int WInside = -1;
+                    int WBuilding = -2;
+                    //int WEnemy = -3;
+                    //int WResource = -4;
+                    //int WDanger = -5;
+                    //int WWarrior = -6;
+                    //int WNextPosition = -7;
+                    //int WDeniedBuilder = -8;
+                    int WUnvisibleCell = -9;
+                    int Wtarget = -10;
+                    #endregion
 
-            return false;
+                    #region определяем стартовые клетки                   
+                    List<XYWeight> findCells = new List<XYWeight>();
+                    int bx = mem.myEntity.Position.X;
+                    int by = mem.myEntity.Position.Y;
+                    for (int m = 1; m < baseSize; m++)
+                    {
+                        int fx;
+                        int fy;
+                        fx = bx + m;
+                        fy = by;
+                        findCells.Add(new XYWeight(fx, fy, startWeight));
+                        pathMap[fx, fy].weight = startWeight;
+                        fx = bx;
+                        fy = by + baseSize - m - 1;
+                        findCells.Add(new XYWeight(fx, fy, startWeight));
+                        pathMap[fx, fy].weight = startWeight;
+                        fx = bx + m - 1;
+                        fy = by + baseSize - 1;
+                        findCells.Add(new XYWeight(fx, fy, startWeight));
+                        pathMap[fx, fy].weight = startWeight;
+                        fx = bx + baseSize- 1;
+                        fy = by + m;
+                        findCells.Add(new XYWeight(fx, fy, startWeight));
+                        pathMap[fx, fy].weight = startWeight;
+                    }
+                    #endregion
+
+                    #region определяем целевые клетки
+                    List<XYWeight> targetCells = new List<XYWeight>();
+                    for (int m = 0; m < buildingSize; m++)
+                    {
+                        int fx = 0;
+                        int fy = 0;
+                        for (int k = 0; k < 4; k++)
+                        {
+                            if (k == 0)
+                            {
+                                fx = sx + m;
+                                fy = sy - 1;
+                            }
+                            else if (k == 1)
+                            {
+                                fx = sx - 1;
+                                fy = sy + m;
+                            }
+                            else if (k == 2)
+                            {
+                                fx = sx + m;
+                                fy = sy + buildingSize;
+                            }
+                            else if (k == 3)
+                            {
+                                fx = sx + buildingSize;
+                                fy = sy + m;
+                            }
+
+                            if (fx >= 0 && fx < mapSize && fy >= 0 && fy < mapSize)
+                            {
+                                if (cellWithIdOnlyBuilding[fx][fy] <= 0)
+                                {
+                                    targetCells.Add(new XYWeight(fx, fy, Wtarget));
+                                    pathMap[fx, fy].weight = Wtarget;
+                                }
+                            }
+                        }
+                    }
+                    #endregion
+
+                    #region блокируем клетки где будет располагаться здание
+                    for (int dx = 0; dx < buildingSize; dx ++ )
+                    {
+                        for (int dy = 0; dy < buildingSize; dy++)
+                        {
+                            pathMap[sx + dx, sy + dy].weight = WBuilding;
+                        }
+                    }
+                    #endregion
+
+                    // начинаем искать путь к целевым клеткам
+                    int numberFindedTarget = 0;
+                    for (int iter = 0; iter < findCells.Count; iter++)
+                    {
+                        int fx = findCells[iter].x;
+                        int fy = findCells[iter].y;
+                        int fw = findCells[iter].weight;
+                        //int fi = findCells[iter].index;
+
+                        for (int jj = 0; jj < 4; jj++)
+                        {
+                            int nx = fx;
+                            int ny = fy;
+                            if (jj == 0) nx--;
+                            if (jj == 1) ny--;
+                            if (jj == 2) nx++;
+                            if (jj == 3) ny++;
+
+                            if (nx >= 0 && nx < mapSize && ny >= 0 && ny < mapSize) // все в границах карты
+                            {
+                                bool canContinue = true;
+                                if (pathMap[nx, ny].weight == Wtarget)
+                                {
+                                    numberFindedTarget++;
+                                    if (numberFindedTarget >= targetCells.Count)
+                                    {
+                                        return false;
+                                    }
+                                }
+                                else if (pathMap[nx, ny].weight == 0)
+                                {
+                                    if (onceVisibleMap[nx][ny] == 0)
+                                    {
+                                        canContinue = false;
+                                        pathMap[nx, ny].weight = WUnvisibleCell;
+                                    }
+
+                                    if (canContinue == true)
+                                    {
+                                        int id = cellWithIdOnlyBuilding[nx][ny];
+                                        if (id >= 0)// occupied cell
+                                        {
+                                            canContinue = false;
+                                            pathMap[nx, ny].weight = WBuilding;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    canContinue = false;
+                                }
+
+                                if (canContinue == true) // empty, safe cell or through free unit
+                                {
+                                    //add weight and findCell
+                                    pathMap[nx, ny].weight = fw - 1;                                    
+                                    findCells.Add(new XYWeight(nx, ny, fw - 1));
+
+                                    //if (debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
+                                    //{
+                                    //    DrawLineOnce(nx + 0.5f, ny + 0.5f, fx + 0.5f, fy + 0.5f, colorMagenta, colorMagenta);
+                                    //}
+                                }
+                                //можем не проверять уже занятые клетки, так как у нас волны распространяются по очереди 1-2-3-4 и т.д.
+                            }
+                        }
+                        //if (debugOptions[(int)DebugOptions.canDrawGetAction] && debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
+                        //{
+                        //    _debugInterface.Send(new DebugCommand.Flush());
+                        //}
+                    }
+
+                    if (debugOptions[(int)DebugOptions.canDrawGetAction] = true && debugOptions[(int)DebugOptions.drawBuildBlockPathMap] == true)
+                    {
+                        _debugInterface.Send(new DebugCommand.Clear());
+
+                        int textSize = 16;
+                        for (int x = 0; x < mapSize; x++)
+                        {
+                            for (int y = 0; y < mapSize; y++)
+                            {
+                                int w = pathMap[x, y].weight;
+                                if (w == WBuilding) DrawCenterCellText(x, y, colorBlack, "B", textSize);
+                                else if (w == WUnvisibleCell) DrawCenterCellText(x, y, colorBlack, "U", textSize);
+                                else if (w == Wtarget) DrawCenterCellText(x, y, colorGreen, "T", textSize);
+                                else if(w != 0)
+                                {
+                                    DrawCenterCellText(x, y, colorRed, startWeight - w, textSize);
+                                }
+                            }
+                        }
+                        _debugInterface.Send(new DebugCommand.Flush());
+                        ;
+                    }
+                }
+            }
+            return true;
         }
 
 
