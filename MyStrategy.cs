@@ -944,17 +944,17 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
             debugOptions[(int)DebugOptions.drawInteresMap] = false;
             debugOptions[(int)DebugOptions.drawMemoryResources] = false;
-            debugOptions[(int)DebugOptions.drawMemoryEnemies] = true;
+            debugOptions[(int)DebugOptions.drawMemoryEnemies] = false;
             debugOptions[(int)DebugOptions.drawDeadStatistic] = true;
 
-            debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
+            debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = false;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackOverMy] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackAll] = false;
-            debugOptions[(int)DebugOptions.drawPotencAttackMove] = true;
+            debugOptions[(int)DebugOptions.drawPotencAttackMove] = false;
             debugOptions[(int)DebugOptions.drawPotencAttackPathfind] = false;
-            debugOptions[(int)DebugOptions.drawRangedBasePotencPlace] = true;
-            debugOptions[(int)DebugOptions.drawOptAttack] = true;
+            debugOptions[(int)DebugOptions.drawRangedBasePotencPlace] = false;
+            debugOptions[(int)DebugOptions.drawOptAttack] = false;
 
             debugOptions[(int)DebugOptions.canDrawDebugUpdate] = false;
 
