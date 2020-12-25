@@ -741,7 +741,7 @@ namespace Aicup2020
                 {
                     case EntityType.BuilderBase: return 5; 
                     case EntityType.BuilderUnit: return 5; 
-                    case EntityType.House: return 2; 
+                    case EntityType.House: return 4; 
                     case EntityType.MeleeBase: return 5; 
                     case EntityType.MeleeUnit: return 5; 
                     case EntityType.RangedBase: return 5; 
