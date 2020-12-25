@@ -46,6 +46,7 @@ namespace Aicup2020
             drawInteresMap, drawMemoryResources, drawMemoryEnemies,
             drawPotencAttackOverMy, drawPotencAttackAll, drawPotencAttackMove, drawPotencAttackPathfind,
             drawOptAttack,
+            drawDeadStatistic,
             canDrawDebugUpdate, allOptionsCount
         }
         bool[] debugOptions = new bool[(int)DebugOptions.allOptionsCount];
@@ -659,6 +660,9 @@ namespace Aicup2020
         bool opponentHasResourcesForRangersBase = false;
         bool isFinal = false;
 
+        int myDeadBuilders = 0;
+        int myDeadRangers = 0;
+        int myDeadMelees = 0;
         int myResources;
         int myScore;
         int myId;
@@ -920,6 +924,10 @@ namespace Aicup2020
                 {
                     DrawMemoryResources();
                 }
+                if (debugOptions[(int)DebugOptions.drawDeadStatistic] == true)
+                {
+                    DrawDeadStatistic();
+                }
                 
                 _debugInterface.Send(new DebugCommand.Flush());
             }
@@ -937,6 +945,7 @@ namespace Aicup2020
             debugOptions[(int)DebugOptions.drawInteresMap] = false;
             debugOptions[(int)DebugOptions.drawMemoryResources] = false;
             debugOptions[(int)DebugOptions.drawMemoryEnemies] = true;
+            debugOptions[(int)DebugOptions.drawDeadStatistic] = true;
 
             debugOptions[(int)DebugOptions.drawBuildAndRepairOrder] = true;
             debugOptions[(int)DebugOptions.drawBuildAndRepairPath] = false;
@@ -1141,6 +1150,13 @@ namespace Aicup2020
             {
                 if (m.Value.checkedNow == false)
                 {
+                    switch (m.Value.myEntity.EntityType)
+                    {
+                        case EntityType.BuilderUnit: myDeadBuilders++; break;
+                        case EntityType.MeleeUnit: myDeadMelees++; break;
+                        case EntityType.RangedUnit: myDeadRangers++; break;
+                    }
+
                     m.Value.Die();
                     entityMemories.Remove(m.Key);
                 }
@@ -2115,6 +2131,49 @@ namespace Aicup2020
                 }
             }
         }
+
+        #region draw dead statistics
+        float drawDeadStatisticDX = -120;
+        float drawDeadStatisticDY = -17;
+        float drawDeadStatisticStepX = -50;
+        float drawDeadStatisticStepY = -21;
+        void DrawDeadStatistic()
+        {
+            int myPlayerNum = 0;
+            for (int i = 0; i <_playerView.Players.Length; i++)
+            {
+                if (_playerView.Players[i].Id == myId)
+                {
+                    myPlayerNum = i;
+                }
+            }
+            //myPlayerNum = _playerView.CurrentTick % 4;
+            Color[] playerColors = new Color[] { 
+                new Color(0.5f, 0.5f, 1, 1),
+                new Color(0.5f, 0.9f, 0.5f, 1),
+                new Color(1, 0.5f, 0.5f, 1),
+                new Color(1, 0.8f, 0.5f, 1) 
+            };
+
+            float x = _debugInterface.GetState().WindowSize.X / 2 + drawDeadStatisticDX;
+            float y = _debugInterface.GetState().WindowSize.Y + drawDeadStatisticDY + drawDeadStatisticStepY * myPlayerNum;
+            int textSize = 16;
+
+            string text;
+            text = $"{currentMyEntityCount[EntityType.MeleeUnit]}/{myDeadMelees}m";
+            _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(
+                new ColoredVertex(null, new Vec2Float(x, y), playerColors[myPlayerNum]), text, 1f, textSize)));
+            x += drawDeadStatisticStepX;
+            text = $"{currentMyEntityCount[EntityType.BuilderUnit]}/{myDeadBuilders}b";            
+            _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(
+                new ColoredVertex(null, new Vec2Float(x, y), playerColors[myPlayerNum]), text, 1f, textSize)));
+            x += drawDeadStatisticStepX;
+            text = $"{currentMyEntityCount[EntityType.RangedUnit]}/{myDeadRangers}r";
+            _debugInterface.Send(new DebugCommand.Add(new DebugData.PlacedText(
+                new ColoredVertex(null, new Vec2Float(x, y), playerColors[myPlayerNum]), text, 1f, textSize)));
+            x += drawDeadStatisticStepX;
+        }
+        #endregion
 
         void GenerateDesires()
         {
@@ -6558,6 +6617,8 @@ namespace Aicup2020
         static Color colorBlack = new Color(0, 0, 0, 1);
         static Color colorGreen = new Color(0, 1, 0, 1);
         static Color colorBlue = new Color(0, 0, 1, 1);
+        static Color colorYellow = new Color(0.8f, 0.5f, 0, 1);
+         
         public void DebugUpdate(PlayerView playerView, DebugInterface debugInterface)
         {
             if (debugOptions[(int)DebugOptions.canDrawDebugUpdate] == true)
