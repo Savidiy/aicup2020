@@ -2244,9 +2244,6 @@ namespace Aicup2020
                         {
                             if (onceVisibleMap[nx][ny] > 0)
                             {
-                                if (nx == 6 && ny == 10)
-                                    ;
-
                                 if (buildBarrierMap[nx, ny].s5noBaseOrWarriorBarrier == true
                                     && buildBarrierMap[nx, ny].s5noEnemiesBarrier == true
                                     && buildBarrierMap[nx, ny].s5noUnvisivleBarrier == true)
@@ -6827,11 +6824,11 @@ namespace Aicup2020
             EntityType baseType = EntityType.BuilderBase;
             if (basicEntityIdGroups[baseType].members.Count > 0)
             {
-                int baseId = basicEntityIdGroups[baseType].members[0];
-                int baseSize = properties[baseType].Size;
-                var mem = entityMemories[baseId];
-                if (mem.myEntity.Active)
-                {
+                //int baseId = basicEntityIdGroups[baseType].members[0];
+                //int baseSize = properties[baseType].Size;
+                //var mem = entityMemories[baseId];
+                //if (mem.myEntity.Active)
+                //{
                     #region стартовые значения
                     CellWI[,] pathMap = new CellWI[mapSize, mapSize];
                     for (int x = 0; x < mapSize; x++)
@@ -6855,33 +6852,6 @@ namespace Aicup2020
                     //int WDeniedBuilder = -8;
                     int WUnvisibleCell = -9;
                     int Wtarget = -10;
-                    #endregion
-
-                    #region определяем стартовые клетки                   
-                    List<XYWeight> findCells = new List<XYWeight>();
-                    int bx = mem.myEntity.Position.X;
-                    int by = mem.myEntity.Position.Y;
-                    for (int m = 1; m < baseSize; m++)
-                    {
-                        int fx;
-                        int fy;
-                        fx = bx + m;
-                        fy = by;
-                        findCells.Add(new XYWeight(fx, fy, startWeight));
-                        pathMap[fx, fy].weight = startWeight;
-                        fx = bx;
-                        fy = by + baseSize - m - 1;
-                        findCells.Add(new XYWeight(fx, fy, startWeight));
-                        pathMap[fx, fy].weight = startWeight;
-                        fx = bx + m - 1;
-                        fy = by + baseSize - 1;
-                        findCells.Add(new XYWeight(fx, fy, startWeight));
-                        pathMap[fx, fy].weight = startWeight;
-                        fx = bx + baseSize- 1;
-                        fy = by + m;
-                        findCells.Add(new XYWeight(fx, fy, startWeight));
-                        pathMap[fx, fy].weight = startWeight;
-                    }
                     #endregion
 
                     #region определяем целевые клетки
@@ -6922,6 +6892,21 @@ namespace Aicup2020
                                 }
                             }
                         }
+                    }
+                    #endregion
+
+                    #region определяем стартовую клетку как одну из целевых
+                    List<XYWeight> findCells = new List<XYWeight>();
+                    if (targetCells.Count > 1)
+                    {
+                        int x = targetCells[0].x;
+                        int y = targetCells[0].y;
+                        findCells.Add(new XYWeight(x, y, startWeight));
+                        pathMap[x, y].weight = startWeight;
+                        targetCells.RemoveAt(0);
+                    } else // всего одна клетка, с которой строят
+                    {
+                        return false;
                     }
                     #endregion
 
@@ -7007,29 +6992,29 @@ namespace Aicup2020
                         //}
                     }
 
-                    if (debugOptions[(int)DebugOptions.canDrawGetAction] = true && debugOptions[(int)DebugOptions.drawBuildBlockPathMap] == true)
-                    {
-                        _debugInterface.Send(new DebugCommand.Clear());
+                if (debugOptions[(int)DebugOptions.canDrawGetAction] = true && debugOptions[(int)DebugOptions.drawBuildBlockPathMap] == true)
+                {
+                    _debugInterface.Send(new DebugCommand.Clear());
 
-                        int textSize = 16;
-                        for (int x = 0; x < mapSize; x++)
+                    int textSize = 16;
+                    for (int x = 0; x < mapSize; x++)
+                    {
+                        for (int y = 0; y < mapSize; y++)
                         {
-                            for (int y = 0; y < mapSize; y++)
+                            int w = pathMap[x, y].weight;
+                            if (w == WBuilding) DrawCenterCellText(x, y, colorBlack, "B", textSize);
+                            else if (w == WUnvisibleCell) DrawCenterCellText(x, y, colorBlack, "U", textSize);
+                            else if (w == Wtarget) DrawCenterCellText(x, y, colorGreen, "T", textSize);
+                            else if (w != 0)
                             {
-                                int w = pathMap[x, y].weight;
-                                if (w == WBuilding) DrawCenterCellText(x, y, colorBlack, "B", textSize);
-                                else if (w == WUnvisibleCell) DrawCenterCellText(x, y, colorBlack, "U", textSize);
-                                else if (w == Wtarget) DrawCenterCellText(x, y, colorGreen, "T", textSize);
-                                else if(w != 0)
-                                {
-                                    DrawCenterCellText(x, y, colorRed, startWeight - w, textSize);
-                                }
+                                DrawCenterCellText(x, y, colorRed, startWeight - w, textSize);
                             }
                         }
-                        _debugInterface.Send(new DebugCommand.Flush());
-                        ;
                     }
+                    _debugInterface.Send(new DebugCommand.Flush());
+                    ;
                 }
+                
             }
             return true;
         }
