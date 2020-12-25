@@ -7000,7 +7000,7 @@ namespace Aicup2020
                     }
                 }
 
-                if (debugOptions[(int)DebugOptions.canDrawGetAction] = true && debugOptions[(int)DebugOptions.drawBuildBlockPathMap] == true)
+                if (debugOptions[(int)DebugOptions.canDrawGetAction] == true && debugOptions[(int)DebugOptions.drawBuildBlockPathMap] == true)
                 {
                     _debugInterface.Send(new DebugCommand.Clear());
 
