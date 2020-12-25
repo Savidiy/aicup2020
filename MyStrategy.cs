@@ -909,6 +909,7 @@ namespace Aicup2020
         int buildTurretThenResourcesOver = 720;
         Vec2Int rangedBasePotencPlace1;
         Vec2Int rangedBasePotencPlace2;
+        int maxRerouteThenCreateBuilding = 30; //максимальная длина обхода, если новое здание блокирует маршрут
 
         const float ratioRangedToBuilder = 0.4f; // соотношение лучников к строителям: 10 строителей на 4 лучников
 
@@ -6741,7 +6742,7 @@ namespace Aicup2020
 
                         if (dist > findDistToBuilder)
                         {
-                            if (CheckNewBuildRouteBlock(x, y, buildingSize) == false)
+                            if (CheckNewBuildRouteBlock(x, y, buildingSize, maxRerouteThenCreateBuilding) == false)
                             {
                                 findX = x;
                                 findY = y;
@@ -6819,7 +6820,7 @@ namespace Aicup2020
         /// <param name="y"></param>
         /// <param name="buildingSize"></param>
         /// <returns>true если путь будет заблокирован</returns>
-        bool CheckNewBuildRouteBlock(int sx, int sy, int buildingSize)
+        bool CheckNewBuildRouteBlock(int sx, int sy, int buildingSize, int maxNewRouteLength)
         {
             EntityType baseType = EntityType.BuilderBase;
             if (basicEntityIdGroups[baseType].members.Count > 0)
@@ -6841,7 +6842,7 @@ namespace Aicup2020
 
                     //стартовое значение, которое будем уменьшать
                     int startWeight = mapSize * mapSize;
-                    //int minWeight = startWeight - maxHealth;
+                    int minWeight = startWeight - maxNewRouteLength;
                     //int WInside = -1;
                     int WBuilding = -2;
                     //int WEnemy = -3;
@@ -6922,13 +6923,14 @@ namespace Aicup2020
 
                     // начинаем искать путь к целевым клеткам
                     int numberFindedTarget = 0;
-                    for (int iter = 0; iter < findCells.Count; iter++)
+                for (int iter = 0; iter < findCells.Count; iter++)
+                {
+                    int fx = findCells[iter].x;
+                    int fy = findCells[iter].y;
+                    int fw = findCells[iter].weight;
+                    //int fi = findCells[iter].index;
+                    if (fw > minWeight)
                     {
-                        int fx = findCells[iter].x;
-                        int fy = findCells[iter].y;
-                        int fw = findCells[iter].weight;
-                        //int fi = findCells[iter].index;
-
                         for (int jj = 0; jj < 4; jj++)
                         {
                             int nx = fx;
@@ -6975,7 +6977,7 @@ namespace Aicup2020
                                 if (canContinue == true) // empty, safe cell or through free unit
                                 {
                                     //add weight and findCell
-                                    pathMap[nx, ny].weight = fw - 1;                                    
+                                    pathMap[nx, ny].weight = fw - 1;
                                     findCells.Add(new XYWeight(nx, ny, fw - 1));
 
                                     //if (debugOptions[(int)DebugOptions.drawBuildAndRepairPath])
@@ -6991,6 +6993,7 @@ namespace Aicup2020
                         //    _debugInterface.Send(new DebugCommand.Flush());
                         //}
                     }
+                }
 
                 if (debugOptions[(int)DebugOptions.canDrawGetAction] = true && debugOptions[(int)DebugOptions.drawBuildBlockPathMap] == true)
                 {
