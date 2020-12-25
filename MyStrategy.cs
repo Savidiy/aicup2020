@@ -1226,7 +1226,7 @@ namespace Aicup2020
             #region draw debug settings
             debugOptions[(int)DebugOptions.canDrawGetAction] = true;
             debugOptions[(int)DebugOptions.drawRetreat] = true;
-            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = true;
+            debugOptions[(int)DebugOptions.drawBuildBarrierMap] = false;
             debugOptions[(int)DebugOptions.drawOnceVisibleMap] = false;
             debugOptions[(int)DebugOptions.drawInteresMap] = false;
             debugOptions[(int)DebugOptions.drawMemoryResources] = false;
@@ -2255,7 +2255,7 @@ namespace Aicup2020
                                         place2find = true;
                                         rangedBasePotencPlace2 = new Vec2Int(nx, ny);
                                     }
-                                    DrawCenterCellTextSafe(nx, ny, colorGreen, "+", 16, DebugOptions.drawRangedBasePotencPlace);
+                                    //DrawCenterCellTextSafe(nx, ny, colorGreen, "+", 16, DebugOptions.drawRangedBasePotencPlace);
                                 }
                             }
                         }
@@ -6950,6 +6950,11 @@ namespace Aicup2020
                                     {
                                         return false;
                                     }
+                                }
+                                else if (resourceMemoryMap[nx][ny] > 0)
+                                {
+                                    canContinue = false;
+                                    pathMap[nx, ny].weight = WBuilding;
                                 }
                                 else if (pathMap[nx, ny].weight == 0)
                                 {
